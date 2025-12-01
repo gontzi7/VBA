@@ -5,7 +5,17 @@ Dim vbOut As Integer
 Dim RutaUsuario, RutaBase, RutaExcel As String
 Dim rutaArchivo As String
 Dim nombreArchivo As String, rutaAnterior As String
-Dim i As Integer
+Dim i As Integer, reintentar As Integer
+
+Dim VBProj As VBIDE.VBProject
+Dim VBComp As VBIDE.VBComponent
+Dim WS As Worksheet
+Dim Rng As Range
+
+Dim FromVBProject As VBIDE.VBProject
+Dim ToVBProject As VBIDE.VBProject
+
+Dim nomModulo As Collection
 
 Sub Actualizar2()
     DebugMensajes = ThisWorkbook.Sheets("Busquedas").Range("Debug")
@@ -20,8 +30,18 @@ Sub Actualizar2()
     'Borrar portapapeles
     Application.CutCopyMode = False
 
+    'Número de reintentos automaticos
+    reintentar = 5
 Reintentar1:
     Call ThisWorkbook.ComprobarActualizacion("A")
+    'Reintentar si hay error de conexion
+    If ThisWorkbook.errorConexion Then
+        reintentar = reintentar - 1
+        If reintentar > 0 Then
+            GoTo Reintentar1
+        End If
+    End If
+
     'Comparar versión actual y nueva
     If Not ThisWorkbook.actualizado And Not ThisWorkbook.errorConexion Then
         vbOut = MsgBox("Hay mas actualizado, actualizar a última versión?" & vbCrLf & _
@@ -38,13 +58,34 @@ Reintentar1:
         Exit Sub
     End If
 
+    'Iniciar colección
+    Set nomModulo = New Collection
+
     Call IniBarra
     'Textos
     ufProgress.Caption = "Actualizar código"
-    ufProgress.LabelCaption.Caption = "Extrayendo ruta de archivo actual.." & vbCrLf & _
+    ufProgress.LabelCaption.Caption = "Contando módulos a actualizar.." & vbCrLf & _
         "Por favor, no abra o seleccione otro documento de Excel o Word."
+
+    Set VBProj = ActiveWorkbook.VBProject
+
+    For Each VBComp In VBProj.VBComponents
+        If TotalCodeLinesInVBComponent(VBComp) > 0 Then
+            'Añadir nombre a colección
+            nomModulo.Add VBComp.name
+        End If
+    ' Rng(1, 2).Value = ComponentTypeToString(VBComp.Type)
+    Next VBComp
+
     'Cuantas veces se llama a actualizar barra
-    progreso = 1 / 3
+    progreso = 1 / (nomModulo.Count + 1) ' +5 por las llamadas extra
+
+    If DebugMensajes Then MsgBox nomModulo.Count
+
+    Call ActBarra
+
+    ufProgress.LabelCaption.Caption = "Extrayendo ruta de archivo.." & vbCrLf & _
+        "Por favor, no abra o seleccione otro documento de Excel o Word."
 
     RutaUsuario = Environ("UserProfile")
     RutaBase = "\BOSLAN INGENIERIA Y CONSULTORIA\Instalaciones - Imagenes\98-PROGRAMAS INST\Gontzal proba\Proyectos"
@@ -56,55 +97,42 @@ Reintentar1:
         MsgBox "Ruta de archivo actual: " & rutaArchivo
     End If
     Call ActBarra
-        'Conseguir nombre de archivo actual para borrar al finalizar
-        ufProgress.LabelCaption.Caption = "Extrayendo nombre de archivo.." & vbCrLf & _
+
+    'Conseguir nombre de archivo actual para borrar al finalizar
+    ufProgress.LabelCaption.Caption = "Extrayendo nombre de archivo.." & vbCrLf & _
+    "Por favor, no abra o seleccione otro documento de Excel o Word."
+    nombreArchivo = ThisWorkbook.name
+    If DebugMensajes Then
+        MsgBox "Nombre de archivo actual: " & nombreArchivo
+    End If
+
+    Call ActBarra
+
+    For i = 1 To nomModulo.Count
+        ufProgress.LabelCaption.Caption = "Actualizando módulo " & i & " de " & nomModulo.Count & vbCrLf & _
         "Por favor, no abra o seleccione otro documento de Excel o Word."
-        nombreArchivo = ThisWorkbook.name
-        If DebugMensajes Then
-            MsgBox "Nombre de archivo actual: " & nombreArchivo
-        End If
-        Call ActBarra
-        'Copiar el archivo actualizado a la misma ruta del antiguo
-        ufProgress.LabelCaption.Caption = "Copiando archivo actualizado.." & vbCrLf & _
-        "Por favor, no abra o seleccione otro documento de Excel o Word."
-        rutaAnterior = ThisWorkbook.FullName
-        If DebugMensajes Then
-            MsgBox "Ruta anterior: " & rutaAnterior
-        End If
-        Call ActBarra
-        'Descargar barra
-        Unload ufProgress
-        'FileCopy RutaUsuario & RutaBase & RutaExcel, rutaAnterior
-        Call ActBarra
 
-
-
-    For i = 1 To 5
-        Dim FromVBProject As VBIDE.VBProject
-        Dim ToVBProject As VBIDE.VBProject
+        MsgBox nomModulo(i)
 
         Set FromVBProject = Workbooks("ActualizarPr2.xlsm").VBProject
         Set ToVBProject = ThisWorkbook.VBProject
 
-        Select Case i
-            Case 1
-                completado = CopyModule("Generales", FromVBProject, ToVBProject, True)
-            Case 2
-                completado = CopyModule("ufBuscador", FromVBProject, ToVBProject, True)
-            Case 3
-                completado = CopyModule("ufProgress", FromVBProject, ToVBProject, True)
-            Case 4
-                completado = CopyModule("Módulo1", FromVBProject, ToVBProject, True)
-            Case 5
-                completado = CopyModule("Módulo2", FromVBProject, ToVBProject, True)
-        End Select
+        completado = CopyModule(nomModulo(i), FromVBProject, ToVBProject, True)
+
+        Call ActBarra
+
         If Not completado Then Exit For 'Salir si hay error
     Next i
-    
+
+    'Descargar barra
+    Unload ufProgress
+
+    Call ActBarra
+
     If completado Then
         MsgBox "Módulo copiado correctamente.", vbInformation
     Else
-        MsgBox "Error al copiar el módulo.", vbCritical
+        MsgBox "Error al actualizar el archivo, inténtelo de nuevo.", vbCritical
     End If
 
     'Activar actulaizaciones de pantalla
@@ -283,26 +311,6 @@ Function CopyModule(ModuleName As String, _
     CopyModule = True
 End Function
 
-Sub ListModules()
-    Dim VBProj As VBIDE.VBProject
-    Dim VBComp As VBIDE.VBComponent
-    Dim WS As Worksheet
-    Dim Rng As Range
-    
-    Set VBProj = ActiveWorkbook.VBProject
-    Set WS = ActiveWorkbook.Worksheets("Lineas")
-    Set Rng = WS.Range("A1")
-    
-    For Each VBComp In VBProj.VBComponents
-        Rng(1, 1).Value = VBComp.name
-
-            Rng(1, 3).Value = TotalCodeLinesInVBComponent(VBComp)
-
-        Rng(1, 2).Value = ComponentTypeToString(VBComp.Type)
-        Set Rng = Rng(2, 1)
-    Next VBComp
-End Sub
-
 Function ComponentTypeToString(ComponentType As VBIDE.vbext_ComponentType) As String
     Select Case ComponentType
         Case vbext_ct_ActiveXDesigner
@@ -365,9 +373,9 @@ Private Sub IniBarra()
     'Inicializar barra de progreso
     frac = 0
     ufProgress.LabelProgress.Width = 0
-    ufProgress.Caption = "Actualizar documento"
-    ufProgress.LabelCaption.Caption = "Extrayendo ruta de archivo actual.." & vbCrLf & _
-        "Por favor, no abra o seleccione otro documento de Excel o Word."
+    ' ufProgress.Caption = "Actualizar documento"
+    ' ufProgress.LabelCaption.Caption = "Extrayendo ruta de archivo actual.." & vbCrLf & _
+    '     "Por favor, no abra o seleccione otro documento de Excel o Word."
     ufProgress.TiempoEstimado.Caption = ""
     ufProgress.Show
 End Sub
