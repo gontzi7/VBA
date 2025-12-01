@@ -1,0 +1,203 @@
+Option Explicit
+
+Dim rutaPlantillaDoc As String
+Dim rutaDocFin As String
+Dim modoDeBug As Boolean
+Dim fso As Object
+Dim wordApp As Object
+Dim nombreMarcador As String
+Dim numApoyosCalc As String
+Dim alternativa As String
+Dim i As Long
+Dim tipoApoyo() As String
+Dim funcionApoyo() As String
+Dim cantidApoy As Long
+Dim norm As Worksheet
+Dim calcApoyo As Worksheet
+
+Sub InformeDoc()
+    'Incializar el objeto FileSystem
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    'Cargar variable deBug
+    modoDeBug = ThisWorkbook.Sheets("Información Conductores").Range("Debug")
+    'Establecer página principal del excel
+    Set calcApoyo = ThisWorkbook.Sheets("Calculo Apoyos")
+    'Numero de apoyos que se van a insertar en el informe
+    numApoyosCalc = calcApoyo.Range("NumApoyos").Value
+    'Ubicación plantilla en servidor
+    rutaPlantillaDoc = "\\BIO-S-FP-01\211_ingenieria$\Usuarios\Gontzal\Proyectos\ApoyosBT(Pr1)\Plantilla Informe apoyos BT.docx"
+    'Nueva ruta con nombre
+    rutaDocFin = ThisWorkbook.Path & "\Informe Apoyos BT.docx"
+    i = 0
+    'Cargar información de conductores desde tabla en excel
+    Call CargarNormalizado
+    'Copiar informe base a misma ubicación del excel con nombre "Informe apoyos BT"
+    On Error GoTo Errorhandler
+    fso.CopyFile rutaPlantillaDoc, rutaDocFin
+    'Abrir documento para modificar
+    Set wordApp = CreateObject("Word.Application")
+    Set wordDoc = wordApp.Documents.Open(rutaDocFin)
+    wordDoc.Activate
+    'Loopear por cada uno de los marcadores del documento, hacer cosas diferentes en cada uno
+    For Each bm In wdDoc.Bookmarks
+        nombreMarcador = bm.Name
+        Select Case nombreMarcador
+            Case "Fecha"
+                'Escribir fecha de hoy con formato: Día de mes de año
+                bm.Range.text = Format(Date, "d de mmmm de yyyy")
+            Case "InicApoy"
+                bm.Select
+                'Loopear hasta que no haya información en el array de tipoApoyo
+                For i = 0 To UBound(tipoApoyo)
+                    'Escribir información general de todos los apoyos a meter en informe
+                    With Selection
+                        .TypeText text:="Nuevo apoyo T1:"
+                        .HomeKey Unit:=wdLine, Extend:=wdExtend
+                        .Font.Underline = wdUnderlineSingle
+                        .HomeKey Unit:=wdLine
+                        .EndKey Unit:=wdLine
+                        .TypeParagraph
+                        .Font.UnderlineColor = wdColorAutomatic
+                        .Font.Underline = wdUnderlineNone
+                        .TypeText text:=vbTab & "Se instala un nuevo apoyo de homrigón tipo " & tipoApoyo(i) & _
+                            "que hará la función de apoyo " & funcionApoyo(i)
+                        .TypeParagraph
+                        .TypeParagraph
+                    End With
+                Next
+            Case "SeleccionAlternativa"
+                'Depende de que alternativa se vaya a aplicar en el cálculo, escribir párrafo adecuado
+                bm.Select
+                Select Case alternativa
+                    Case "A"
+                        Selection.TypeText text:=" no superan los 500 metros de altura desde el nivel del mar, se hará el cálculo de esfuerzos en la zona A, sin tener en cuenta hipótesis de viento o hielo."
+                    Case "B"
+                        Selection.TypeText text:=" se encuentran entre los 500 y 1.000 metros de altura desde el nivel del mar, se hará el cálculo de esfuerzos en la zona B."
+                    Case "C"
+                        Selection.TypeText text:=" se encuentran superiores a 1.000 metros de altura desde el nivel del mar, se hará el cálculo de esfuerzos en la zona C."
+                    Case Else
+                        MsgBox "No se ha pasado la variable de alternativa. Deteniendo el programa"
+                        GoTo Errorhandler
+                End Select
+            Case "AlturaApoy"
+                'Altura de apoyos a instalar, siempre 13
+                bm.Select
+                Selection.TypeText text:="13"
+            Case "ResultadoCalculo"
+                bm.Select
+                'Loopear hasta que no haya información en el array de tipoApoyo
+                i = 1
+                For i = 0 To UBound(funcionApoyo)
+                    'Escribir texto de cálculo de esfuerzos, diferente por cada función de apoyo.
+                    Select Case funcionApoyo
+                        Case "en ángulo"
+
+                        Case "de alineación"
+
+                        Case "de fin de línea"
+
+                        Case "en estrella"
+
+                        Case Else
+                            MsgBox "Hay un apoyo con función indefinida. Deteniendo el programa"
+                            GoTo Errorhandler
+                    End Select
+
+                        With Selection
+                            .TypeText text:="Nuevo apoyo T1:"
+                            .HomeKey Unit:=wdLine, Extend:=wdExtend
+                            .Font.Underline = wdUnderlineSingle
+                            .HomeKey Unit:=wdLine
+                            .EndKey Unit:=wdLine
+                            .TypeParagraph
+                            .Font.UnderlineColor = wdColorAutomatic
+                            .Font.Underline = wdUnderlineNone
+                            .TypeText text:=vbTab & "Se instala un nuevo apoyo de homrigón tipo " & tipoApoyo(i) & _
+                                "que hará la función de apoyo " & funcionApoyo(i)
+                            .TypeParagraph
+                            .TypeParagraph
+                        End With
+                Next
+            Case Else
+                ' Default action for other bookmarks
+                bm.Range.text = "Default action text"
+        End Select
+    Next bm
+    'Buscar textos en documento y reemplazar
+    With wdDoc.Content.Find
+        .text = "NumeroDeApoyosAInformar"
+        .Replacement.text = numApoyosCalc
+        .Forward = True
+        .Wrap = 1 ' wdFindContinue
+        .Format = False
+        .MatchCase = False
+        .MatchWholeWord = False
+        .MatchWildcards = False
+        .MatchSoundsLike = False
+        .MatchAllWordForms = False
+        .Execute Replace:=2 ' wdReplaceAll
+    End With
+    Call CerrarDoc
+Exit Sub
+
+Errorhandler:
+    'Si ocurre algun error ejecutar
+    MsgBox "Se ha producido un error a la hora de pasar el informe a formato Doc: " & Err.Description, vbExclamation, "Error 01"
+    Application.ScreenUpdating = True
+    'Proteger memoria
+    Memoria.Protect Password:=contrasenaPaginas
+    'Cerrar documento correctamente
+    Call CerrarDoc
+    End
+End Sub
+
+Private Sub CerrarDoc()
+    'Cerrar y guardar documento
+    wdDoc.Save
+    wdDoc.Close
+    wdApp.Quit
+    'Borrar objetos para siguiente ejecución
+    Set wdDoc = Nothing
+    Set wdApp = Nothing
+End Sub
+
+Private Sub CargarNormalizado()
+    On Error GoTo Errorhandler
+    Set norm = ThisWorkbook.Sheets("Información Doc")
+    'Desactivar actualizaciones
+    Application.ScreenUpdating = False
+    'Contar paginas en excel, quitar 3 para obtener apoyos calculados
+    cantidApoy = Sheets.Count
+    cantidApoy = cantidApoy - 3
+    'Desproteger memoria
+    Memoria.Unprotect Password:=contrasenaPaginas
+    'Pasar información de apoyos
+    For i = 1 To cantidApoy
+        'Seleccionar la pagina número i
+        Sheets(i).Select
+        'Comprobar en cada pagina si la función está mal seleccionado (mas de uno o 0)
+        If ActiveSheet.Range("FuncApCalc") = "ERROR" Then
+            MsgBox "Se ha definido mas de una función para un mismo apoyo, seleccione una única función por apoyo a calcular.", vbInformation
+            'Seleccionar cuadro para modificar
+            ActiveSheet.Range("Alin").Select
+            'Reactivar actualizaciones
+            Application.ScreenUpdating = True
+            'Proteger memoria
+            Memoria.Protect Password:=contrasenaPaginas
+            End
+        End If
+        'Está bien seleccionado, pegar valores en pagina de formato
+        norm.Range(Cells(i + 1, 2), Cells(i + 1, 9)) = ActiveSheet.Range("INFOCOND")
+    Next
+    MsgBox "Se han cargado valores normalizados"
+    End
+Exit Sub
+
+Errorhandler:
+    'Si ocurre algun error ejecutar
+    MsgBox "Se ha producido un error a la hora de pasar la información a tabla normalizada: " & Err.Description, vbExclamation, "Error 07"
+    Application.ScreenUpdating = True
+    'Proteger memoria
+    Memoria.Protect Password:=contrasenaPaginas
+    End
+End Sub

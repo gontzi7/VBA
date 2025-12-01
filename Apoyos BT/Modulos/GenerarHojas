@@ -1,0 +1,66 @@
+Option Explicit
+
+Dim calcApoyo As Worksheet
+Dim i As Long
+Dim cantidadApoy As Long
+
+Sub GenerarHoja()
+    'Pagina principal
+    Set calcApoyo = ThisWorkbook.Sheets("Calculo Apoyos")
+    'Inicializar contador
+    i = 0
+    'Cargar numero de apoyos a calcular
+    cantidadApoy = calcApoyo.Range("CantApoy")
+    'Verifica
+    If cantidadApoy <= 1 Then
+        MsgBox "La cantidad a generar tiene que ser mayor a 2", vbInformation
+        calcApoyo.Range("CantApoy").Select
+        End
+    End If
+    On Error GoTo Errorhandler
+    'Desproteger
+    calcApoyo.Unprotect Password:=contrasenaPaginas
+    'Desactivar actualizaciones
+    Application.ScreenUpdating = False
+    'Copiar paginas hasta llegar a la cantidad deseada
+    For i = 2 To cantidadApoy
+        'Copiar pagina entera
+        With calcApoyo
+            .Select
+            .Copy Before:=Sheets(i)
+        End With
+        'Borrar primera fila
+        Sheets("Calculo Apoyos (2)").Select
+        Rows("1:1").Select
+        Selection.Delete Shift:=xlUp
+        'Borrar cuadro de generar tablas
+        Range("E5:G6").Select
+        Selection.Clear
+        With Selection.Interior
+            .Pattern = xlSolid
+            .PatternColorIndex = xlAutomatic
+            .ThemeColor = xlThemeColorAccent6
+            .TintAndShade = 0.599993896298105
+            .PatternTintAndShade = 0
+        End With
+        'Seleccionar cota de apoyo
+        ActiveSheet.Range("Altitud").Select
+        'Borrar boton de generar
+        ActiveSheet.Shapes.Range(Array("Generar paginas")).Delete
+        Sheets("Calculo Apoyos (2)").Name = "Apoyo " & i
+        'Proteger hoja recién generada
+        ActiveSheet.Protect Password:=contrasenaPaginas
+    Next
+    'Proteger
+    calcApoyo.Protect Password:=contrasenaPaginas
+Exit Sub
+
+Errorhandler:
+    'Si ocurre algun error ejecutar
+    MsgBox "Se ha producido un error a la hora de crear páginas para apoyos: " & Err.Description, vbExclamation, "Error 06"
+    Application.CutCopyMode = False
+    Application.ScreenUpdating = True
+    'Proteger
+    calcApoyo.Protect Password:=contrasenaPaginas
+    End
+End Sub

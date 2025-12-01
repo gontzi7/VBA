@@ -1,0 +1,92 @@
+Dim calcApoyo As Worksheet
+Dim ws As Worksheet
+Dim sheetName As String
+Dim keepSheets As Collection
+Dim i As Long
+Dim deBugAviso As Boolean
+Global contrasenaPaginas As String
+
+Sub Refrescar()
+    'Contraseña maestra
+    contrasenaPaginas = "79052809s"
+    'Cargar variable deBug
+    deBugAviso = ThisWorkbook.Sheets("Información Conductores").Range("Debug")
+    'Establecer página principal del excel
+    Set calcApoyo = ThisWorkbook.Sheets("Calculo Apoyos")
+    calcApoyo.Select
+    'Desproteger pagina maestra
+    calcApoyo.Unprotect Password:=contrasenaPaginas
+    On Error GoTo Errorhandler
+    'Iniciar colección de strings para guardar páginas importantes a no borrar
+    Set keepSheets = New Collection
+    'Páginas importantes
+    keepSheets.Add "Calculo Apoyos"
+    keepSheets.Add "|"
+    keepSheets.Add "Información conductores"
+    keepSheets.Add "Información Doc"
+    'Desactivar alertas que mostrará excel cada vez que se borre una hoja.
+    Application.DisplayAlerts = False
+    'Loopear por todas las páginas del workbook y mirar si coinciden con los de la colección
+    For Each ws In ThisWorkbook.Worksheets
+        On Error Resume Next
+        'Confirmar si la página está incluida en la colección
+        Err.Clear
+        For i = 1 To keepSheets.Count
+            If ws.Name = keepSheets.Item(i) Then Exit For
+        Next i
+        'Si no está en la colección, borrar
+        If i > keepSheets.Count Then
+            If deBugAviso Then
+                MsgBox "Se borrará la página: " & ws.Name
+            End If
+            ws.Delete
+        End If
+        On Error GoTo 0
+    Next ws
+    'Volver a activar alertas.
+    Application.DisplayAlerts = True
+    'Mostrar todos los tipos de Apoyo
+    With calcApoyo
+        .Range("Alin") = True
+        .Range("Ang") = True
+        .Range("FinLinea") = True
+        .Range("Estrella") = True
+    End With
+    'Mostrar
+    Call Mostrar("Alin")
+    Call Mostrar("Ang")
+    Call Mostrar("FinLinea")
+    Call Mostrar("Estrella")
+    'Resetear excel a valores iniciales
+    With calcApoyo
+        .Range("Altitud") = ""
+        .Range("AlinLong1") = ""
+        .Range("AlinTipo1") = ""
+        .Range("AlinLong2") = ""
+        .Range("AlinTipo2") = ""
+        .Range("AngLong1") = ""
+        .Range("AngTipo1") = ""
+        .Range("AngTipo2") = ""
+        .Range("AngLong3") = ""
+        .Range("AngTipo3") = ""
+        .Range("AngAng3") = ""
+        .Range("AngTipo4") = ""
+        .Range("FinLong") = ""
+        .Range("FinTipo") = ""
+        .Range("CantApoy") = ""
+    End With
+    'Resetear plantilla de estrella
+    Call Limpiar
+    calcApoyo.Range("Altitud").Select
+    'Proteger
+    calcApoyo.Protect Password:=contrasenaPaginas
+Exit Sub
+
+Errorhandler:
+    'Si ocurre algun error ejecutar
+    MsgBox "Se ha producido un error a la hora de reiniciar el excel: " & Err.Description, vbExclamation, "Error 02"
+    Application.ScreenUpdating = True
+    'Proteger
+    calcApoyo.Protect Password:=contrasenaPaginas
+    End
+End Sub

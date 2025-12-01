@@ -1,0 +1,50 @@
+Dim hoja As Worksheet
+' Se llama al sub desde el botón de tablas
+Sub Alin()
+    Call Mostrar("Alin")
+End Sub
+
+Sub Ang()
+    Call Mostrar("Ang")
+End Sub
+
+Sub FinLinea()
+    Call Mostrar("FinLinea")
+End Sub
+
+Sub Estrella()
+    Call Mostrar("Estrella")
+End Sub
+' Macro para mostrar o ocultar tablas
+Public Sub Mostrar(seccion As String)
+
+    Dim inicio, final As Range
+    ' Rango de tablas de apoyos diferentes
+    Set hoja = ThisWorkbook.ActiveSheet
+    Set inicio = hoja.Range(seccion & "I")
+    Set final = hoja.Range(seccion & "F")
+
+    Dim rango As Range
+    Set rango = hoja.Range(inicio, final)
+    'Desproteger pagina maestra
+    hoja.Unprotect Password:=contrasenaPaginas
+    On Error GoTo Errorhandler
+    ' Mostrar u ocultar tablas según selección
+    If hoja.Range(seccion) = True Then
+        rango.EntireRow.Hidden = False
+    ElseIf hoja.Range(seccion) = False Then
+        rango.EntireRow.Hidden = True
+    End If
+    'Proteger
+    hoja.Protect Password:=contrasenaPaginas
+Exit Sub
+
+Errorhandler:
+    'Si ocurre algun error ejecutar
+    MsgBox "Se ha producido un error a la hora de gestionar visibilidad de diferentes apoyos: " & Err.Description, vbExclamation, "Error 06"
+    Application.CutCopyMode = False
+    Application.ScreenUpdating = True
+    'Proteger
+    hoja.Protect Password:=contrasenaPaginas
+    End
+End Sub

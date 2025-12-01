@@ -1,0 +1,88 @@
+Dim hoja As Worksheet
+
+Sub Generar()
+    Dim cantidad As Long
+    Dim rangoTabla As Range
+
+    Set hoja = ThisWorkbook.ActiveSheet
+
+    'Desproteger pagina maestra
+    hoja.Unprotect Password:=contrasenaPaginas
+    On Error GoTo Errorhandler
+    'Conseguir número de tablas a crear
+    cantidad = hoja.Range("Cantidad").Value
+    'Rango de tabla a copiar
+    Set rangoTabla = hoja.Range("TablaI:TablaF")
+    If cantidad > 2 Then
+        'Mirar si hay tablas generadas de antes, si hay, borrar.
+        If hoja.Range("H55").Value <> "" Then
+            'Hay tabla, limpiar
+            Call Limpiar
+        End If
+        'Loopear copiando y pegando la tabla hasta llegar a la cantidad que se ha pedido
+        hoja.Range("TablaI").Select
+        Dim i As Long
+        i = 1
+        Application.CutCopyMode = False
+        'Copiar tabla en portapapeles
+        rangoTabla.Copy
+        Do While i < cantidad
+            'Moverse dos celdas a la derecha y pegar con formato
+            ActiveCell.Offset(0, 2).PasteSpecial Paste:=xlPasteColumnWidths
+            ActiveCell.PasteSpecial Paste:=xlPasteAll
+            i = i + 1
+            'Cambiar número de vano
+            ActiveCell.Value = "Detalle de Vano " & i
+        Loop
+    Else
+        MsgBox "Introduzca el número de vanos que afecta el cálculo de apoyos. (Tiene que ser mas de 2)", vbInformation
+        hoja.Range("Cantidad").Select
+        End
+    End If
+    'Volver a estado inicial
+    Application.CutCopyMode = False
+    hoja.Range("Cantidad").Select
+    'Proteger
+    hoja.Protect Password:=contrasenaPaginas
+Exit Sub
+
+Errorhandler:
+    'Si ocurre algun error ejecutar
+    MsgBox "Se ha producido un error a la hora de crear tablas de apoyo en estrella: " & Err.Description, vbExclamation, "Error 03"
+    Application.CutCopyMode = False
+    Application.ScreenUpdating = True
+    'Proteger
+    hoja.Protect Password:=contrasenaPaginas
+    End
+End Sub
+
+Public Sub Limpiar()
+    Dim rangoLimpiar As Range
+
+    Set hoja = ThisWorkbook.ActiveSheet
+    'Posicion inicial
+    hoja.Range("Cantidad").Select
+    'Rango a limpiar
+    Set rangoLimpiar = hoja.Range("TablaF:XFD53")
+    'Desproteger pagina maestra
+    hoja.Unprotect Password:=contrasenaPaginas
+    'Borrar todo
+    rangoLimpiar.Clear
+    'Poner formato
+    With rangoLimpiar.Interior
+        .Pattern = xlSolid
+        .PatternColorIndex = xlAutomatic
+        .ThemeColor = xlThemeColorAccent3
+        .TintAndShade = 0.799981688894314
+        .PatternTintAndShade = 0
+    End With
+    'Limpiar datos metidos por el usuario y dejar por defecto
+    hoja.Range("EstrellaLong1").Select
+    Selection.Value = ""
+    hoja.Range("EstrellaTipo1").Select
+    Selection.Value = ""
+    hoja.Range("Cantidad").Select
+    Selection.Value = ""
+    'Proteger pagina maestra
+    hoja.Protect Password:=contrasenaPaginas
+End Sub
