@@ -1,0 +1,195 @@
+Option Explicit
+
+Dim Fitx As String
+Dim tenpFitx As String
+Dim haizFitx As String
+Dim PVGIS As Worksheet
+Dim rng As Range
+Dim rng2 As Range
+Dim irteeraArray() As Variant
+Dim i As Long, j As Long
+Dim wbCSV As Workbook
+Dim wsCSV As Worksheet
+Dim fd As FileDialog
+Dim OutPut As Integer
+Dim CSVzabalik As Boolean
+Public Itsatsiak As Boolean
+Dim latitude As String
+Dim Altitude As String
+Dim progreso As Double, frac As Double, progreso2 As Double, frac2 As Double
+
+Public Sub AukeratuDok()
+    On Error GoTo ErrorHandler
+    'Pantaila eguneratzeak desaktibatu
+    Application.ScreenUpdating = False
+    Itsatsiak = False
+    Set PVGIS = ThisWorkbook.Sheets("PVGIS")
+    'Hasteko, confirmatu ea erabiltzaileak fitxategia deskargatu duen edo ez
+    OutPut = MsgBox("Hurrengoz fitxategi bat eskatuko da, instalazioaren lekuko irradiazio, tenperatura eta haize datu sortak dituena." & vbCrLf & _
+        "Hau PVGIS web orrian sartuz lortu daiteke." & vbCrLf & "Deskargatuta duzu?", vbInformation + vbYesNo)
+    If OutPut = 6 Then
+        'Behin informazioa ezabatuta, irradiazio, tenperatura eta haize abiadurak eskatu
+        Fitx = FitxategiLortu()
+        If Fitx = "ezeztatua" Then
+            MsgBox "Berriz aukeratzeko, erabiltzaile-interfazea abiatzeko botoia sakatu", vbInformation
+            Exit Sub
+        End If
+        'Optimizazioak konparaketak gutxiago tardatzeko
+        Application.Calculation = xlCalculationManual
+        'Aurrerapen barra erakutsi
+        frac = 0
+        frac2 = 0
+        ufProgressObr.TituloObra.Caption = ""
+        ufProgressObr.LabelProgress.Width = 0
+        ufProgressObr.LabelProgress2.Width = 0
+        ufProgressObr.Caption = "Datuak kopiatzen TMYtik orrialdera."
+        ufProgressObr.Proceso.Caption = "Fitxategia irekitzen.."
+        ufProgressObr.SubProceso.Caption = ""
+        ufProgressObr.TiempoEstimado.Caption = ""
+        ufProgressObr.Denbora.Caption = ""
+        ufProgressObr.Show vbModeless
+        progreso = 1 / 4
+        Call Garbitu
+        'Fitxategia izanda, ireki
+        Set wbCSV = Workbooks.Open(Fitx)
+        ActiveWindow.Visible = False
+        CSVzabalik = True
+        Set wsCSV = wbCSV.Sheets(1) 'Informazioa lehen orrialdean dago
+        'Datuen heina definitu
+        Set rng2 = wsCSV.Range("A18:J8777")
+        'Array-a hasieratu datu prozesatuak gordetzeko
+        ReDim irteeraArray(1 To rng2.Rows.count, 1 To rng2.Columns.count)
+        'Heineko lerro bakoitza prozesatu
+        Call ActualizarBarra
+        ufProgressObr.Proceso.Caption = "Datuak kopiatzen"
+        progreso2 = 1 / (rng2.Rows.count)
+        ufProgressObr.SubProceso.Caption = "Datuei formatua ematen"
+        For i = 1 To rng2.Rows.count
+            For j = 1 To rng2.Columns.count
+                '"."-ak ","-ekin ordezkatu formulak funtziona dezaten
+                If Not IsEmpty(rng2.Cells(i, j).Value) Then
+                    irteeraArray(i, j) = Replace(rng2.Cells(i, j).Value, ".", ",")
+                Else
+                    irteeraArray(i, j) = "" 'Gelaxka hutsak ere gorde
+                End If
+            Next j
+            Call ActualizarBarra2
+        Next i
+        Call ReiniciarBarra2
+        ufProgressObr.Proceso.Caption = "Instalazio datuak gordetzen"
+        'Latitude eta Altitudeak gorde
+        latitude = Mid(wsCSV.Range("A1").Value, InStr(wsCSV.Range("A1").Value, ":") + 2)
+        latitude = Replace(latitude, ".", ",")
+        latitude = Round(latitude, 2)
+        Altitude = Mid(wsCSV.Range("A3").Value, InStr(wsCSV.Range("A3").Value, ":") + 2)
+        Altitude = Replace(Altitude, ".", ",")
+        Call ActualizarBarra
+        ufProgressObr.Proceso.Caption = "Fitxategia ixten"
+        'CSV fitxategia itxi aldaketak gorde gabe
+        wbCSV.Close SaveChanges:=False
+        ActiveWindow.Visible = True
+        CSVzabalik = False
+        Call ActualizarBarra
+        ufProgressObr.Proceso.Caption = "Datuak itsasten"
+        'Prozesatutako informazioa "A2" gelaxkan itsatsi
+        ThisWorkbook.Sheets("PVGIS").Range("A2").Resize(UBound(irteeraArray, 1), UBound(irteeraArray, 2)).Value = irteeraArray
+        'Latitude eta altitude datuak itsatsi
+        ThisWorkbook.Sheets("Instalazio datuak").Range("InsLatitude").Value = latitude
+        ThisWorkbook.Sheets("Instalazio datuak").Range("InsAltitude").Value = Altitude
+        Call ActualizarBarra
+        'Aurrerapen barra deskargatu
+        Unload ufProgressObr
+        'Erabiltzaileari konfirmazio mezua erakutsi
+        MsgBox "Datuak prozesatuak eta ondo itsatsiak!", vbInformation
+        Itsatsiak = True
+        'Pantaila eguneratzeak aktibatu
+        Application.ScreenUpdating = True
+        'Kalkulazioa berriz automatiko ezarri
+        Application.Calculation = xlCalculationAutomatic
+    ElseIf OutPut = 7 Then
+        'Ezetz esan du.
+        NolaDeskargatu.Show vbModeless
+        Itsatsiak = False
+    End If
+    Exit Sub
+ErrorHandler:
+    'Erroreren bat gertatzerakoan, hurrengoa egin
+    MsgBox "Programan errore bat gertatu da: " & Err.Description, vbExclamation
+    If CSVzabalik Then
+        'CSV fitxategia itxi aldaketak gorde gabe
+        wbCSV.Close SaveChanges:=False
+    End If
+    ActiveWindow.Visible = False
+    'Objektuak garbitu
+    Set fd = Nothing
+    'Pantaila eguneratzeak aktibatu
+    Application.ScreenUpdating = True
+    'Kalkulazioa berriz automatiko ezarri
+    Application.Calculation = xlCalculationAutomatic
+    'Aurrerapen barra deskargatu
+    Unload ufProgressObr
+End Sub
+
+Private Function FitxategiLortu() As String
+    'FileDialog objektua sortu fitxategi aukeratzeko moduan
+    Set fd = Application.FileDialog(msoFileDialogFilePicker)
+    'Onartutako fitxategi luzapenen iragazkiak
+    fd.Filters.Clear
+    fd.Filters.Add "Lekuko datu sortak", "*.csv"
+    fd.AllowMultiSelect = False
+    '"*.csv;*.epw"
+    'Esploratzailearen titulua
+    fd.Title = "Lekuko orduko datuen fitxategia aukeratu."
+    'Baliozko fitxategia dela egiaztatzea
+    If fd.Show = -1 Then
+        FitxategiLortu = fd.SelectedItems(1)
+    Else
+        'Erabiltzaileak aukera bertan behera uzten badu, itzuli "ezeztatua"
+        FitxategiLortu = "ezeztatua"
+    End If
+    'Objektuak garbitu
+    Set fd = Nothing
+End Function
+
+Sub Garbitu()
+    Set PVGIS = ThisWorkbook.Sheets("PVGIS")
+    Set rng = PVGIS.Range("A2:J8761")
+    'Jadanik datuak badaude orrialdean, hauek ezabatu.
+    If PVGIS.Range("TaulaSarrerak").Value <> 0 Then
+        rng.ClearContents
+    End If
+End Sub
+
+'Aurrerapen barra
+Private Sub ActualizarBarra()
+    'Dei bakoitzeko frakzioa
+    frac = progreso + frac
+    'Aurrerapen barra eguneratu
+    With ufProgressObr
+        .LabelProgress.Width = frac * (.FrameProgress.Width)
+        .Repaint
+    End With
+    DoEvents
+End Sub
+
+Private Sub ActualizarBarra2()
+    'Dei bakoitzeko frakzioa
+    ' Application.Wait Now + #12:00:01 AM#
+    frac2 = progreso2 + frac2
+    'Aurrerapen barra sekundarioa eguneratu
+    With ufProgressObr
+        .LabelProgress2.Width = frac2 * (.FrameProgress2.Width)
+    End With
+    DoEvents
+End Sub
+
+Private Sub ReiniciarBarra2()
+    'Aurrerapen barra sekundarioa berabiatu
+    ' Application.Wait Now + #12:00:01 AM#
+    ufProgressObr.SubProceso.Caption = ""
+    ufProgressObr.LabelProgress2.Width = 0
+    frac2 = 0
+    progreso2 = 0
+    'Barra primarioa aurrera eraman
+    Call ActualizarBarra
+End Sub

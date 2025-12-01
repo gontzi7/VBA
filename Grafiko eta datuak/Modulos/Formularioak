@@ -1,0 +1,20 @@
+Option Explicit
+
+Public Gelditu As Boolean
+Public AModu As Integer
+Public BenchmarkScore As Double
+
+Sub Abiatu()
+ Call AukeratuDok
+ If Itsatsiak Then
+    Call Nahitaezko
+ End If
+End Sub
+
+Sub Nahitaezko()
+    NahitaezkoDatuak.Show vbModeless
+End Sub
+
+Sub Pausu()
+    Pausu2.Show vbModeless
+End Sub

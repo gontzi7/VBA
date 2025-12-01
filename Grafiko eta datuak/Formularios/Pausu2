@@ -1,0 +1,1595 @@
+Option Explicit
+
+Dim ADatuak As Worksheet, IDatuak As Worksheet, sh As Worksheet
+Dim OutPut As Integer
+Dim algoritm As Boolean
+Dim luz As Long, zab As Long
+Dim latitude As Double, zimur As Double, azimut As Double, aldapa As Double
+Dim neg As Boolean
+Dim cell As Range
+Dim igaronDenb As Double
+Dim timerKalk As Timer
+'Konfigurazio optimoa
+Dim par1 As Double, par2 As Double
+Dim progreso As Double, frac As Double, progreso2 As Double, frac2 As Double
+Dim bestCost As Double, bestEnergy As Double, optimalSurface As Double, optimalProp As Double, optimalInvQuant As Double, a As Double, b As Double, c As Double
+Dim optimalPanel As String, optimalInverter As String
+Dim optimalSeries As Integer, optimalParallel As Integer
+'Sorkuntza lortu gabeko hurrengo konfigurazioa
+Dim SecbestCost As Double, SecbestEnergy As Double, SecoptimalSurface As Double, SecoptimalProp As Double
+Dim SecoptimalPanel As String, SecoptimalInverter As String
+Dim SecoptimalSeries As Integer, SecoptimalParallel As Integer
+Dim Kanpora As Boolean, Gorde As Boolean, comb As Boolean, zahar As Boolean, Errore As Boolean
+Dim sozKop As Integer, secsozKop As Integer
+Dim kop1 As Integer, kop2 As Integer
+Dim estDenbora As String, db As Double
+Dim LatHas As Double
+Dim HAld As Double, HAzim As Double, HLatit As Double, HAltit As Double, HZimu As Double
+Dim HAzal As Double, HUrtKon As Double, HPlakIz As String, HInbIz As String, HSer As Double, HPar As Double, HTurbIz As String, HTurbKop As Integer
+
+'Programari laguntzeko funtzioak
+'=======================================================================================================================
+'=======================================================================================================================
+Private Function ZenbatKaraktereStringean(ByVal testu As String, ByVal karaktere As String) As Integer
+    Dim i As Integer
+    Dim count As Integer
+    count = 0
+    For i = 1 To Len(testu)
+        If Mid(testu, i, 1) = karaktere Then
+            count = count + 1
+        End If
+    Next i
+    ZenbatKaraktereStringean = count
+End Function
+
+Private Function OrientazioGaleraKalk(ByVal Azmut As Double, ByVal Aldp As Double, ByVal Latitd As Double) As Double
+    'Orientazio galerak kalkulatu azimut, aldapa eta latitude balioetatik abiatuz (IDAE)
+    If Aldp > 15 And Aldp <= 90 Then
+        OrientazioGaleraKalk = ((1.2 * 10 ^ (-4)) * ((Aldp - Latitd + 10) ^ 2) + ((3.5 * 10 ^ (-5)) * (Azmut ^ 2)))
+    ElseIf Aldp <= 15 Then
+        OrientazioGaleraKalk = ((1.2 * 10 ^ (-4)) * ((Aldp - Latitd + 10) ^ 2))
+    End If
+End Function
+
+'Fibonacci funtzioa ngarren fibonacci zenbakia kalkulatzeko (ez oso efizientea nahita, ordenagailua ebaluatzeko)
+Function Fibonacci(n As Long) As Long
+    If n <= 1 Then
+        Fibonacci = n
+    Else
+        Fibonacci = Fibonacci(n - 1) + Fibonacci(n - 2)
+    End If
+End Function
+
+Private Function InbertsoreKopuru(ByVal par As Integer, ByVal IscInb As Double, ByVal IscFov As Double, ByVal sar As Integer, ByVal konb As Boolean)
+    'Inbertsore kopuru kalkulatu emandako datuetatik abiatuz, beti gorantz borobildu
+    If konb Then
+        'Zatidura 0z egiteko errorea kentzeko
+        Do
+            IscInb = IscInb + 1
+        Loop While IscInb / IscFov < 1
+        kop1 = WorksheetFunction.RoundUp(par / (WorksheetFunction.RoundDown(IscInb / IscFov, 0)), 0)
+        kop2 = WorksheetFunction.RoundUp(par / sar, 0)
+        'Bien arteko minimoa itzuli
+        InbertsoreKopuru = WorksheetFunction.Min(kop1, kop2)
+    Else
+        InbertsoreKopuru = WorksheetFunction.RoundUp(par / sar, 0)
+    End If
+End Function
+
+Function PCBenchmark() As Double
+    Dim StartTime As Double
+    Dim EndTime As Double
+    Dim Iterations As Long
+    Dim FibonacciScore As Double
+    Dim i As Long
+    Dim Result As Long
+
+    'Iterazio kopurua
+    Iterations = 100
+    'Timerra hasi
+    Call TimerHasi
+    ufProgressObr.TituloObra.Caption = ""
+    ufProgressObr.LabelProgress.Width = 0
+    ufProgressObr.LabelProgress2.Width = 0
+    ufProgressObr.Caption = "Ordenagailua ebaluatzen."
+    ufProgressObr.Proceso.Caption = ""
+    ufProgressObr.SubProceso.Caption = ""
+    ufProgressObr.TiempoEstimado.Caption = ""
+    ufProgressObr.Show vbModeless
+    'Fibonacci kalkulazioa hainbat aldiz egin
+    For i = 1 To Iterations
+        Result = Fibonacci(25)
+        ufProgressObr.Caption = "Ordenagailua ebaluatzen. " & i
+    Next i
+    Unload ufProgressObr
+    'Timerra amaitu
+    Call TimerAmaitu
+    'Tardatutako segunduak gorde
+    Dim TimeTaken As Double
+    TimeTaken = igaronDenb
+    'Ordenagailuaren puntuazioa
+    FibonacciScore = Iterations / TimeTaken 'Puntuazio gehiago, ordenagailu hobe
+    'Puntuazioa itzuli
+    PCBenchmark = FibonacciScore
+End Function
+
+Private Function KalkEst(ByVal denbBase As Double) As String
+    Dim eSec As Double, eMin As Double, eHour As Double
+    Dim estSec As Double
+    Dim aldiz As Integer
+    'Puntuazioa hasieratu ebaluazioa egin ez bada
+    If BenchmarkScore = 0 Then
+        BenchmarkScore = 1
+    End If
+    'Puntuazioa eta kalkulaziorako denbora basea hartu eta denbora estimatua itzuli
+    estSec = BenchmarkScore * denbBase
+    'Ordu kopuru
+    eHour = WorksheetFunction.RoundDown(estSec / 3600, 0)
+    eMin = WorksheetFunction.RoundDown((estSec - eHour * 3600) / 60, 0)
+    eSec = WorksheetFunction.RoundDown((estSec - eHour * 3600 - eMin * 60), 0)
+    KalkEst = WorksheetFunction.Text(eHour, "00") & ":" & WorksheetFunction.Text(eMin, "00") & ":" & _
+        WorksheetFunction.Text(Round(eSec, 0), "00")
+End Function
+'=======================================================================================================================
+'=======================================================================================================================
+
+Private Sub UserForm_Initialize()
+    algoritm = True
+    comb = True
+    Set sh = ActiveSheet
+    Set ADatuak = ThisWorkbook.Sheets("Algoritmo datuak")
+    Set IDatuak = ThisWorkbook.Sheets("Instalazio datuak")
+    zahar = ADatuak.Range("L24")
+    LatHas = IDatuak.Range("InsLatitude")
+    'Pantailaren erdian jarri laster-leihoa
+    With Pausu2
+        .StartUpPosition = 0
+        .Left = Application.Left + (0.5 * Application.Width) - (0.5 * .Width)
+        .Top = Application.Top + (0.5 * Application.Height) - (0.5 * .Height)
+    End With
+    'Plaken, inbertsore eta turbinen datuak ezabatu
+    Call DatuakEzabatu("Y")
+    'Hiru zerrendak eguneratu
+    Call ZerrendaEguneratu("Fotovoltaiko")
+    Call ZerrendaEguneratu("Inbertsore")
+    Call ZerrendaEguneratu("Eoliko")
+    'Kokapen eta muga datuak kargatu
+    Call Kargatu_Click("H")
+    'Hasierako egoera
+    KostuKutx.Value = False
+    Call KostuKutx_Click
+    AlgoritmoCB.Value = False
+    Call AlgoritmoCB_Click
+    CombBoxCB.Value = False
+    Call CombBoxCB_Click
+    'Hasierako datuak gorde
+    Call AbiapuntuDatu("A")
+End Sub
+
+'Botoien prozesuak
+'=======================================================================================================================
+'=======================================================================================================================
+Private Sub Atera_Click()   'Ateratzeko kodea
+    Unload Me
+End Sub
+
+Private Sub UserForm_QueryClose(Cancel As Integer, CloseMode As Integer)
+    If Not Gorde Then
+        'Konfirmazio mezua erakutsi
+        OutPut = MsgBox("Leiho hau ixten bada, ezarritako eta kalkulatutako aldagaiak ez dira gordeko, jarraitu?", vbExclamation + vbYesNo)
+        If OutPut = 7 Then
+            Cancel = 1
+            Exit Sub
+        End If
+        'Datuak ezabatu
+        ADatuak.Range("B6").Value = ""
+        ADatuak.Range("D7").Value = ""
+        ADatuak.Range("D8").Value = ""
+        ADatuak.Range("B8").Value = ""
+        ADatuak.Range("B15").Value = ""
+        ADatuak.Range("B16").Value = ""
+        ADatuak.Range("B22").Value = ""
+        ADatuak.Range("B23").Value = ""
+        ADatuak.Range("B24").Value = ""
+        ADatuak.Range("B25").Value = ""
+        Call AbiapuntuDatu("At")
+    End If
+    'Hasierako orrialde berdina aukeratu
+    sh.Select
+    'Pantaila eguneratzeak aktibatu
+    Application.ScreenUpdating = True
+End Sub
+
+Private Sub Garbitu_Click()
+    'Datu guztiak kokapen datuak izan ezik garbitu
+    Call DatuakEzabatu("H")
+    ParaleloKutxa.Value = 0
+    TurbinaKopuru.Value = 0
+    SerieKutxa.Value = 0
+End Sub
+
+Private Sub Kargatu1_Click()
+    Call Kargatu_Click("B")
+End Sub
+
+Private Sub Ebaluatu_Click()
+    'Puntuazioa normalizatu
+    Dim puntNorm As Double
+    puntNorm = 63
+    BenchmarkScore = puntNorm / PCBenchmark
+    Me.Caption = "Instalazioaren parametroak eta kalkulua " & BenchmarkScore
+End Sub
+
+Private Sub Onartu_Click()
+    'Instalazioa onartzen da, datuak gorde
+    Gorde = True
+    Unload Me
+End Sub
+
+Private Sub CombinerLaguntza_Click()
+    MsgBox "String combiner boxak instalazio askotan erabiltzen dira," & _
+    " paraleloko panel string bat baino gehiago, inbertsoreko sarrera bakar batera konbinatzen dituzte." & vbCrLf & _
+    "Orduan 2 MPPT sarrera dituen inbertsore batera, 2 string baino gehiago konektatu ahal izango dira." & vbCrLf & _
+    "String combiner boxak erabiltzea nahi bada, inbertsoreak dituen MPPT sarrera baino string gehiago konfiguratzen badira," & _
+    " baina inbertsorearen korronte mugagatik, string gehiago erabili ahalko badiren momentuan erabiliko dira bakarrik.", vbInformation
+End Sub
+'=======================================================================================================================
+'=======================================================================================================================
+
+'Kutxatila eta egunerapen prozesuak
+'=======================================================================================================================
+'=======================================================================================================================
+Private Sub AlgoritmoCB_Click()
+    If AlgoritmoCB.Value = False Then
+        'Algoritmoak aldatzen dituen datuak Aktibatu erabiltzaileak aldatzeko
+        FotovoltaikoKutxa.Enabled = True
+        InbertsoreKutxa.Enabled = True
+        SerieKutxa.Enabled = True
+        ParaleloKutxa.Enabled = True
+        SerieFletxa.Enabled = True
+        ParaleloFletxa.Enabled = True
+        TurbinaKutxa.Enabled = True
+        TurbinaKopuru.Enabled = True
+        TurbinaFletxa.Enabled = True
+        CombBoxCB.Enabled = True
+        AlgoritmoBotoi.Enabled = False
+        algoritm = False
+    Else
+        'Algoritmoak aldatzen dituen datuak desaktibatu erabiltzaileak aldatu ez ditzan
+        FotovoltaikoKutxa.Enabled = False
+        InbertsoreKutxa.Enabled = False
+        SerieKutxa.Enabled = False
+        ParaleloKutxa.Enabled = False
+        SerieFletxa.Enabled = False
+        ParaleloFletxa.Enabled = False
+        TurbinaKutxa.Enabled = False
+        TurbinaKopuru.Enabled = False
+        TurbinaFletxa.Enabled = False
+        CombBoxCB.Enabled = False
+        AlgoritmoBotoi.Enabled = True
+        algoritm = True
+        Call DatuakEzabatu("A")
+    End If
+End Sub
+
+Private Sub CombBoxCB_Click()
+    If CombBoxCB.Value = True Then
+        'Combiner boxak erabiliko direla adierazi kalkuluetarako
+        ADatuak.Range("N9").Value = True
+        comb = True
+    Else
+        'Combiner boxak ez direla erabiliko adierazi kalkuluetarako
+        ADatuak.Range("N9").Value = False
+        comb = False
+    End If
+    Call Kalkulatu
+End Sub
+'=======================================================================================================================
+'=======================================================================================================================
+
+'Aldaketa prozesuen deikuntzak
+'=======================================================================================================================
+'=======================================================================================================================
+Private Sub AzaleraKutx_Click()
+    Call Aldaketak(Me.AzaleraKutx, Me.AzaleraTB)
+    Call AzaleraTB_AfterUpdate
+End Sub
+
+Private Sub TurbinaKutx_Click()
+    Call Aldaketak(Me.TurbinaKutx, Me.AltueraTB, True)
+End Sub
+
+Private Sub KostuKutx_Click()
+    Call Aldaketak(Me.KostuKutx, Me.KostuTB)
+    Call KostuTB_AfterUpdate
+End Sub
+
+Private Sub PotentziaKutx_Click()
+    Call Aldaketak(Me.PotentziaKutx, Me.PotentziaTB)
+    Call PotentziaTB_AfterUpdate
+End Sub
+
+Private Sub AzaleraTB_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+    Call TextBox_KeyPress(Me.AzaleraTB, KeyAscii, "D")
+End Sub
+
+Private Sub AltueraTB_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+    Call TextBox_KeyPress(Me.AltueraTB, KeyAscii, "D")
+End Sub
+
+Private Sub KostuTB_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+    Call TextBox_KeyPress(Me.KostuTB, KeyAscii, "D")
+End Sub
+
+Private Sub PotentziaTB_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+    Call TextBox_KeyPress(Me.PotentziaTB, KeyAscii, "D")
+End Sub
+
+Private Sub SerieKutxa_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+    Call TextBox_KeyPress(Me.SerieKutxa, KeyAscii, "F")
+End Sub
+
+Private Sub ParaleloKutxa_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+    Call TextBox_KeyPress(Me.ParaleloKutxa, KeyAscii, "F")
+End Sub
+
+Private Sub TurbinaKopuru_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+    Call TextBox_KeyPress(Me.TurbinaKopuru, KeyAscii, "F")
+End Sub
+
+Private Sub KaxaLatitude_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+    Call TextBox_KeyPress(Me.KaxaLatitude, KeyAscii, "D")
+End Sub
+
+Private Sub KaxaAltitude_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+    Call TextBox_KeyPress(Me.KaxaAltitude, KeyAscii, "N")
+End Sub
+
+Private Sub KaxaAzimut_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+    Call TextBox_KeyPress(Me.KaxaAzimut, KeyAscii, "N")
+End Sub
+
+Private Sub KaxaAldapa_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+    Call TextBox_KeyPress(Me.KaxaAldapa, KeyAscii, "D")
+End Sub
+
+Private Sub KaxaZimurtasun_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+    Call TextBox_KeyPress(Me.KaxaZimurtasun, KeyAscii, "D")
+End Sub
+
+Private Sub KostuTB_AfterUpdate()
+    'Orrialdean idatzi
+    ADatuak.Range("B22").Value = KostuTB.Value
+    Call Kalkulatu
+End Sub
+
+Private Sub AzaleraTB_AfterUpdate()
+    'Orrialdean idatzi
+    ADatuak.Range("B23") = AzaleraTB.Value
+    Call Kalkulatu
+End Sub
+
+Private Sub PotentziaTB_AfterUpdate()
+    'Orrialdean idatzi
+    ADatuak.Range("B24").Value = PotentziaTB.Value
+    Call Kalkulatu
+End Sub
+
+Private Sub AltueraTB_AfterUpdate()
+    'Orrialdean idatzi
+    ADatuak.Range("B25").Value = AltueraTB.Value
+    Call Kalkulatu
+End Sub
+
+Private Sub ParaleloKutxa_AfterUpdate()
+    ADatuak.Range("D8").Value = ParaleloKutxa.Value
+    IDatuak.Range("PlakPar").Value = ParaleloKutxa.Value
+    Call Kalkulatu
+End Sub
+
+Private Sub SerieKutxa_AfterUpdate()
+    ADatuak.Range("D7").Value = SerieKutxa.Value
+    IDatuak.Range("PlakSer").Value = SerieKutxa.Value
+    Call Kalkulatu
+End Sub
+
+Private Sub TurbinaKopuru_AfterUpdate()
+    ADatuak.Range("B16").Value = TurbinaKopuru.Value
+    IDatuak.Range("TurbKop").Value = TurbinaKopuru.Value
+    Call Kalkulatu
+End Sub
+'=======================================================================================================================
+'=======================================================================================================================
+
+'Aldakuntza kodea
+'=======================================================================================================================
+'=======================================================================================================================
+Private Sub Aldaketak(ByVal cb As MSForms.CheckBox, ByVal tb As MSForms.TextBox, Optional Eoliko As Boolean)
+    'Kutxatila aldatzerakoan beharrezko aldaketak egin
+    If cb.Value = True Then
+        tb.Enabled = True
+        If Eoliko Then
+            'Turbina bada, sekzioa erakutsi edo kendu
+            EolikoFR.Visible = True
+            MsgBox "Turbina eolikoa ez dago oraindik inplementatuta algoritmoarekin funtzionateko."
+        Else
+            tb.Value = ""
+        End If
+    Else
+        tb.Enabled = False
+        tb.Value = ""
+        If Eoliko Then
+            'Turbina bada, sekzioa erakutsi edo kendu
+            EolikoFR.Visible = False
+        Else
+            tb.Value = "999999"
+        End If
+    End If
+End Sub
+
+Private Sub TextBox_KeyPress(ByVal tb As MSForms.TextBox, ByVal KeyAscii As MSForms.ReturnInteger, ByVal Dez As String)
+    Dim userInput As String
+    Dim validCharsDez As String
+    Dim validCharsFul As String
+    Dim validCharsNeg As String
+    Dim comp As String
+    Dim char As String
+    'Onartutako karaktereak
+    validCharsDez = "0123456789,."
+    validCharsFul = "0123456789"
+    validCharsNeg = "-0123456789,."
+    neg = False
+    Select Case Dez
+        'Dez aldagaia erabili onargarriak diren karaktereak kargatzeko
+        Case "D"
+            comp = validCharsDez
+        Case "F"
+            comp = validCharsFul
+        Case "N"
+            comp = validCharsNeg
+    End Select
+    userInput = tb.Text
+    char = Chr(KeyAscii)
+    'Begiratu sartutako karakterea onargarrien zerrendan ez dagoen
+    If InStr(comp & Chr(8), char) = 0 Then
+        'Ez da baliozkoa, ezabatu NULLekin
+        KeyAscii = 0
+    End If
+    If Dez = "N" Or Dez = "D" Then
+        'Sartutako testuak puntu bat badu, aldatu eta koma bat jarri.
+        If InStr("." & Chr(8), char) > 0 Then
+            'Puntuak komekin ordezkatu
+            KeyAscii = 44
+        End If
+        'Koma bat baino gehiago badago, ezabatu bigarrena eta/edo hurrengoak
+        If ZenbatKaraktereStringean(userInput, ",") > 0 And KeyAscii = 44 Or KeyAscii = 46 Then
+            'Ezabatu NULLekin
+            KeyAscii = 0
+        End If
+    End If
+    If Dez = "N" Then
+        'Negatibo bat baino gehiago badago, ezabatu bigarrena eta/edo hurrengoak
+        If ZenbatKaraktereStringean(userInput, "-") > 0 And KeyAscii = 45 Then
+            'Ezabatu NULLekin
+            KeyAscii = 0
+            neg = True
+        End If
+        'Negatiboa sartzen bada, hasieran jarri. Negatibo bat badago jada, ez jarri
+        If InStr("-" & Chr(8), char) > 0 And Not neg Then
+            'Hasieran jarri negatiboa
+            tb.Value = "-" & tb.Value
+            KeyAscii = 0
+        End If
+        'Negatiboa bigarren aldiz sartzen bada, kendu
+        If InStr("-" & Chr(8), char) > 0 And neg Then
+            'Negatiboa kendu hasieratik
+            tb.Value = Mid(tb.Value, 2)
+            KeyAscii = 0
+        End If
+    End If
+End Sub
+'=======================================================================================================================
+'=======================================================================================================================
+
+'Laguntzailearen logika
+'=======================================================================================================================
+'=======================================================================================================================
+Private Sub Laguntzaile()
+    Dim errfIsc As Double, errfVoc As Double, errfImpp As Double, errfVmpp As Double, errfPot As Double, errfProp As Double, errfKost As Double, errfAz As Double, errfSork As Double
+    Application.Calculate
+
+    'Erreferentzia balioak kargatu
+    errfIsc = ADatuak.Range("M13")
+    errfVoc = ADatuak.Range("M14")
+    errfImpp = ADatuak.Range("M15")
+    errfVmpp = ADatuak.Range("M16")
+    errfPot = ADatuak.Range("M17")
+    errfProp = ADatuak.Range("M18")
+    errfKost = ADatuak.Range("M19")
+    errfAz = ADatuak.Range("M20")
+    errfSork = ADatuak.Range("M21")
+
+    'Konparatzeko balioak kargatu
+    Dim konpIsc As Double, konpVoc As Double, konpImpp As Double, konpVmpp As Double, konpPot As Double, konpProp1 As Double, konpProp2 As Double, konpKost As Double, konpAz As Double, konpSork As Double
+    konpIsc = ADatuak.Range("N13")
+    konpVoc = ADatuak.Range("N14")
+    konpImpp = ADatuak.Range("N15")
+    konpVmpp = ADatuak.Range("N16")
+    konpPot = ADatuak.Range("N17")
+    konpProp1 = 0.8
+    konpProp2 = 1.25
+    konpKost = ADatuak.Range("N19")
+    konpAz = ADatuak.Range("N20")
+    konpSork = ADatuak.Range("N21")
+
+    'Prolema nagusien logika
+    Dim probRng As Range, cell As Range
+    Dim mezu As String
+    Set probRng = ADatuak.Range("L13:L21")
+
+    'Laguntzaile mezua hasieratu
+    mezu = vbCrLf & "Laguntzaile birtualaren gomendioak:" & vbCrLf
+    For Each cell In probRng
+        If cell.Value = True Then
+            'Gomendioa erakutsi, problema kentzeko
+            Select Case cell.Row
+                Case 13 'Isc handiegia
+                    mezu = mezu & "- Zirkuitulabur korronte handiegia. " & vbCrLf
+                Case 14 'Voc handiegia
+                    If konpVoc > (errfVoc * 0.9) And Not ADatuak.Range("L16").Value Then  'Voc egoera txarrenean dago kalkulatuta, %90a ez badu gainditzen dena ondo
+                        mezu = mezu & "- Zelaiaren zirkuitu irekiko tentsioa handiegia da, baina onargarria da." & vbCrLf
+                    ElseIf konpVoc < (errfVoc * 0.9) And Not ADatuak.Range("L16").Value Then
+                        mezu = mezu & "- Zelaiaren zirkuitu irekiko tentsio handiegia. String kopurua murriztu muga barruan egon arte edo" & _
+                        " panel modeloa aldatu." & vbCrLf
+                    End If
+                Case 15 'Impp handiegia
+                    mezu = mezu & "- Zelaiaren korronte maximo handiegia." & vbCrLf
+                Case 16 'Vmpp handiegia
+                    mezu = mezu & "- Zelaiaren tentsio maximo handiegia. String kopurua murriztu muga barruan egon arte edo" & _
+                        " panel modeloa aldatu." & vbCrLf
+                Case 17 'Pmpp handiegia
+                    If errfProp < 1.25 Then 'Proportzioa ondo badago, ondo dago instalazioa, oharra erakutsi
+                        mezu = mezu & "- Zelaiak gehiegizko potentzia du, baina onargarria da." & vbCrLf
+                    End If
+                Case 18 'Proportzioa 0,65 baino txikiago edo 1,25 baino handiago
+                    If errfProp < 0.65 Then
+                        mezu = mezu & "- Inbertsorea oso gaindimentsionatuta dago instalazioarentzat, potentzia baxuagoko" & _
+                            " inbertsore bat aukeratu." & vbCrLf
+                    ElseIf errfProp > 1.25 Then
+                        mezu = mezu & "- Inbertsorea oso azpidimentsionatuta dago instalazioarentzat, potentzia handiagoko" & _
+                            " inbertsore bat aukeratu." & vbCrLf
+                    End If
+                Case 19 'Instalazio prezio handiegia
+                    mezu = mezu & "- Instalazioa aurrekontutik kanpo. Beste panel eta konfigurazioa hautatu, edo inbertsorea aldatu." & vbCrLf
+                Case 20 'Instalazio azalera handiegia
+                    mezu = mezu & "- Instalazioaren azalerak muga gainditzen du. Beste panel potenteago bat aukeratu, edo" & _
+                        " azalera muga handitu" & vbCrLf
+                Case 21 'Instalazio sorkuntza potentzia txikiegia
+                    mezu = mezu & "- Instalazioak sortuko duen potentzia ez da iristen ezarritako mugara. Panel gehiago" & _
+                        " instalatu edo energia muga handitu." & vbCrLf
+            End Select
+        End If
+    Next cell
+
+    'Problemarik aurkitu ez badira, hau azaltzen duen mezu bat adierazi
+    If mezu = vbCrLf & "Laguntzaile birtualaren gomendioak:" & vbCrLf Then
+        mezu = vbCrLf & vbCrLf & vbCrLf & "Ez dira problemarik detektatu konfigurazioan."
+    End If
+
+    'Mezua kargatu
+    Gomendio.Caption = mezu
+End Sub
+'=======================================================================================================================
+'=======================================================================================================================
+
+'Algoritmoa funtzionatzkeo funtzioak
+'=======================================================================================================================
+'=======================================================================================================================
+Private Sub AlgoritmoBotoi_Click()
+    Call Kalkulatu
+    If Errore Then
+        Exit Sub
+    End If
+    'Prezio eta azalera kutxatilak konprobatu
+    If KostuTB.Value = "" Or AzaleraTB.Value = "" Then
+        OutPut = MsgBox("KONTUZ! Ez dira azalera eta/edo instalazioaren kostu mugak ezarri, hauek mugatzen ez badira, baliteke algoritmoak" & _
+            " nahi ez den instalazio bat lortzea." & vbCrLf & "Algoritmoarekin jarraitu?", vbYesNo + vbExclamation)
+        If OutPut = 7 Then
+            'Ez exekutatu algoritmoa
+            GoTo KanporaAtera
+        End If
+    End If
+    'Gelditzeko aldagaiak hasieratu
+    Gelditu = False
+    Kanpora = False
+    Call OptimizazioAlgoritmoa
+    If Kanpora Then
+        'Ez da algoritmoa erabili nahi
+        GoTo KanporaAtera
+    End If
+    'Algoritmo kaxa desmarkatu
+    AlgoritmoCB.Value = False
+    algoritm = True
+    Call AlgoritmoCB_Click
+    'Timerra amaitu
+    Call TimerAmaitu
+    Pausu2.Caption = "Instalazioaren parametroak eta kalkulua.         Azken exekuzio denbora: " & Round(igaronDenb, 2) & " segundu."
+    'Kalkulazioa berriz automatiko ezarri
+    Application.Calculation = xlCalculationAutomatic
+    If Gelditu Then
+        MsgBox "Ezin izan dira konfigurazio guztiak ikasi, puntu honetarainoko konfigurazio honena erakutsiko da." & vbCrLf & _
+            "Konfigurazio hau erakutsiko da, egiaztatzeko eta/edo aldatzeko."
+        'MsgBox optimalInvQuant & " " & optimalProp & " " & a & " " & b & " " & c
+        If sozKop = 0 And secsozKop = 0 Then
+            'Ez da soluziorik aurkitu definitutako mugak betetzen dituena
+            MsgBox "Ezarritako mugak erabiliz, ezin izan da muga guztiak betetzen dituen soluizo bat ere aurkitu." & _
+            " Saiatu instalazio kostua edo teilatu azalera handitzen." & vbCrLf & _
+            "Kontuan hartu, eroale eta babesen prezioa " & ADatuak.Range("N6") & " €koa dela gutxi gora behera.", vbExclamation
+        ElseIf sozKop = 0 And secsozKop > 0 Then
+            'Hurbilena
+            InbertsoreKutxa.Value = SecoptimalInverter
+            FotovoltaikoKutxa.Value = SecoptimalPanel
+            SerieKutxa.Value = SecoptimalSeries
+            Call SerieKutxa_AfterUpdate
+            ParaleloKutxa.Value = SecoptimalParallel
+            Call ParaleloKutxa_AfterUpdate
+            Call Kalkulatu
+        Else
+            'Optimoena
+            InbertsoreKutxa.Value = optimalInverter
+            FotovoltaikoKutxa.Value = optimalPanel
+            SerieKutxa.Value = optimalSeries
+            Call SerieKutxa_AfterUpdate
+            ParaleloKutxa.Value = optimalParallel
+            Call ParaleloKutxa_AfterUpdate
+            Call Kalkulatu
+        End If
+    Else
+        If sozKop = 0 And secsozKop = 0 Then
+            'Ez da soluziorik aurkitu definitutako mugak betetzen dituena
+            MsgBox "Ezarritako mugak erabiliz, ezin izan da muga guztiak betetzen dituen soluizo bat ere aurkitu." & _
+            " Saiatu instalazio kostua edo teilatu azalera handitzen." & vbCrLf & _
+            "Kontuan hartu, eroale eta babesen prezioa " & ADatuak.Range("N6") & " €koa dela gutxi gora behera.", vbExclamation
+        ElseIf sozKop = 0 And secsozKop > 0 Then
+            'Ez da soluzio optimorik lortu, baina kostu barruan eta potentzia sorkuntza hurbil bat duena lortu da
+            MsgBox "Ezarritako mugak erabiliz, ezin ezin izan da muga guztiak betetzen dituen soluizo bat ere aurkitu." & _
+            " Baina prezio eta azalera barruan geratu den hurrengo gehien sortzen duen instalazioa aurkitu da.", vbInformation
+            InbertsoreKutxa.Value = SecoptimalInverter
+            FotovoltaikoKutxa.Value = SecoptimalPanel
+            SerieKutxa.Value = SecoptimalSeries
+            Call SerieKutxa_AfterUpdate
+            ParaleloKutxa.Value = SecoptimalParallel
+            Call ParaleloKutxa_AfterUpdate
+            Call Kalkulatu
+        Else
+            MsgBox "Konfigurazio optimoena lortuta." & vbCrLf & _
+                "Konfigurazio hau erakutsiko da, egiaztatzeko eta/edo aldatzeko."
+            InbertsoreKutxa.Value = optimalInverter
+            FotovoltaikoKutxa.Value = optimalPanel
+            SerieKutxa.Value = optimalSeries
+            Call SerieKutxa_AfterUpdate
+            ParaleloKutxa.Value = optimalParallel
+            Call ParaleloKutxa_AfterUpdate
+            Call Kalkulatu
+        End If
+    End If
+    'Konfigurazio optimoa orrialdean jarri
+    ' ADatuak.Range("G21").Value = "Optimal Panel: " & optimalPanel
+    ' ADatuak.Range("G22").Value = "Optimal Inverter: " & optimalInverter
+    ' ADatuak.Range("G23").Value = "Optimal Series: " & optimalSeries
+    ' ADatuak.Range("G24").Value = "Optimal Parallel: " & optimalParallel
+    ' ADatuak.Range("G25").Value = "Total Cost: " & bestCost
+    ' ADatuak.Range("G26").Value = "Total Energy: " & bestEnergy
+    ' ADatuak.Range("G27").Value = "Total Surface: " & optimalSurface
+KanporaAtera:
+    'Atera
+End Sub
+
+'Optimizazio algoritmoa
+Sub OptimizazioAlgoritmoa()
+    'Aldagaiak definitu, panelak, inbertsore, konfigurazio eta instalazio eolikorako
+    Dim roofSize As Double, energyTarget As Double, budget As Double
+    Dim panelCost As Double, inverterCost As Double, perPanelSurf As Double
+    Dim panelIsc As Double, panelImpp As Double, panelVoc As Double, panelVmpp As Double, panelWp As Double, panelW As Integer, panelH As Integer, panelEfi As Double
+    Dim inverterIsc As Double, inverterImpp As Double, inverterVoc As Double, inverterVmpp As Double, inverterWp As Double, inverterMPPT As Integer, inverterVstart As Double
+    Dim series As Integer, parallel As Integer, totalPanels As Long, totalInverters As Integer
+    Dim totalIsc As Double, totalImpp As Double, totalVoc As Double, totalVmpp As Double, totalWp As Double
+    Dim totalCost As Double, totalEnergy As Double, totalSurf As Double
+    Dim panelName As Variant, inverterName As Variant
+    Dim i As Integer, j As Integer
+    Dim minPanelWp As Double, maxPanelWp As Double
+    Dim minInverterWp As Double, maxInverterWp As Double
+    Dim panelCount As Integer, inverterCount As Integer
+    Dim aurrKonst As Double, matKost As Double
+    Dim irrSork As Double
+    Dim propPnom As Double
+
+    'Inbertsore, panel eta turbina eoliko datuak arrayetan gorde
+    Dim panelData As Variant, panelDataO As Variant
+    Dim inverterData As Variant, inverterDataO As Variant
+    panelData = Sheets("Datu fotoboltaikoak").Range("B2:BK16").Value
+    inverterData = Sheets("Datu fotoboltaikoak").Range("B18:BK34").Value
+    ReDim panelDataO(1 To UBound(panelData, 1), 1 To UBound(panelData, 2))
+    ReDim inverterDataO(1 To UBound(inverterData, 1), 1 To UBound(inverterData, 2))
+    'Algoritmoak nola funtzionatuko duen galdetu
+    AlgoritmoKonfig.Show
+    Call Kargatu_Click("")
+    PotentziaTB.Value = ADatuak.Range("B24")
+    'Pantaila eguneratzeak desaktibatu
+    Application.ScreenUpdating = False
+    Call PotentziaTB_AfterUpdate
+    If AModu = 6 Then
+        'Ebaluatu denbora ondo kalkulatzeko
+        Call Ebaluatu_Click
+        'Eskatutako sortutako potentzia arabera, heinak aldatu
+        Select Case ADatuak.Range("B24")
+            Case 0 To 6999
+            '7MWh baino gutxiago, autokontsumo pertsonala
+            minPanelWp = 1
+            maxPanelWp = 350
+            minInverterWp = 1
+            maxInverterWp = 10000
+            db = (AzaleraTB.Value * 0.11) + 3.2
+            estDenbora = KalkEst(db)
+            Case 7000 To 34999
+            '7MWh eta 35MWh artean, autokontsumo komunitario edo industrial txikia
+            minPanelWp = 350
+            maxPanelWp = 550
+            minInverterWp = 6000
+            maxInverterWp = 50000
+            db = (AzaleraTB.Value * 0.1495) - 1.5223
+            estDenbora = KalkEst(db)
+            Case 35000 To 99999
+            '35MWh eta 100MWh artean, instalazio industrial handia
+            minPanelWp = 450
+            maxPanelWp = 600
+            minInverterWp = 35000
+            maxInverterWp = 150000
+            db = AzaleraTB.Value * 0.0584
+            estDenbora = KalkEst(db)
+            Case Else
+            '100MWh baino gehiago, zelai fotovoltaikoa
+            minPanelWp = 550
+            maxPanelWp = 1000
+            minInverterWp = 50000
+            maxInverterWp = 1000000
+            db = (AzaleraTB.Value * 0.0539) - 1
+            estDenbora = KalkEst(db)
+        End Select
+    ElseIf AModu = 7 Then
+        'Ebaluatu denbora ondo kalkulatzeko
+        Call Ebaluatu_Click
+        minPanelWp = 1
+        maxPanelWp = 9999
+        minInverterWp = 1
+        maxInverterWp = 9999999
+        db = (AzaleraTB.Value * 1.013) + 6.3243
+        estDenbora = KalkEst(db)
+    Else
+        'Atera
+        Kanpora = True
+        Exit Sub
+    End If
+    'Timerra hasi
+    Call TimerHasi
+    'Aurrerapen barra erakutsi
+    frac = 0
+    frac2 = 0
+    ufProgressObr.TituloObra.Caption = ""
+    ufProgressObr.LabelProgress.Width = 0
+    ufProgressObr.LabelProgress2.Width = 0
+    ufProgressObr.Caption = "Algoritmoa hasierazten."
+    ufProgressObr.Proceso.Caption = "Panel eta inbertsore datuak kargatzen."
+    ufProgressObr.SubProceso.Caption = ""
+    ufProgressObr.TiempoEstimado.Caption = ""
+    ufProgressObr.Denbora.Caption = "Kalkulazio denbora estimatua: " & estDenbora
+    ufProgressObr.Show vbModeless
+    Call ActualizarBarra
+    panelCount = 1
+    inverterCount = 1
+    'Pausu 1: Panelak optimizatu
+    For i = LBound(panelData, 2) To UBound(panelData, 2)
+        If panelData(2, i) >= minPanelWp And panelData(2, i) <= maxPanelWp Then
+            'Parametro barruan badago, array optimizatura kopiatu
+            For j = LBound(panelData, 1) To UBound(panelData, 1)
+                panelDataO(j, panelCount) = panelData(j, i)
+            Next j
+            panelCount = panelCount + 1
+        End If
+    Next i
+    'Pausu 2: Inbertsoreak optimizatu
+    For i = LBound(inverterData, 2) To UBound(inverterData, 2)
+        If inverterData(4, i) >= minInverterWp And inverterData(4, i) <= maxInverterWp Then
+            'Parametro barruan badago, array optimizatura kopiatu
+            For j = LBound(inverterData, 1) To UBound(inverterData, 1)
+                inverterDataO(j, inverterCount) = inverterData(j, i)
+            Next j
+            inverterCount = inverterCount + 1
+        End If
+    Next i
+    'Kostu konstanteak kargatu
+    ufProgressObr.Proceso.Caption = "Datu konstanteak kargatzen."
+    Application.Calculate
+    'Aurrekontu
+    aurrKonst = ADatuak.Range("N6")
+    matKost = ADatuak.Range("N7")
+    'Sorkuntza
+    irrSork = ADatuak.Range("N8")
+    'Aurrerapen barrarako mugak ezarri
+    progreso = 1 / ((panelCount - 1) * (inverterCount - 1))
+    ufProgressObr.Proceso.Caption = "Muga datuak kargatzen."
+    'Ezarritako mugak kargatu
+    roofSize = ADatuak.Range("B23").Value
+    energyTarget = ADatuak.Range("B24").Value
+    budget = ADatuak.Range("B22").Value
+    'Mugak ezarri ez badira, muga oso altu bat ezarri
+    If roofSize = 0 Then roofSize = 99999
+    If energyTarget = 0 Then energyTarget = 9999999
+    If budget = 0 Then budget = 999999
+    'Konfigurazio honena abiatu, konparazioak egiteko
+    bestCost = 999999
+    SecbestCost = 999999
+    bestEnergy = 0
+    SecbestEnergy = 0
+    ufProgressObr.Caption = "Konfigurazioak konparatzen."
+    'Optimizazioak konparaketak gutxiago tardatzeko
+    Application.Calculation = xlCalculationManual
+    sozKop = 0
+    secsozKop = 0
+    'Panel eta inbertsore guztiak begiratu arrayak erabiliz
+    For i = LBound(panelDataO, 2) To UBound(panelDataO, 2)
+        panelName = panelDataO(1, i)
+    If Len(panelName) > 2 Then  'Izena onargarria bada
+            If zahar Then   'Kalkulazio metodo zaharra mantendu, erroreak zuzentzeko
+                'Panelaren izena orrialdean sartu kalkuluak egiteko
+                ADatuak.Range("B6").Value = panelName
+                IDatuak.Range("PlakaIzen").Value = panelName
+            End If
+            'Panel informazioa kargatu arraytik
+            panelIsc = panelDataO(6, i)     'Zirkuitulabur korronte
+            panelImpp = panelDataO(5, i)    'Potentzi maximoko korronte
+            panelVoc = panelDataO(3, i)     'Zirkuitu irekiko tentsio
+            panelVmpp = panelDataO(4, i)    'Potentzi maximoko tentsio
+            panelWp = panelDataO(2, i)      'Potentzi maximo
+            panelCost = panelDataO(14, i)   'Paneleko kostu
+            panelH = panelDataO(11, i)      'Panel altuera
+            panelW = panelDataO(12, i)      'Panel luzeera
+            panelEfi = panelDataO(15, i)    'Panel efizientzia
+            'Inbertsoreak
+            For j = LBound(inverterDataO, 2) To UBound(inverterDataO, 2)
+                inverterName = inverterDataO(1, j)
+                If Len(inverterName) > 2 Then   'Izena onargarria bada
+                    If zahar Then
+                        'Inbertsore izena orrialdean sartu kalkuluak egiteko
+                        ADatuak.Range("B8").Value = inverterName
+                        IDatuak.Range("InbIzen").Value = inverterName
+                    End If
+                    ufProgressObr.Proceso.Caption = panelName & " panela ikasten, " & inverterName & " inbertsorearekin."
+                    'Inbertsore informazioa lortu arraytik
+                    inverterIsc = inverterDataO(14, j)      'Jasan dezakeen zirkuitulabur korronte
+                    inverterImpp = inverterDataO(15, j)     'Jasan dezakeen potentzi maximoko korronte
+                    inverterVoc = inverterDataO(8, j)       'Jasan dezakeen zirkuitu irekiko tentsioa
+                    inverterVmpp = inverterDataO(10, j)     'Jasan dezakeen potentzi maximoko tentsio
+                    inverterWp = inverterDataO(4, j)        'Jasan dezakeen zelai fotovoltaiko maximo
+                    inverterCost = inverterDataO(16, j)     'Inbertsoreko kostu
+                    inverterMPPT = inverterDataO(17, j)     'Inbertsoreko MPPT sarrera kop
+                    inverterVstart = inverterDataO(6, j)    'Inbertsoreko abio tentsio minimoa
+                    'Serieko kopuru minimo eta maximoak kargatu
+                    Dim minSeries As Integer, maxSeries As Integer, maxParallel
+                    minSeries = Int(inverterVstart / panelVmpp) + 1
+                    maxSeries = Int(inverterVoc / panelVoc)
+                    perPanelSurf = Round((panelW / 1000) * (panelH / 1000), 2)
+                    'Kostuak mugatuta
+                    par1 = WorksheetFunction.RoundUp(((aurrKonst + (budget / (1 + 1 * 0.21))) / (maxSeries * (panelCost + matKost) + ((panelIsc / inverterImpp) * inverterCost))), 0)
+                    'Azalerak mugatuta
+                    par2 = (roofSize / perPanelSurf) / minSeries
+                    maxParallel = WorksheetFunction.Min(par1, par2)
+                    'Aurrerapen barraren proportzioa
+                    progreso2 = 1 / (maxSeries * maxParallel)
+                    If zahar Then
+                        'Formulak aktibatu datuak kargatu ahal izateko
+                        Application.Calculate
+                        minSeries = ADatuak.Range("D10").Value
+                        maxSeries = ADatuak.Range("D9").Value
+                        'Paralelo maximo kargatu kostu arabera
+                        maxParallel = ADatuak.Range("L11").Value
+                    End If
+                    'Serie eta paralelo konfigurazio guztietatik iteratu
+                    For parallel = 1 To maxParallel
+                        If zahar Then
+                            ADatuak.Range("D8").Value = parallel
+                            IDatuak.Range("PlakPar").Value = parallel
+                        End If
+                        For series = minSeries To maxSeries
+                            totalInverters = InbertsoreKopuru(parallel, inverterIsc, panelIsc, inverterMPPT, comb)
+                            totalPanels = (series * parallel)
+                            totalCost = aurrKonst + (matKost * totalPanels) + (panelCost * totalPanels) + (inverterCost * totalInverters)
+                            'BEZa gehitu
+                            totalCost = totalCost + (totalCost * 0.21)
+                            If zahar Then
+                                ADatuak.Range("D7").Value = series
+                                IDatuak.Range("PlakSer").Value = series
+                                'Formulak aktibatu datuak kargatu ahal izateko
+                                Application.Calculate
+                                totalCost = ADatuak.Range("B18")
+                                totalInverters = ADatuak.Range("B9")
+                            End If
+                            totalSurf = (perPanelSurf * totalPanels)
+                            'Azalera eta kostuak mugen artean badaude, kalkuluak egin (optimizatzeko)
+                            If totalCost <= budget And totalSurf <= roofSize Then
+                                'Aurrerapen barra eguneratu
+                                ufProgressObr.SubProceso.Caption = parallel & " paralelo eta " & series & " konfigurazioa ikasten."
+                                'Igaro den denbora erakutsi segunduro
+                                ufProgressObr.TiempoEstimado.Caption = "Exekuzio denbora: " & timerKalk.CurrentElapsed
+                                Call ActualizarBarra2
+                                'Zelai fotovoltaikoaren ezaugarriak
+                                totalVoc = series * panelVoc    'Tentsioa seriekin handitu
+                                totalVmpp = series * panelVmpp
+                                totalIsc = parallel * panelIsc  'Korrontea paralelokin handitu
+                                totalImpp = parallel * panelImpp
+                                totalEnergy = (irrSork * totalSurf * panelEfi)
+                                totalWp = totalPanels * panelWp
+                                propPnom = WorksheetFunction.RoundUp(totalWp / (inverterWp * totalInverters), 2)
+                                If zahar Then
+                                    totalWp = ADatuak.Range("B19")  'Potentzia totala
+                                    propPnom = ADatuak.Range("L8")
+                                End If
+                                'Zelaiaren ezaugarriek inbertsore maximoak gainditzen ez dituztela, eta p nominal proportzioa onargarria dela zihurtatu
+                                If totalVoc <= inverterVoc And totalVmpp <= inverterVmpp And totalIsc <= (inverterIsc * totalInverters) And totalImpp <= (inverterImpp * totalInverters) And propPnom > 0.65 And propPnom < 1.25 Then
+                                    'Konfigurazioak potentzia eta kostu mugak betetzen baditu ikusi
+                                    If totalCost <= budget And totalEnergy >= energyTarget And totalEnergy <= (1.25 * energyTarget) Then
+                                        'Kostu baxuena duen instalazioa gorde
+                                        If totalCost < bestCost Then
+                                            bestCost = totalCost
+                                            bestEnergy = totalEnergy
+                                            optimalPanel = panelName
+                                            optimalInverter = inverterName
+                                            optimalSeries = series
+                                            optimalParallel = parallel
+                                            optimalSurface = totalSurf
+                                            ' optimalProp = propPnom
+                                            ' optimalInvQuant = totalInverters
+                                            ' a = totalWp
+                                            ' b = inverterWp
+                                            'Lortutako soluzio kopurua gorde
+                                            sozKop = sozKop + 1
+                                            ufProgressObr.TituloObra.Caption = sozKop & " soluzio optimo eta " & secsozKop & " soluzio" & _
+                                                " 'nahiko optimoak' aurkitu dira."
+                                        End If
+                                    'Sorkuntza muga lortu ez bada, baina prezio muga bai, gorde
+                                    ElseIf totalCost <= budget Then
+                                        'Gehien sortzen duen instalazioa
+                                        If totalEnergy > SecbestEnergy Then
+                                            SecbestCost = totalCost
+                                            SecbestEnergy = totalEnergy
+                                            SecoptimalPanel = panelName
+                                            SecoptimalInverter = inverterName
+                                            SecoptimalSeries = series
+                                            SecoptimalParallel = parallel
+                                            SecoptimalSurface = totalSurf
+                                            ' optimalProp = totalVoc
+                                            ' optimalInvQuant = totalInverters
+                                            ' a = perPanelSurf
+                                            ' b = inverterWp
+                                            ' c = totalSurf
+                                            'Lortutako soluzio kopurua gorde
+                                            secsozKop = secsozKop + 1
+                                            ufProgressObr.TituloObra.Caption = sozKop & " soluzio optimo eta " & secsozKop & " soluzio" & _
+                                                " 'nahiko optimoak' aurkitu dira."
+                                        End If
+                                    End If
+                                End If
+                            End If
+                        'Gelditzea eskatzen bada, hona iristean kalkulazioak amaitu
+                        If Gelditu Then Exit Sub
+                        Next series
+                    Next parallel
+                    Call ReiniciarBarra2
+                End If
+            Next j
+        End If
+    Next i
+    'MsgBox bestEnergy & " " & energyTarget & " " & SecbestEnergy & " " & b & " " & c
+    'Aurrerapen barra deskargatu
+    Unload ufProgressObr
+    'Eguneratzeak aktibatu
+    Application.ScreenUpdating = True
+End Sub
+'=======================================================================================================================
+'=======================================================================================================================
+
+'Kokapen datuen aldaketa eta ziurtapena
+'=======================================================================================================================
+'=======================================================================================================================
+Private Sub KaxaLatitude_AfterUpdate()
+    'Konfirmatu ea sartutako latitudea penintsulan dagoen edo ez
+    If IsNumeric(KaxaLatitude.Value) Then
+        latitude = CDbl(KaxaLatitude.Value)
+        If latitude <= 26 Or latitude >= 46 Then
+            MsgBox "Programa honek Iberiar penintsularako instalazioetarako dago diseinatuta, mesedez, sartu [28,29]" & _
+                " edo [34,45]º-ko latitude bat.", vbExclamation
+            KaxaLatitude.Value = ""
+            KaxaLatitude.SetFocus
+            Exit Sub
+        End If
+        If latitude <= 33 And latitude >= 30 Then
+            MsgBox "Programa honek Iberiar penintsularako instalazioetarako dago diseinatuta, mesedez, sartu [28,29]" & _
+                " edo [34,45]º-ko latitude bat.", vbExclamation
+            KaxaLatitude.Value = ""
+            KaxaLatitude.SetFocus
+            Exit Sub
+        End If
+        'Lehen zegoena baino ezberdina bada, PVGIS datu basea berriz kargatzeko abisua eman
+        If latitude <> LatHas Then
+            OutPut = MsgBox("Latitudea aldatu da, honek aurretik kargatuta zeuden irradiazio balioak baliogabetzen ditu." & vbCrLf & _
+                " Beste PVGIS TMY lokalizazio datuak kargatu?", vbYesNo + vbQuestion)
+            If OutPut = 6 Then
+Eskatu:
+                'Instalazio lekuko datuak kargatu berriz
+                Call AukeratuDok
+                If Not Itsatsiak Then
+                    'Ez dira datuak itsatsi
+                    latitude = IDatuak.Range("InsLatitude")
+                    KaxaLatitude.Value = latitude
+                    Exit Sub
+                End If
+                'Konfirmatu latitude berdina edo antzekoa dela
+                If latitude < IDatuak.Range("InsLatitude") + 0.2 And latitude > IDatuak.Range("InsLatitude") - 0.2 Then
+                    '0.4ko tartea utzi
+                Else
+                    'Tartean ez dago
+                    OutPut = MsgBox("Kargatutako datuak " & IDatuak.Range("InsLatitude") & "ºko latitudekoak dira," & _
+                        " eta idatzitako latitudea " & latitude & "º izan da. Kargatutako datuko latitudea erabili?", vbExclamation + vbYesNo)
+                    If OutPut = 6 Then
+                        'Datuetako latitudea idatzi
+                        latitude = IDatuak.Range("InsLatitude")
+                        KaxaLatitude.Value = latitude
+                    Else
+                        'Berriz eskatu kargatzea
+                        GoTo Eskatu
+                    End If
+                End If
+            Else
+                'Ez kargatu, lehengo latitudea idatzi
+                KaxaLatitude.Value = LatHas
+                Exit Sub
+            End If
+        End If
+        'Orrialdean jarri balioa
+        IDatuak.Range("InsLatitude") = latitude
+    Else
+        'MsgBox "Ez da numerikoa"
+    End If
+    Call Kalkulatu
+End Sub
+
+Private Sub KaxaZimurtasun_AfterUpdate()
+    'Konfirmatu ea sartutako latitudea penintsulan dagoen edo ez
+    If IsNumeric(KaxaZimurtasun.Value) Then
+        zimur = CDbl(KaxaZimurtasun.Value)
+        If zimur < 0.1 Or zimur > 0.4 Then
+            MsgBox "Zimurtasuna 0,1 eta 0,4 balio artean egon behar da, eta ezin da negatibo izan.", vbInformation
+            KaxaZimurtasun.Value = ""
+            KaxaZimurtasun.SetFocus
+            Exit Sub
+        End If
+        'Orrialdean jarri balioa
+        IDatuak.Range("InsZimurt") = zimur
+    Else
+        'MsgBox "Ez da numerikoa"
+    End If
+    Call Kalkulatu
+End Sub
+
+Private Sub KaxaAldapa_AfterUpdate()
+    'Konfirmatu ea sartutako latitudea penintsulan dagoen edo ez
+    If IsNumeric(KaxaAldapa.Value) Then
+        aldapa = CDbl(KaxaAldapa.Value)
+        If aldapa < 0 Or aldapa > 90 Then
+            MsgBox "Aldapa angelua 0 eta 90 balio artean egon behar da.", vbInformation
+            KaxaAldapa.Value = ""
+            KaxaAldapa.SetFocus
+            Exit Sub
+        End If
+        'Orrialdean jarri balioa
+        IDatuak.Range("InsAldapa") = aldapa
+    Else
+        'MsgBox "Ez da numerikoa"
+    End If
+    Call Kalkulatu
+End Sub
+
+Private Sub KaxaAzimut_AfterUpdate()
+    'Konfirmatu ea sartutako latitudea penintsulan dagoen edo ez
+    If IsNumeric(KaxaAzimut.Value) Then
+        azimut = CDbl(KaxaAzimut.Value)
+        If azimut < -180 Or azimut > 180 Then
+            MsgBox "Azimut angelua -180 eta 180 balio artean egon behar da.", vbInformation
+            KaxaAzimut.Value = ""
+            KaxaAzimut.SetFocus
+            Exit Sub
+        End If
+        'Orrialdean jarri balioa
+        IDatuak.Range("InsAzimut") = azimut
+    Else
+        'MsgBox "Ez da numerikoa"
+    End If
+    Call Kalkulatu
+End Sub
+'=======================================================================================================================
+'=======================================================================================================================
+
+'Bestelako funtzioak
+'=======================================================================================================================
+'=======================================================================================================================
+Private Sub AbiapuntuDatu(ByVal eg As String)
+    If eg = "A" Then
+        'Hasieran, orrialdeko datuak gorde
+        HAld = IDatuak.Range("InsAldapa").Value
+        HAzim = IDatuak.Range("InsAzimut").Value
+        HLatit = IDatuak.Range("InsLatitude").Value
+        HAltit = IDatuak.Range("InsAltitude").Value
+        HZimu = IDatuak.Range("InsZimurt").Value
+        HAzal = IDatuak.Range("InsAzMax").Value
+        HUrtKon = IDatuak.Range("InsUrtKonts").Value
+        HPlakIz = IDatuak.Range("PlakaIzen").Value
+        HInbIz = IDatuak.Range("InbIzen").Value
+        HSer = IDatuak.Range("PlakSer").Value
+        HPar = IDatuak.Range("PlakPar").Value
+        HTurbIz = IDatuak.Range("TurbIzen")
+        HTurbKop = IDatuak.Range("TurbKop")
+    ElseIf eg = "At" Then
+        Application.Calculation = xlCalculationManual
+        'Ateratzea aukeratzen bada, hasierako balioak idatzi
+        IDatuak.Range("InsAldapa").Value = HAld
+        IDatuak.Range("InsAzimut").Value = HAzim
+        IDatuak.Range("InsLatitude").Value = HLatit
+        IDatuak.Range("InsAltitude").Value = HAltit
+        IDatuak.Range("InsZimurt").Value = HZimu
+        IDatuak.Range("InsAzMax").Value = HAzal
+        IDatuak.Range("InsUrtKonts").Value = HUrtKon
+        IDatuak.Range("PlakaIzen").Value = HPlakIz
+        IDatuak.Range("InbIzen").Value = HInbIz
+        IDatuak.Range("PlakSer").Value = HSer
+        IDatuak.Range("PlakPar").Value = HPar
+        IDatuak.Range("TurbIzen") = HTurbIz
+        IDatuak.Range("TurbKop") = HTurbKop
+        Application.Calculation = xlCalculationAutomatic
+    End If
+End Sub
+
+Private Sub Kargatu_Click(Optional Hasiera As String)
+    'Orrialdeko datu geografikoak kargatu
+    KaxaAldapa.Value = IDatuak.Range("InsAldapa").Value
+    KaxaAzimut.Value = IDatuak.Range("InsAzimut").Value
+    KaxaLatitude.Value = IDatuak.Range("InsLatitude").Value
+    KaxaAltitude.Value = IDatuak.Range("InsAltitude").Value
+    KaxaZimurtasun.Value = IDatuak.Range("InsZimurt").Value
+    If Hasiera = "H" Then
+        'Muga datuak kargatu
+        KostuTB.Value = ADatuak.Range("B22")
+        AzaleraTB.Value = IDatuak.Range("InsAzMax")
+        ADatuak.Range("B23") = IDatuak.Range("InsAzMax")
+        PotentziaTB.Value = IDatuak.Range("InsUrtKonts")
+        ADatuak.Range("B24") = IDatuak.Range("InsUrtKonts")
+        AltueraTB.Value = ""
+        'Instalazio datuak kargatu
+        FotovoltaikoKutxa.Value = IDatuak.Range("PlakaIzen")
+        ADatuak.Range("B6") = IDatuak.Range("PlakaIzen")
+        InbertsoreKutxa.Value = IDatuak.Range("InbIzen")
+        ADatuak.Range("B8") = IDatuak.Range("InbIzen")
+        SerieKutxa.Value = IDatuak.Range("PlakSer")
+        ADatuak.Range("D7") = IDatuak.Range("PlakSer")
+        ParaleloKutxa.Value = IDatuak.Range("PlakPar")
+        ADatuak.Range("D8") = IDatuak.Range("PlakPar")
+        TurbinaKutxa.Value = IDatuak.Range("TurbIzen")
+        ADatuak.Range("B15") = IDatuak.Range("TurbIzen")
+        TurbinaKopuru.Value = IDatuak.Range("TurbKop")
+        ADatuak.Range("B16") = IDatuak.Range("TurbKop")
+    ElseIf Hasiera = "B" Then
+        'Hasierako datuak kargatu
+        FotovoltaikoKutxa.Value = HPlakIz
+        ADatuak.Range("B6") = HPlakIz
+        InbertsoreKutxa.Value = HInbIz
+        ADatuak.Range("B8") = HInbIz
+        SerieKutxa.Value = HSer
+        ADatuak.Range("D7") = HSer
+        ParaleloKutxa.Value = HPar
+        ADatuak.Range("D8") = HPar
+        TurbinaKutxa.Value = HTurbIz
+        ADatuak.Range("B15") = HTurbIz
+        TurbinaKopuru.Value = HTurbKop
+        ADatuak.Range("B16") = HTurbKop
+    Else
+        'Muga datuak kargatu
+        KostuTB.Value = ADatuak.Range("B22")
+        AzaleraTB.Value = ADatuak.Range("B23")
+        PotentziaTB.Value = ADatuak.Range("B24")
+        AltueraTB.Value = ADatuak.Range("B25")
+    End If
+    'Turbina atala erakutsi edo ez
+    If Len(TurbinaKutxa.Value) > 1 Then
+        TurbinaKutx.Value = True
+    End If
+    Call Kalkulatu
+End Sub
+
+Private Sub FotovoltaikoKutxa_Change()
+    If FotovoltaikoKutxa.Value = "" Then
+        'Zuriz jarri bada, ezabatu datuak
+        ADatuak.Range("B6").Value = FotovoltaikoKutxa.Value
+        IDatuak.Range("PlakaIzen").Value = FotovoltaikoKutxa.Value
+    Else
+        'Panel modelo bat aukeratzerakoan, datuak kargatu
+        ADatuak.Range("B6").Value = FotovoltaikoKutxa.Value
+        IDatuak.Range("PlakaIzen").Value = FotovoltaikoKutxa.Value
+        luz = ADatuak.Range("F11")
+        zab = ADatuak.Range("F12")
+        Vmpp.Caption = ADatuak.Range("F4")
+        Voc.Caption = ADatuak.Range("F3")
+        Impp.Caption = ADatuak.Range("F5")
+        Isc.Caption = ADatuak.Range("F6")
+        Wp.Caption = ADatuak.Range("F2")
+        Efiz.Caption = ADatuak.Range("F15") * 100
+        Prezio.Caption = ADatuak.Range("F14")
+        Azalera.Caption = ADatuak.Range("L6")
+        Call Kalkulatu
+    End If
+End Sub
+
+Private Sub InbertsoreKutxa_Change()
+    If InbertsoreKutxa.Value = "" Then
+        'Zuriz jarri bada, ezabatu datuak
+        IDatuak.Range("InbIzen").Value = InbertsoreKutxa.Value
+        ADatuak.Range("B8").Value = InbertsoreKutxa.Value
+    Else
+        'Inbertsore modelo bat aukeratzerakoan, datuak kargatu
+        IDatuak.Range("InbIzen").Value = InbertsoreKutxa.Value
+        ADatuak.Range("B8").Value = InbertsoreKutxa.Value
+        VmppMin.Caption = ADatuak.Range("H9")
+        VmppMax.Caption = ADatuak.Range("H10")
+        ImppInv.Caption = ADatuak.Range("H15")
+        IscInv.Caption = ADatuak.Range("H14")
+        PrezioInv.Caption = ADatuak.Range("H16")
+        EfizInv.Caption = ADatuak.Range("H12") * 100
+        Vmax.Caption = ADatuak.Range("H8")
+        Pmax.Caption = ADatuak.Range("H4")
+        DisIscInv.Caption = ADatuak.Range("H14")
+        DisVocInv.Caption = ADatuak.Range("H8")
+        DisImppInv.Caption = ADatuak.Range("H15")
+        DisVmppInv.Caption = ADatuak.Range("H10")
+        DisPfvInv.Caption = ADatuak.Range("H4")
+        PmaxInv.Caption = ADatuak.Range("H2")
+        MPPTKopuru.Caption = "Inbertsore honek " & ADatuak.Range("H17") & " MPPT sarrera ditu."
+        Call Kalkulatu
+    End If
+End Sub
+
+Private Sub TurbinaKutxa_Change()
+    If TurbinaKutxa.Value = "" Then
+        'Zuriz jarri bada, ezabatu balioak
+        PnomEol.Caption = ""
+        DiamEol.Caption = ""
+        PrezEol.Caption = ""
+        EnerEol.Caption = ""
+        TurbinaKopuru.Value = ""
+        ADatuak.Range("B16").Value = 0
+        IDatuak.Range("TurbKop").Value = 0
+        Call Kalkulatu
+    Else
+        'Inbertsore modelo bat aukeratzerakoan, datuak kargatu
+        ADatuak.Range("B15").Value = TurbinaKutxa.Value
+        IDatuak.Range("TurbIzen").Value = TurbinaKutxa.Value
+        PnomEol.Caption = ADatuak.Range("J2")
+        DiamEol.Caption = ADatuak.Range("J3")
+        PrezEol.Caption = ADatuak.Range("J4")
+        EnerEol.Caption = ADatuak.Range("J5")
+        Call Kalkulatu
+    End If
+End Sub
+
+Private Sub DatuakEzabatu(Optional Noiz As String)
+    'Datu fotovoltaiko
+    Vmpp.Caption = ""
+    Voc.Caption = ""
+    Impp.Caption = ""
+    Isc.Caption = ""
+    Wp.Caption = ""
+    Efiz.Caption = ""
+    Prezio.Caption = ""
+    Azalera.Caption = ""
+    FotovoltaikoKutxa.Value = ""
+    'Inbertsore datu
+    VmppMin.Caption = ""
+    VmppMax.Caption = ""
+    ImppInv.Caption = ""
+    IscInv.Caption = ""
+    PrezioInv.Caption = ""
+    EfizInv.Caption = ""
+    Vmax.Caption = ""
+    Pmax.Caption = ""
+    InbertsoreKutxa.Value = ""
+    'Diseinu datuak
+    Pnomin.Caption = ""
+    ModKop.Caption = ""
+    AzaleraTot.Caption = ""
+    DisIscFv.Caption = ""
+    DisVocFv.Caption = ""
+    DisImppFv.Caption = ""
+    DisVmppFv.Caption = ""
+    DisPmppFv.Caption = ""
+    DisIscInv.Caption = ""
+    DisVocInv.Caption = ""
+    DisImppInv.Caption = ""
+    DisVmppInv.Caption = ""
+    DisPfvInv.Caption = ""
+    SerieKutxa.Value = ""
+    ParaleloKutxa.Value = ""
+    'Laburpena
+    ModKop2.Caption = ""
+    AzaleraTot2.Caption = ""
+    InvKop.Caption = ""
+    FvPnom.Caption = ""
+    PmppFv.Caption = ""
+    PmaxInv.Caption = ""
+    Pnomin2.Caption = ""
+    SorkUrte.Caption = ""
+    InstPrez.Caption = ""
+    'Turbina datuak
+    TurbinaKutxa.Value = ""
+    PnomEol.Caption = ""
+    DiamEol.Caption = ""
+    PrezEol.Caption = ""
+    EnerEol.Caption = ""
+    TurbinaKopuru.Value = ""
+    If Noiz = "H" Or Noiz = "A" Then
+        'Ez ezabatu
+    Else
+        'Kokapen datuak
+        KaxaLatitude.Value = ""
+        KaxaAltitude.Value = ""
+        KaxaAldapa.Value = ""
+        KaxaZimurtasun.Value = ""
+        KaxaAzimut.Value = ""
+        Tartea.Caption = ""
+        'Muga datuak
+        KostuTB.Value = ""
+        AzaleraTB.Value = ""
+        PotentziaTB.Value = ""
+        AltueraTB.Value = ""
+    End If
+End Sub
+
+Private Sub ZerrendaEguneratu(ByVal Zein As String)
+    Dim Orrialde As Worksheet
+    Dim rng As Range
+    Dim Izena As MSForms.ComboBox
+    If Zein = "Fotovoltaiko" Then
+        Set Izena = Me.FotovoltaikoKutxa
+        Set Orrialde = ThisWorkbook.Sheets("Datu fotoboltaikoak")
+        Set rng = Orrialde.Range("B2:BK2")
+    ElseIf Zein = "Inbertsore" Then
+        Set Izena = Me.InbertsoreKutxa
+        Set Orrialde = ThisWorkbook.Sheets("Datu fotoboltaikoak")
+        Set rng = Orrialde.Range("B18:BK18")
+    ElseIf Zein = "Eoliko" Then
+        Set Izena = Me.TurbinaKutxa
+        Set Orrialde = ThisWorkbook.Sheets("Haize datuak")
+        Set rng = Orrialde.Range("AP3:AS3")
+    Else
+        MsgBox "Ezin da zerrenda eguneratu"
+    End If
+    'Lehen zegoena kendu
+    Izena.Clear
+    For Each cell In rng
+        Izena.AddItem cell.Value
+    Next cell
+End Sub
+
+Private Sub Kalkulatu()
+    'Kalkulatutako datuak erakutsi
+    'Datu nahitaezkoak daudela egiaztatu
+    If KaxaLatitude.Value = "" Or KaxaAltitude.Value = "" Or KaxaAldapa.Value = "" Or KaxaZimurtasun.Value = "" Or KaxaAzimut.Value = "" Then
+        'Datuak falta dira
+        MsgBox "Kokapen daturen bat betetzea falta da, hauek guztiak beteta egon arte ezin izango dira kalkulu zehatzak egin.", vbCritical
+        Errore = True
+        Exit Sub
+    End If
+    Errore = False
+    'Serie paralelo tartea eguneratu
+    Tartea.Caption = ADatuak.Range("D10") & " eta " & ADatuak.Range("D9") & " artean"
+    'Modulu kopurua kalkulatu eta erakutsi
+    ModKop.Caption = ADatuak.Range("B7").Value
+    ModKop2.Caption = ADatuak.Range("B7").Value
+    'Zenbat inbertsore behar diren erakutsi (MPPT sarrera arabera)
+    InvKop.Caption = ADatuak.Range("L10")
+    'Moduluek erabilitako azalera
+    AzaleraTot.Caption = ADatuak.Range("L7").Value
+    AzaleraTot2.Caption = ADatuak.Range("L7").Value
+    'Zelai fotovoltaikoaren datuak
+    DisIscFv.Caption = ADatuak.Range("D3")
+    DisVocFv.Caption = ADatuak.Range("D4")
+    DisImppFv.Caption = ADatuak.Range("D5")
+    DisVmppFv.Caption = ADatuak.Range("D6")
+    DisPmppFv.Caption = ADatuak.Range("D2")
+    'Inbertsore guztien datuak
+    DisIscInv.Caption = ADatuak.Range("H14") * ADatuak.Range("B9")
+    DisVocInv.Caption = ADatuak.Range("H8")
+    DisImppInv.Caption = ADatuak.Range("H15") * ADatuak.Range("B9")
+    DisVmppInv.Caption = ADatuak.Range("H10")
+    DisPfvInv.Caption = ADatuak.Range("H4") * ADatuak.Range("B9")
+    'Laburpen datuak
+    FvPnom.Caption = ADatuak.Range("D2")
+    PmppFv.Caption = ADatuak.Range("X4")
+    SorkUrte.Caption = ADatuak.Range("B19")
+    InstPrez.Caption = ADatuak.Range("B18")
+    Pnomin.Caption = ADatuak.Range("L8")
+    Pnomin2.Caption = ADatuak.Range("L8")
+    'Konparaketak egin bateragarritasuna ikasteko
+    Dim labelName As String
+    Dim i As Integer
+    Dim labelMap As Object
+    Dim labelKey As Variant
+    'Hiztegi bat sortu, etiketa izen bakoitze lerro zenbaki batera lotzeko.
+    Set labelMap = CreateObject("Scripting.Dictionary")
+    'Etiketa izen eta lerro zenbakiak definitu
+    labelMap.Add "DisIscFv", 13
+    labelMap.Add "DisVocFv", 14
+    labelMap.Add "DisImppFv", 15
+    labelMap.Add "DisVmppFv", 16
+    labelMap.Add "DisPmppFv", 17
+    labelMap.Add "Pnomin2", 18
+    labelMap.Add "InstPrez", 19
+    labelMap.Add "AzaleraTot2", 20
+    labelMap.Add "SorkUrte", 21
+    'Hiztegiko etiketa bakoitzaren gelaxketatik mugitu
+    For Each labelKey In labelMap.Keys
+        'Etiketa bakoitzaren gelaxka balioa lortu
+        Set cell = ADatuak.Range("L" & labelMap(labelKey))
+        'Gelaxkaren balioa lortu, eta etiketari kolore egokia eman
+        If cell.Value = True Then
+            Controls(labelKey).ForeColor = RGB(255, 0, 0) 'Gorria, bat ez badator
+            If labelKey = "Pnomin2" Then
+                Controls("Pnomin").ForeColor = RGB(255, 0, 0)
+            End If
+            If labelKey = "AzaleraTot2" Then
+                Controls("AzaleraTot").ForeColor = RGB(255, 0, 0)
+            End If
+        Else
+            Controls(labelKey).ForeColor = RGB(0, 0, 0) 'Beltza, bat badator
+            If labelKey = "Pnomin2" Then
+                Controls("Pnomin").ForeColor = RGB(0, 0, 0)
+            End If
+            If labelKey = "AzaleraTot2" Then
+                Controls("AzaleraTot").ForeColor = RGB(0, 0, 0)
+            End If
+        End If
+    Next labelKey
+    Call Laguntzaile
+    Set labelMap = Nothing
+End Sub
+'=======================================================================================================================
+'=======================================================================================================================
+
+'Fletxen kodea
+'=======================================================================================================================
+'=======================================================================================================================
+Private Sub SerieFletxa_SpinDown()
+    If SerieKutxa.Value = "" Then
+        SerieKutxa.Value = 0
+    End If
+    If SerieKutxa.Value > 0 Then
+        SerieKutxa.Value = SerieKutxa.Value - 1
+    End If
+    ADatuak.Range("D7").Value = SerieKutxa.Value
+    IDatuak.Range("PlakSer").Value = SerieKutxa.Value
+    Call Kalkulatu
+End Sub
+
+Private Sub SerieFletxa_SpinUp()
+    If SerieKutxa.Value = "" Then
+        SerieKutxa.Value = 0
+    End If
+    SerieKutxa.Value = SerieKutxa.Value + 1
+    ADatuak.Range("D7").Value = SerieKutxa.Value
+    IDatuak.Range("PlakSer").Value = SerieKutxa.Value
+    Call Kalkulatu
+End Sub
+
+Private Sub ParaleloFletxa_SpinDown()
+    If ParaleloKutxa.Value = "" Then
+        ParaleloKutxa.Value = 0
+    End If
+    If ParaleloKutxa.Value > 0 Then
+        ParaleloKutxa.Value = ParaleloKutxa.Value - 1
+    End If
+    ADatuak.Range("D8").Value = ParaleloKutxa.Value
+    IDatuak.Range("PlakPar").Value = ParaleloKutxa.Value
+    Call Kalkulatu
+End Sub
+
+Private Sub ParaleloFletxa_SpinUp()
+    If ParaleloKutxa.Value = "" Then
+        ParaleloKutxa.Value = 0
+    End If
+    ParaleloKutxa.Value = ParaleloKutxa.Value + 1
+    ADatuak.Range("D8").Value = ParaleloKutxa.Value
+    IDatuak.Range("PlakPar").Value = ParaleloKutxa.Value
+    Call Kalkulatu
+End Sub
+
+Private Sub TurbinaFletxa_SpinDown()
+    If TurbinaKopuru.Value = "" Then
+        TurbinaKopuru.Value = 0
+    End If
+    If TurbinaKopuru.Value > 0 Then
+        TurbinaKopuru.Value = TurbinaKopuru.Value - 1
+    End If
+    ADatuak.Range("B16").Value = TurbinaKopuru.Value
+    IDatuak.Range("TurbKop").Value = TurbinaKopuru.Value
+    Call TurbinaKutxa_Change
+    Call Kalkulatu
+End Sub
+
+Private Sub TurbinaFletxa_SpinUp()
+    If TurbinaKopuru.Value = "" Then
+        TurbinaKopuru.Value = 0
+    End If
+    TurbinaKopuru.Value = TurbinaKopuru.Value + 1
+    ADatuak.Range("B16").Value = TurbinaKopuru.Value
+    IDatuak.Range("TurbKop").Value = TurbinaKopuru.Value
+    Call TurbinaKutxa_Change
+    Call Kalkulatu
+End Sub
+'=======================================================================================================================
+'=======================================================================================================================
+
+'Timer eta aurrerapen barra kodea
+'=======================================================================================================================
+'=======================================================================================================================
+'Timer
+Sub TimerHasi()
+    Set timerKalk = New Timer
+    timerKalk.StartTimer
+End Sub
+
+Sub TimerAmaitu()
+    timerKalk.StopTimer
+    igaronDenb = timerKalk.GetElapsedTime
+End Sub
+
+'Aurrerapen barra
+Private Sub ActualizarBarra()
+    'Dei bakoitzeko frakzioa
+    frac = progreso + frac
+    'Aurrerapen barra eguneratu
+    With ufProgressObr
+        .LabelProgress.Width = frac * (.FrameProgress.Width)
+        .Repaint
+    End With
+    DoEvents
+End Sub
+
+Private Sub ActualizarBarra2()
+    'Dei bakoitzeko frakzioa
+    ' Application.Wait Now + #12:00:01 AM#
+    frac2 = progreso2 + frac2
+    'Aurrerapen barra sekundarioa eguneratu
+    With ufProgressObr
+        .LabelProgress2.Width = frac2 * (.FrameProgress2.Width)
+    End With
+    DoEvents
+End Sub
+
+Private Sub ReiniciarBarra2()
+    'Aurrerapen barra sekundarioa berabiatu
+    ' Application.Wait Now + #12:00:01 AM#
+    ufProgressObr.SubProceso.Caption = ""
+    ufProgressObr.LabelProgress2.Width = 0
+    frac2 = 0
+    progreso2 = 0
+    'Barra primarioa aurrera eraman
+    Call ActualizarBarra
+End Sub
+'=======================================================================================================================
+'=======================================================================================================================

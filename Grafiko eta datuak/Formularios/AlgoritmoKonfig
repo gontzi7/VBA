@@ -1,0 +1,138 @@
+Option Explicit
+
+Dim ADatuak As Worksheet, IDatuak As Worksheet
+Dim OutPut As Integer
+Dim denbEst As String
+Dim db As Double
+
+Private Function ZenbatKaraktereStringean(ByVal testu As String, ByVal karaktere As String) As Integer
+    Dim i As Integer
+    Dim count As Integer
+    count = 0
+    For i = 1 To Len(testu)
+        If Mid(testu, i, 1) = karaktere Then
+            count = count + 1
+        End If
+    Next i
+    ZenbatKaraktereStringean = count
+End Function
+
+Private Function KalkEst(ByVal denbBase As Double) As String
+    Dim eSec As Double, eMin As Double, eHour As Double
+    Dim estSec As Double
+    Dim aldiz As Integer
+    'Puntuazioa hasieratu ebaluazioa egin ez bada
+    If BenchmarkScore = 0 Then
+        BenchmarkScore = 1
+    End If
+    'Puntuazioa eta kalkulaziorako denbora basea hartu eta denbora estimatua itzuli
+    estSec = BenchmarkScore * denbBase
+    'Ordu kopuru
+    eHour = WorksheetFunction.RoundDown(estSec / 3600, 0)
+    eMin = WorksheetFunction.RoundDown((estSec - eHour * 3600) / 60, 0)
+    eSec = WorksheetFunction.RoundDown((estSec - eHour * 3600 - eMin * 60), 0)
+    KalkEst = WorksheetFunction.Text(eHour, "00") & ":" & WorksheetFunction.Text(eMin, "00") & ":" & _
+        WorksheetFunction.Text(Round(eSec, 0), "00")
+End Function
+
+Private Sub UserForm_Initialize()
+    Dim i As Integer
+    Dim panelCount As Integer, inverterCount As Integer
+    Set ADatuak = ThisWorkbook.Sheets("Algoritmo datuak")
+    Set IDatuak = ThisWorkbook.Sheets("Instalazio datuak")
+    'Pantailaren erdian jarri laster-leihoa
+    With AlgoritmoKonfig
+        .StartUpPosition = 0
+        .Left = Application.Left + (0.5 * Application.Width) - (0.5 * .Width)
+        .Top = Application.Top + (0.5 * Application.Height) - (0.5 * .Height)
+    End With
+    Dim panelData As Variant
+    Dim inverterData As Variant
+    panelData = Sheets("Datu fotoboltaikoak").Range("B2:BK16").Value
+    inverterData = Sheets("Datu fotoboltaikoak").Range("B18:BK34").Value
+    'Panel eta inbertsore kopurua zenbatu
+    panelCount = 0
+    inverterCount = 0
+    For i = LBound(panelData, 2) To UBound(panelData, 2)
+        If Len(panelData(1, i)) > 2 Then
+            'Izen ona bada, bat gehitu
+            panelCount = panelCount + 1
+        End If
+    Next i
+    For i = LBound(inverterData, 2) To UBound(inverterData, 2)
+        If Len(inverterData(1, i)) > 2 Then
+            'Izen ona bada, bat gehitu
+            inverterCount = inverterCount + 1
+        End If
+    Next i
+    'Testu eta potentzia kargatu
+    db = (Pausu2.AzaleraTB.Value * 1.013) + 6.3243
+    denbEst = KalkEst(db)
+    Azalpena.Caption = "Orrialde honetako datu basean, " & panelCount & " panel eta " & inverterCount & " inbertsore daude eskuragarri." & vbCrLf & _
+        "Nahi bada, algoritmoak hauen guztien arteko konbinazio posible guztiak ikasiko ditu, baina baliteke kalkulua" & _
+        " egiteko " & denbEst & " denbora behar izatea. Hau ekiditeko, optimizazio bat egin daiteke, honek sartutako potentzia" & _
+        " muga hartuko du eta panelak eta inbertsoreak mugatuko ditu. Baliteke konfiguraziorik optimoena ez" & _
+        " aurkitzea, baina kalkulazio denbora asko murriztuko da."
+    Potentzia.Value = ADatuak.Range("B24").Value
+End Sub
+
+Private Sub AteraKonfig_Click()
+    'Algoritmo kaxatik atera eta ez erabili
+    AModu = 2
+    Unload AlgoritmoKonfig
+End Sub
+
+Private Sub ErabiliKonfig_Click()
+    'Optimizazioa erabili
+    'Potentzia kaxa hutsik ez dagoela konfirmatu
+    If Potentzia.Value = "" Then
+        MsgBox "Optimizazioa erabili ahal izateko, sorkuntza potentzia sartu behar da nahitaez.", vbCritical
+        Potentzia.SetFocus
+        Exit Sub
+    End If
+    AModu = 6
+    ADatuak.Range("B24").Value = Potentzia.Value
+    Unload AlgoritmoKonfig
+End Sub
+
+Private Sub EzErabiliKonfig_Click()
+    'Optimizazioa ez erabili, mezu bat atera
+    OutPut = MsgBox("KONTUZ! Konfigurazio optimizatua erabili gabe aurrera jarraitzea erabakitzen bada, programak " & denbEst & " denbora" & _
+        " eman ahal izango du kalkuluak egiten konfigurazio hoberena lortu arte. Amaitu aurretik geldituz gero, oso litekeena da" & _
+        " aurkitutako soluzioa optimizazioa erabiliz aurkitutakoa baino okerragoa izatea. Jarraitu?", vbExclamation + vbYesNo)
+    If OutPut = 6 Then
+        AModu = 7
+        Unload AlgoritmoKonfig
+    Else
+        Exit Sub
+    End If
+End Sub
+
+Private Sub Potentzia_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+    Call TextBox_KeyPress(Me.Potentzia, KeyAscii)
+End Sub
+
+Private Sub TextBox_KeyPress(ByVal tb As MSForms.TextBox, ByVal KeyAscii As MSForms.ReturnInteger)
+    Dim userInput As String
+    Dim validChars As String
+    Dim char As String
+    'Onartutako karaktereak
+    validChars = "0123456789,."
+    userInput = tb.Text
+    char = Chr(KeyAscii)
+    'Begiratu sartutako karakterea onargarrien zerrendan ez dagoen
+    If InStr(validChars & Chr(8), char) = 0 Then
+        'Ez da baliozkoa, ezabatu NULLekin
+        KeyAscii = 0
+    End If
+    'Sartutako testuak puntu bat badu, aldatu eta koma bat jarri.
+    If InStr("." & Chr(8), char) > 0 Then
+        'Puntuak komekin ordezkatu
+        KeyAscii = 44
+    End If
+    'Koma bat baino gehiago badago, ezabatu bigarrena eta/edo hurrengoak
+    If ZenbatKaraktereStringean(userInput, ",") > 0 And KeyAscii = 44 Or KeyAscii = 46 Then
+        'Ezabatu NULLekin
+        KeyAscii = 0
+    End If
+End Sub

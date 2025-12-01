@@ -1,0 +1,16 @@
+Private Sub CommandButton1_Click()
+
+End Sub
+
+Private Sub UserForm_Initialize()
+#If IsMac = False Then
+    'hide the title bar if you're working on a windows machine. Otherwise, just display it as you normally would
+    'Me.Height = Me.Height - 10
+    'HideTitleBar.HideTitleBar Me
+#End If
+    With ufProgressObr
+        .StartUpPosition = 0
+        .Left = Application.Left + (0.5 * Application.Width) - (0.5 * .Width)
+        .Top = Application.Top + (0.5 * Application.Height) - (0.5 * .Height)
+    End With
+End Sub

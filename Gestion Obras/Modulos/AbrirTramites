@@ -1,0 +1,11 @@
+Option Explicit
+
+Sub AbrirTram()
+    Dim filePath As String
+    filePath = ThisWorkbook.Sheets("Config").Range("RutaTram").Value
+    If Len(filePath) > 0 Then
+        Workbooks.Open filePath
+    Else
+        MsgBox "La celda esta vacia, por favor introduzca la ruta relativa"
+    End If
+End Sub

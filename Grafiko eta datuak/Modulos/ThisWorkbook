@@ -1,0 +1,55 @@
+'Liburua zabaltzerakoan agertuko diren mezuak
+Private Sub Workbook_Open()
+    'Beste orrialde guztiak erakutsi
+    Call BesteOrrialdeak("E")
+    'Makroak aktibatzeko orrialdea ezkutatu
+    ThisWorkbook.Sheets("MAKROAK AKTIBATU").Visible = False
+    ThisWorkbook.Sheets("Instalazio datuak").Select
+    MsgBox "Ez da gomendatzen koloreztutako orrialdeak zabaldu edo modifikatzea.", vbExclamation
+End Sub
+
+'Liburua ixterakoan, hasierako egoera ezarri
+Private Sub Workbook_BeforeClose(Cancel As Boolean)
+    ThisWorkbook.Sheets("MAKROAK AKTIBATU").Visible = True
+    ThisWorkbook.Sheets("MAKROAK AKTIBATU").Select
+    Call BesteOrrialdeak("K")
+    ActiveWorkbook.Save
+End Sub
+
+Private Sub BesteOrrialdeak(ByVal erak As String)
+    If erak = "E" Then
+        ThisWorkbook.Sheets("Iberdrola").Visible = True
+        ThisWorkbook.Sheets("Gantt").Visible = True
+        ThisWorkbook.Sheets("Instalazio datuak").Visible = True
+        ThisWorkbook.Sheets("Datu fotoboltaikoak").Visible = True
+        ThisWorkbook.Sheets("Taulak (FV)").Visible = True
+        ThisWorkbook.Sheets("Haize datuak").Visible = True
+        ThisWorkbook.Sheets("Taulak (Haize)").Visible = True
+        ThisWorkbook.Sheets("Aurrekontua").Visible = True
+        ThisWorkbook.Sheets("Analisi ekonomikoa").Visible = True
+        ThisWorkbook.Sheets("Taulak (Analisi ekonomikoa)").Visible = True
+        ThisWorkbook.Sheets("|").Visible = True
+        ThisWorkbook.Sheets("PVGIS").Visible = True
+        ThisWorkbook.Sheets("IDAE").Visible = True
+        ThisWorkbook.Sheets("AEMET").Visible = True
+        ThisWorkbook.Sheets("Winds").Visible = True
+        ThisWorkbook.Sheets("Algoritmo datuak").Visible = True
+    Else
+        ThisWorkbook.Sheets("Iberdrola").Visible = False
+        ThisWorkbook.Sheets("Gantt").Visible = False
+        ThisWorkbook.Sheets("Instalazio datuak").Visible = False
+        ThisWorkbook.Sheets("Datu fotoboltaikoak").Visible = False
+        ThisWorkbook.Sheets("Taulak (FV)").Visible = False
+        ThisWorkbook.Sheets("Haize datuak").Visible = False
+        ThisWorkbook.Sheets("Taulak (Haize)").Visible = False
+        ThisWorkbook.Sheets("Aurrekontua").Visible = False
+        ThisWorkbook.Sheets("Analisi ekonomikoa").Visible = False
+        ThisWorkbook.Sheets("Taulak (Analisi ekonomikoa)").Visible = False
+        ThisWorkbook.Sheets("|").Visible = False
+        ThisWorkbook.Sheets("PVGIS").Visible = False
+        ThisWorkbook.Sheets("IDAE").Visible = False
+        ThisWorkbook.Sheets("AEMET").Visible = False
+        ThisWorkbook.Sheets("Winds").Visible = False
+        ThisWorkbook.Sheets("Algoritmo datuak").Visible = False
+    End If
+End Sub

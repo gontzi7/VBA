@@ -1,0 +1,48 @@
+Option Explicit
+
+Private Sub ContraAceptar_Click()
+    'Boton para aceptar
+    If TextBox1.Text <> contraseñaCambio Then
+        'No es correcta
+        MsgBox "La contraseña introducida no es la correcta, contacte con un administrador.", vbExclamation
+        CorrectoContraseña = False
+        ThisWorkbook.Sheets("Memoria").Unprotect Password:=contraseñaPaginas
+        ThisWorkbook.Sheets("Memoria").Range("contraCorrecto") = False
+        ThisWorkbook.Sheets("Memoria").Protect Password:=contraseñaPaginas
+        Unload Me
+    Else
+        'Contraseña correcta
+        CorrectoContraseña = True
+        ThisWorkbook.Sheets("Memoria").Unprotect Password:=contraseñaPaginas
+        ThisWorkbook.Sheets("Memoria").Range("contraCorrecto") = True
+        ThisWorkbook.Sheets("Memoria").Protect Password:=contraseñaPaginas
+        'Mirar si se ha decidido no volver a mostrar
+        If VolverAmostrarCheck.Value = True Then
+            volverAmostrar = True
+            ThisWorkbook.Sheets("Config").Range("volverAmostrar") = True
+        Else
+            volverAmostrar = False
+            ThisWorkbook.Sheets("Config").Range("volverAmostrar") = False
+        End If
+        Unload Me
+    End If
+End Sub
+
+Private Sub ContraSalir_Click()
+    'Boton para salir de solicitud de contraseña
+    CorrectoContraseña = False
+    Unload Me
+End Sub
+
+Private Sub UserForm_Initialize()
+    'Alinear en el centro de la pantalla activa
+    With ufContraseña
+        .StartUpPosition = 0
+        .Left = Application.Left + (0.5 * Application.Width) - (0.5 * .Width)
+        .Top = Application.Top + (0.5 * Application.Height) - (0.5 * .Height)
+    End With
+    'Mirar estado previo de volverAmostrar
+    VolverAmostrarCheck.Value = ThisWorkbook.Sheets("Config").Range("volverAmostrar")
+    'Mirar estado previo de contraseñaCorrecta
+    CorrectoContraseña = ThisWorkbook.Sheets("Memoria").Range("contraCorrecto")
+End Sub

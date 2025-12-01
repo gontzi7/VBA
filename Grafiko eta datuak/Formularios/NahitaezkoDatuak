@@ -1,0 +1,516 @@
+Option Explicit
+
+Dim sh As Worksheet
+Dim ADatuak As Worksheet
+Dim IDatuak As Worksheet
+Dim latitude As Double
+Dim zimur As Double
+Dim azimut As Double
+Dim aldapa As Double
+
+Private Function ZenbatKaraktereStringean(ByVal texto As String, ByVal caracter As String) As Integer
+    Dim i As Integer
+    Dim count As Integer
+    count = 0
+    For i = 1 To Len(texto)
+        If Mid(texto, i, 1) = caracter Then
+            count = count + 1
+        End If
+    Next i
+    ZenbatKaraktereStringean = count
+End Function
+
+Private Sub UserForm_Initialize()
+    'Pantaila eguneratzeak desaktibatu
+    Application.ScreenUpdating = False
+    Set sh = ActiveSheet
+    Set ADatuak = ThisWorkbook.Sheets("Algoritmo datuak")
+    Set IDatuak = ThisWorkbook.Sheets("Instalazio datuak")
+    'Pantailaren erdian jarri laster-leihoa
+    With NahitaezkoDatuak
+        .StartUpPosition = 0
+        .Left = Application.Left + (0.5 * Application.Width) - (0.5 * .Width)
+        .Top = Application.Top + (0.5 * Application.Height) - (0.5 * .Height)
+    End With
+    Call Garbitu_Click
+    Call Kargatu_Click
+End Sub
+
+Private Sub Hurrengo_Click()
+    'Kontsumo totala urteko kalkulatu
+    Call Kalk
+    'Beharrezko datuak bete direla zihurtatu
+    If KaxaAltitude.Value <> 0 And KaxaLatitude.Value <> 0 And KaxaZimurtasun.Value <> 0 And KaxaAldapa.Value <> 0 And KaxaAzimut.Value <> 0 Then
+        'Datuak bete dira, informazioa gorde
+        With IDatuak
+            .Range("InsAldapa").Value = KaxaAldapa.Value
+            .Range("InsAzimut").Value = KaxaAzimut.Value
+            .Range("InsLatitude").Value = KaxaLatitude.Text
+            .Range("InsAltitude").Value = KaxaAltitude.Value
+            .Range("InsZimurt").Value = KaxaZimurtasun.Value
+            .Range("InsBezKop").Value = BezTB.Value
+            .Range("UrtK").Value = UrtTB.Value
+            .Range("OtsK").Value = OtsTB.Value
+            .Range("MarK").Value = MarTB.Value
+            .Range("ApiK").Value = ApiTb.Value
+            .Range("MaiK").Value = MaiTB.Value
+            .Range("EkaK").Value = EkaTB.Value
+            .Range("UztK").Value = UztTB.Value
+            .Range("AbuK").Value = AbuTB.Value
+            .Range("IraK").Value = IraTb.Value
+            .Range("UrrK").Value = UrrTB.Value
+            .Range("AzaK").Value = AzaTB.Value
+            .Range("AbeK").Value = AbeTB.Value
+            .Range("InsUrtKonts").Value = UrteTB.Value
+        End With
+        'Hurrengo pausura pasatu
+        Call Atera_Click
+        Pausu2.Show vbModeless
+    Else
+        'Ez dira bete, mezu bat erakutsi eta beteta ez dauden kutxatilak aukeratu
+        MsgBox "Ez dira datu guztiak bete, mesedez, datu guztiak bete.", vbCritical
+    End If
+End Sub
+
+Sub Kalk()
+    Dim urt As Double, Bkop As Integer
+    'Hilabete guztien kontsumoa batu eta erakutsi
+    urt = CDbl(UrtTB.Value) + CDbl(OtsTB.Value) + CDbl(MarTB.Value) + CDbl(ApiTb.Value) + CDbl(MaiTB.Value) + CDbl(EkaTB.Value) + CDbl(UztTB.Value) + CDbl(AbuTB.Value) + CDbl(IraTb.Value) + CDbl(UrrTB.Value) + CDbl(AzaTB.Value) + CDbl(AbeTB.Value)
+    If Not BezeroAsko Then
+        Bkop = 1
+    Else
+        Bkop = CDbl(BezTB.Value)
+    End If
+    UrteTB.Value = urt * Bkop
+End Sub
+
+Private Sub KaxaLatitude_AfterUpdate()
+    'Konfirmatu ea sartutako latitudea penintsulan dagoen edo ez
+    If IsNumeric(KaxaLatitude.Value) Then
+        latitude = CDbl(KaxaLatitude.Value)
+        If latitude <= 26 Or latitude >= 46 Then
+            MsgBox "Programa honek Iberiar penintsularako instalazioetarako dago diseinatuta, mesedez, sartu [28,29] edo [34,45]º-ko latitude bat.", vbInformation
+            KaxaLatitude.Value = 0
+            KaxaLatitude.SetFocus
+        End If
+        If latitude <= 33 And latitude >= 30 Then
+            MsgBox "Programa honek Iberiar penintsularako instalazioetarako dago diseinatuta, mesedez, sartu [28,29] edo [34,45]º-ko latitude bat.", vbInformation
+            KaxaLatitude.Value = 0
+            KaxaLatitude.SetFocus
+        End If
+        Call Egun(Me.KaxaLatitude)
+    Else
+        'MsgBox "Ez da numerikoa"
+    End If
+End Sub
+
+Private Sub KaxaZimurtasun_AfterUpdate()
+    'Konfirmatu ea sartutako latitudea penintsulan dagoen edo ez
+    If IsNumeric(KaxaZimurtasun.Value) Then
+        zimur = CDbl(KaxaZimurtasun.Value)
+        If zimur < 0.1 Or zimur > 0.4 Then
+            MsgBox "Zimurtasuna 0,1 eta 0,4 balio artean egon behar da, eta ezin da negatibo izan.", vbInformation
+            KaxaZimurtasun.Value = 0
+            KaxaZimurtasun.SetFocus
+            Call Egun(Me.KaxaZimurtasun)
+        End If
+    Else
+        'MsgBox "Ez da numerikoa"
+    End If
+End Sub
+
+Private Sub KaxaAzimut_AfterUpdate()
+    'Konfirmatu ea sartutako latitudea penintsulan dagoen edo ez
+    If IsNumeric(KaxaAzimut.Value) Then
+        azimut = CDbl(KaxaAzimut.Value)
+        If azimut < -180 Or azimut > 180 Then
+            MsgBox "Azimut angelua -180 eta 180 balio artean egon behar da.", vbInformation
+            KaxaAzimut.Value = 0
+            KaxaAzimut.SetFocus
+            Call Egun(Me.KaxaAzimut)
+        End If
+    Else
+        'MsgBox "Ez da numerikoa"
+    End If
+End Sub
+
+Private Sub KaxaAldapa_AfterUpdate()
+    'Konfirmatu ea sartutako latitudea penintsulan dagoen edo ez
+    If IsNumeric(KaxaAldapa.Value) Then
+        aldapa = CDbl(KaxaAldapa.Value)
+        If aldapa < 0 Or aldapa > 90 Then
+            MsgBox "Aldapa angelua 0 eta 90 balio artean egon behar da.", vbInformation
+            KaxaAldapa.Value = 0
+            KaxaAldapa.SetFocus
+        End If
+        Call Egun(Me.KaxaAldapa)
+    Else
+        'MsgBox "Ez da numerikoa"
+    End If
+End Sub
+
+Private Sub Atera_Click()
+    Unload Me
+End Sub
+
+Private Sub UserForm_QueryClose(Cancel As Integer, CloseMode As Integer)
+    'Hasierako orrialde berdina aukeratu
+    sh.Select
+    'Pantaila eguneratzeak aktibatu
+    Application.ScreenUpdating = True
+End Sub
+
+Private Sub Garbitu_Click()
+    'Datuak garbitu
+    KaxaAldapa.Value = 0
+    KaxaAzimut.Value = 0
+    KaxaLatitude.Value = 0
+    KaxaAltitude.Value = 0
+    KaxaZimurtasun.Value = 0
+    'Faktura datuak
+    BezTB.Value = 0
+    UrtTB.Value = 0
+    OtsTB.Value = 0
+    MarTB.Value = 0
+    ApiTb.Value = 0
+    MaiTB.Value = 0
+    EkaTB.Value = 0
+    UztTB.Value = 0
+    AbuTB.Value = 0
+    IraTb.Value = 0
+    UrrTB.Value = 0
+    AzaTB.Value = 0
+    AbeTB.Value = 0
+    UrteTB.Value = 0
+End Sub
+
+Private Sub Kargatu_Click()
+    'Kutxatillak ondo konfiguratu kargatzeko
+    UrteKonts.Value = False
+    Call Aldaketak(Me.UrteKonts, Me.UrteTB, True)
+    'Orrialdeko datuak kargatu
+    KaxaAldapa.Value = IDatuak.Range("InsAldapa").Value
+    KaxaAzimut.Value = IDatuak.Range("InsAzimut").Value
+    KaxaLatitude.Value = IDatuak.Range("InsLatitude").Value
+    KaxaAltitude.Value = IDatuak.Range("InsAltitude").Value
+    KaxaZimurtasun.Value = IDatuak.Range("InsZimurt").Value
+    'Bezero kopurua
+    If IDatuak.Range("C13") > 2 Then
+        BezTB.Value = IDatuak.Range("C13")
+        BezeroAsko.Value = True
+        Call Aldaketak(Me.BezeroAsko, Me.BezTB)
+    Else
+        BezTB.Value = 1
+    End If
+    'Faktura datuak
+    UrtTB.Value = IDatuak.Range("UrtK")
+    OtsTB.Value = IDatuak.Range("OtsK")
+    MarTB.Value = IDatuak.Range("MarK")
+    ApiTb.Value = IDatuak.Range("ApiK")
+    MaiTB.Value = IDatuak.Range("MaiK")
+    EkaTB.Value = IDatuak.Range("EkaK")
+    UztTB.Value = IDatuak.Range("UztK")
+    AbuTB.Value = IDatuak.Range("AbuK")
+    IraTb.Value = IDatuak.Range("IraK")
+    UrrTB.Value = IDatuak.Range("UrrK")
+    AzaTB.Value = IDatuak.Range("AzaK")
+    AbeTB.Value = IDatuak.Range("AbeK")
+    UrteTB.Value = IDatuak.Range("InsUrtKonts")
+End Sub
+
+Private Sub Lehenetsi_Click()
+    'Orrialdeko datuak kargatu
+    KaxaAldapa.Value = 35
+    KaxaAzimut.Value = -43
+    KaxaLatitude.Value = 43.3
+    KaxaAltitude.Value = 26.11
+    KaxaZimurtasun.Value = 0.3
+    'Faktura datuak
+    UrteKonts.Value = False
+    Call Aldaketak(Me.UrteKonts, Me.UrteTB, True)
+    BezeroAsko.Value = True
+    Call Aldaketak(Me.BezeroAsko, Me.BezTB)
+    BezTB.Value = 16
+    UrtTB.Value = 127
+    OtsTB.Value = 135
+    MarTB.Value = 124
+    ApiTb.Value = 120
+    MaiTB.Value = 117
+    EkaTB.Value = 103
+    UztTB.Value = 98
+    AbuTB.Value = 112
+    IraTb.Value = 118
+    UrrTB.Value = 125
+    AzaTB.Value = 130
+    AbeTB.Value = 138
+    Call Kalk
+End Sub
+
+Private Sub TextBox_KeyPress(ByVal tb As MSForms.TextBox, ByVal KeyAscii As MSForms.ReturnInteger, ByVal tbn As String)
+    Dim userInput As String
+    Dim validChars As String, validChars2 As String, validChars3 As String
+    Dim comp As String
+    Dim char As String
+    Dim neg As Boolean
+    Dim mota As Integer
+    neg = False
+    'Onartutako karaktereak
+    validChars = "-0123456789,."
+    validChars2 = "0123456789,."
+    validChars3 = "0123456789"
+    If tbn = "KaxaZimurtasun" Or tbn = "KaxaLatitude" Or tbn = "KaxaAldapa" Then
+        comp = validChars2
+        mota = 2
+    ElseIf tbn = "KaxaAzimut" Or tbn = "KaxaAltitude" Then
+        comp = validChars
+        mota = 1
+    ElseIf tbn = "kop" Then
+        comp = validChars3
+        mota = 3
+    End If
+    userInput = tb.Text
+    char = Chr(KeyAscii)
+    'Begiratu sartutako karakterea onargarrien zerrendan ez dagoen
+    If InStr(comp & Chr(8), char) = 0 Then
+        'Ez da baliozkoa, ezabatu NULLekin
+        KeyAscii = 0
+    End If
+    If mota < 3 Then
+        'Sartutako testuak puntu bat badu, aldatu eta koma bat jarri.
+        If InStr("." & Chr(8), char) > 0 Then
+            'Puntuak komekin ordezkatu
+            KeyAscii = 44
+        End If
+        If mota = 1 Then
+            'Negatibo bat baino gehiago badago, ezabatu bigarrena eta/edo hurrengoak
+            If ZenbatKaraktereStringean(userInput, "-") > 0 And KeyAscii = 45 Then
+                'Ezabatu NULLekin
+                KeyAscii = 0
+                neg = True
+            End If
+            'Negatiboa sartzen bada, hasieran jarri. Negatibo bat badago jada, ez jarri
+            If InStr("-" & Chr(8), char) > 0 And Not neg Then
+                'Hasieran jarri negatiboa
+                tb.Value = "-" & tb.Value
+                KeyAscii = 0
+            End If
+            'Negatiboa bigarren aldiz sartzen bada, kendu
+            If InStr("-" & Chr(8), char) > 0 And neg Then
+                'Negatiboa kendu hasieratik
+                tb.Value = Mid(tb.Value, 2)
+                KeyAscii = 0
+            End If
+        End If
+        'Koma bat baino gehiago badago, ezabatu bigarrena eta/edo hurrengoak
+        If ZenbatKaraktereStringean(userInput, ",") > 0 And KeyAscii = 44 Or KeyAscii = 46 Then
+            'Ezabatu NULLekin
+            KeyAscii = 0
+        End If
+    End If
+End Sub
+
+Private Sub KaxaLatitude_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+    Call TextBox_KeyPress(Me.KaxaLatitude, KeyAscii, "KaxaLatitude")
+End Sub
+
+Private Sub KaxaAltitude_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+    Call TextBox_KeyPress(Me.KaxaAltitude, KeyAscii, "KaxaAltitude")
+End Sub
+
+Private Sub KaxaAzimut_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+    Call TextBox_KeyPress(Me.KaxaAzimut, KeyAscii, "KaxaAzimut")
+End Sub
+
+Private Sub KaxaAldapa_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+    Call TextBox_KeyPress(Me.KaxaAldapa, KeyAscii, "KaxaAldapa")
+End Sub
+
+Private Sub KaxaZimurtasun_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+    Call TextBox_KeyPress(Me.KaxaZimurtasun, KeyAscii, "KaxaZimurtasun")
+End Sub
+
+Private Sub BezTB_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+    Call TextBox_KeyPress(Me.BezTB, KeyAscii, "kop")
+End Sub
+
+Private Sub UrtTB_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+    Call TextBox_KeyPress(Me.UrtTB, KeyAscii, "KaxaZimurtasun")
+End Sub
+
+Private Sub OtsTB_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+    Call TextBox_KeyPress(Me.OtsTB, KeyAscii, "KaxaZimurtasun")
+End Sub
+
+Private Sub MarTB_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+    Call TextBox_KeyPress(Me.MarTB, KeyAscii, "KaxaZimurtasun")
+End Sub
+
+Private Sub ApiTB_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+    Call TextBox_KeyPress(Me.ApiTb, KeyAscii, "KaxaZimurtasun")
+End Sub
+
+Private Sub MaiTB_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+    Call TextBox_KeyPress(Me.MaiTB, KeyAscii, "KaxaZimurtasun")
+End Sub
+
+Private Sub EkaTB_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+    Call TextBox_KeyPress(Me.EkaTB, KeyAscii, "KaxaZimurtasun")
+End Sub
+
+Private Sub UztTB_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+    Call TextBox_KeyPress(Me.UztTB, KeyAscii, "KaxaZimurtasun")
+End Sub
+
+Private Sub AbuTB_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+    Call TextBox_KeyPress(Me.AbuTB, KeyAscii, "KaxaZimurtasun")
+End Sub
+
+Private Sub IraTB_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+    Call TextBox_KeyPress(Me.IraTb, KeyAscii, "KaxaZimurtasun")
+End Sub
+
+Private Sub UrrTB_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+    Call TextBox_KeyPress(Me.UrrTB, KeyAscii, "KaxaZimurtasun")
+End Sub
+
+Private Sub AzaTB_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+    Call TextBox_KeyPress(Me.AzaTB, KeyAscii, "KaxaZimurtasun")
+End Sub
+
+Private Sub AbeTB_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+    Call TextBox_KeyPress(Me.AbeTB, KeyAscii, "KaxaZimurtasun")
+End Sub
+
+Private Sub UrteTB_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+    Call TextBox_KeyPress(Me.UrteTB, KeyAscii, "KaxaZimurtasun")
+End Sub
+
+
+Private Sub BezTB_AfterUpdate()
+    Call Egun(Me.BezTB)
+    Call Kalk
+End Sub
+
+Private Sub UrtTB_AfterUpdate()
+    Call Egun(Me.UrtTB)
+    Call Kalk
+End Sub
+
+Private Sub OtsTB_AfterUpdate()
+    Call Egun(Me.OtsTB)
+    Call Kalk
+End Sub
+
+Private Sub MarTB_AfterUpdate()
+    Call Egun(Me.MarTB)
+    Call Kalk
+End Sub
+
+Private Sub ApiTb_AfterUpdate()
+    Call Egun(Me.ApiTb)
+    Call Kalk
+End Sub
+
+Private Sub MaiTB_AfterUpdate()
+    Call Egun(Me.MaiTB)
+    Call Kalk
+End Sub
+
+Private Sub EkaTB_AfterUpdate()
+    Call Egun(Me.EkaTB)
+    Call Kalk
+End Sub
+
+Private Sub UztTB_AfterUpdate()
+    Call Egun(Me.UztTB)
+    Call Kalk
+End Sub
+
+Private Sub AbuTB_AfterUpdate()
+    Call Egun(Me.AbuTB)
+    Call Kalk
+End Sub
+
+Private Sub IraTb_AfterUpdate()
+    Call Egun(Me.IraTb)
+    Call Kalk
+End Sub
+
+Private Sub UrrTB_AfterUpdate()
+    Call Egun(Me.UrrTB)
+    Call Kalk
+End Sub
+
+Private Sub AzaTB_AfterUpdate()
+    Call Egun(Me.AzaTB)
+    Call Kalk
+End Sub
+
+Private Sub AbeTB_AfterUpdate()
+    Call Egun(Me.AbeTB)
+    Call Kalk
+End Sub
+
+Private Sub KaxaAltitude_AfterUpdate()
+    Call Egun(Me.KaxaAltitude)
+End Sub
+
+Private Sub Egun(ByVal tb As MSForms.TextBox)
+    'Dena ezabatzen bada, 0 jarri
+    If tb.Value = "" Then
+        tb.Value = 0
+    End If
+End Sub
+
+Private Sub Aldaketak(ByVal cb As MSForms.CheckBox, ByVal tb As MSForms.TextBox, Optional Urte As Boolean)
+    'Kutxatila aldatzerakoan beharrezko aldaketak egin
+    If cb.Value = True Then
+        tb.Enabled = True
+        If Urte Then
+            'Urteko kontsumoa bada, hilabeteko kutxak desaktibatu
+            UrtTB.Enabled = False
+            OtsTB.Enabled = False
+            MarTB.Enabled = False
+            ApiTb.Enabled = False
+            MaiTB.Enabled = False
+            EkaTB.Enabled = False
+            UztTB.Enabled = False
+            AbuTB.Enabled = False
+            IraTb.Enabled = False
+            UrrTB.Enabled = False
+            AzaTB.Enabled = False
+            AbeTB.Enabled = False
+            BezeroAsko.Value = False
+            BezeroAsko.Enabled = False
+            BezTB.Enabled = False
+            BezTB.Value = 0
+        End If
+    Else
+        tb.Enabled = False
+        tb.Value = 0
+        If Urte Then
+            'Urteko kontsumoa, hilabeteko kutxak aktibatu
+            UrtTB.Enabled = True
+            OtsTB.Enabled = True
+            MarTB.Enabled = True
+            ApiTb.Enabled = True
+            MaiTB.Enabled = True
+            EkaTB.Enabled = True
+            UztTB.Enabled = True
+            AbuTB.Enabled = True
+            IraTb.Enabled = True
+            UrrTB.Enabled = True
+            AzaTB.Enabled = True
+            AbeTB.Enabled = True
+            BezeroAsko.Enabled = True
+        End If
+    End If
+End Sub
+
+Private Sub BezeroAsko_Click()
+    Call Aldaketak(Me.BezeroAsko, Me.BezTB)
+End Sub
+
+Private Sub UrteKonts_Click()
+    Call Aldaketak(Me.UrteKonts, Me.UrteTB, True)
+End Sub

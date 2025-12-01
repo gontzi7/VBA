@@ -1,0 +1,93 @@
+Option Explicit
+
+Private Sub Worksheet_Change(ByVal Target As Range)
+    On Error GoTo ErrorHandler
+    Dim row As Object
+    Dim colMax As Integer
+    'Si el cambio no es realizado por el programa, ejecutar
+    If ThisWorkbook.autom = False Then
+        'Si el cambio es en las columnas importantes
+        If ThisWorkbook.Sheets("Config").Range("NoCrear") Then
+            colMax = 6
+        Else
+            colMax = 5
+        End If
+        If (Target.Column >= 3 And Target.Column + Target.Columns.Count - 1 <= colMax) Or _
+            (Target.Column >= 7 And Target.Column + Target.Columns.Count - 1 <= 8) Then
+            'Al hacer algun cambio en una fila ya definida, gestionar cambio
+            Application.ScreenUpdating = False
+            Dim filaCambio As String
+            Dim Cambio, filaNum, num As Double
+            Dim rango As Range
+            'Mirar si cambio es en una sola fila o mas de una fila
+            num = 0
+            For Each row In Target.Rows
+                num = num + 1
+            Next row
+            'Si es 1 o mas de 1 filaCambio diferentes
+            If num = 1 Then
+                filaCambio = Target.row - ThisWorkbook.filaDato + 2 & ":" & Target.row - ThisWorkbook.filaDato + 2
+            ElseIf num > 1 Then
+                num = 0
+                For Each row In Target.Rows
+                    filaNum = row.row - ThisWorkbook.filaDato + 2
+                    num = num + 1
+                    If num = 1 Then
+                        filaCambio = filaNum & ":" & filaNum
+                    ElseIf num > 1 Then
+                        filaCambio = filaCambio & "," & filaNum & ":" & filaNum
+                    End If
+                Next row
+            End If
+            ThisWorkbook.Sheets("Memoria").Select
+            ThisWorkbook.Sheets("Memoria").Unprotect Password:=contraseñaPaginas
+            'Guardar seleccion en un rango
+            Set rango = ThisWorkbook.Sheets("Memoria").Range(filaCambio)
+            'Mirar cada fila del rango, si hay mas de una fila que se ha modificado
+            For Each row In rango.Rows
+                'Seleccionar cada fila una a una y mirar si es nueva o modificacion
+                Application.CutCopyMode = False
+                num = row.row
+                ThisWorkbook.Sheets("Memoria").Range(num & ":" & num).Select
+                'Si es modificación y no nueva fila
+                If WorksheetFunction.CountA(Selection) > 1 And Not ThisWorkbook.Sheets("Memoria").Cells(num, 9) = "B" Then
+                    With Selection.Interior
+                        .Pattern = xlSolid
+                        .PatternColorIndex = xlAutomatic
+                        .Color = 3381759
+                        .TintAndShade = 0
+                        .PatternTintAndShade = 0
+                    End With
+                    ThisWorkbook.Sheets("Memoria").Cells(num, 9) = "M"
+                ElseIf WorksheetFunction.CountA(Selection) < 1 And Not ThisWorkbook.Sheets("Memoria").Cells(num, 9) = "B" Then
+                'Si es nueva fila
+                    With Selection.Interior
+                        .Pattern = xlSolid
+                        .PatternColorIndex = xlAutomatic
+                        .Color = 10079487
+                        .TintAndShade = 0
+                        .PatternTintAndShade = 0
+                    End With
+                    ThisWorkbook.Sheets("Memoria").Cells(num, 9) = "N"
+                End If
+            Next row
+            ThisWorkbook.Sheets("Memoria").Protect Password:=contraseñaPaginas
+            ThisWorkbook.Sheets("Obras").Select
+            Application.ScreenUpdating = True
+        Else
+        'Si el cambio esta fuera de estas columnas no gestionar
+        End If
+    Else
+    'Si es realizado por el programa, no hacer nada
+    End If
+    Exit Sub
+
+ErrorHandler:
+    'Si ocurre algun error ejecutar
+    MsgBox "Ha ocurrido un error en el código de modifiación de página : " & Err.Description & ". El libro requiere reinicio.", vbExclamation
+    ThisWorkbook.Sheets("Obras").Select
+    Range("Titulo").Select
+    ThisWorkbook.Sheets("Memoria").Protect Password:=contraseñaPaginas
+    Application.ScreenUpdating = True
+    Exit Sub
+End Sub

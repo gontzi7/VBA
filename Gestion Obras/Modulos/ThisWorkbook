@@ -1,0 +1,1599 @@
+Option Explicit
+'Variables para el programa
+Dim total As Long
+Dim Obras As Worksheet
+Dim Error As Worksheet
+Dim Config As Worksheet
+Dim Memoria As Worksheet
+Dim MemFunc As Worksheet
+Public filas As Long
+Dim rango As Range
+Dim rangoCliente As Range
+Dim rangoProvincia As Range
+Dim forzar As Boolean
+Dim fdObj As Object
+Dim ruta As String
+Dim pref As String
+Dim i As Long
+Public colNum As Integer
+Dim colC As Integer
+Dim colA As Integer
+Dim colP As Integer
+Dim colId As Integer
+Public colObr As Integer
+Public colNom As Integer
+Dim colRetr As Integer
+Dim colNotas As Integer
+Dim numCarpetas As Long
+Public autom As Boolean
+Dim pos As Long
+Public colRuta As Long
+Public colTitulo As Long
+Public filaDato As Integer
+Dim n As Long
+Dim cell As Range
+Dim fila As Long
+Dim OutPut As Integer
+Dim noCrear As Boolean
+Dim selectedCell As Range
+Dim elapsedTime As Double
+Dim timerApoyos As Timer
+Dim progreso As Double
+Dim frac As Double
+Dim progreso2 As Double
+Dim frac2 As Double
+Dim cantidElem As Long
+Dim cantidElemM As Long
+Dim cantidElemN As Long
+Dim cantidElemB As Long
+Dim segPerOp As Double
+Dim m As Long
+Dim marc As Long
+Dim rutaMalB As Boolean
+Dim vezError As Integer
+Dim ans As Integer
+Dim salir As Boolean
+'Funciones
+Function ExisteEnRango(cell As String, rng As String) As Boolean
+    'Pegar valor de celda a buscar en celda correcta en config
+    Config.Select
+    Dim valueToFind As String
+    Config.Range("Buscar") = cell
+    valueToFind = Config.Range("Buscar").Value
+    'Guardar rango
+    Dim rngB As Range
+    Set rngB = Config.Range(rng)
+    'Ver si el texto de la celda esta en el rango
+    If Application.WorksheetFunction.CountIf(rngB, valueToFind) > 0 Then
+        ExisteEnRango = True 'Existe el texto en rango
+    Else
+        ExisteEnRango = False 'No existe texto en rango
+    End If
+    Obras.Select
+End Function
+
+Function NombreValidoCarpeta(folderName As String) As Boolean
+    Dim forbiddenChars As String
+    Dim i As Integer
+    'Carácteres no validos en nombre carpeta
+    forbiddenChars = "\/:*?""<>|"
+    'Comparar si existen dentro del string
+    For i = 1 To Len(forbiddenChars)
+        If InStr(folderName, Mid(forbiddenChars, i, 1)) > 0 Then
+            NombreValidoCarpeta = False
+            Exit Function
+        End If
+    Next i
+    'No se han encontrado carácteres no válidos
+    NombreValidoCarpeta = True
+End Function
+
+Function Clipboard(Optional StoreText As String) As String
+    Dim X As Variant
+    'Guardar como variante para soporte de VBA 64-bit
+    X = StoreText
+    'Crear objeto de HTMLFile
+    With CreateObject("htmlfile")
+        With .parentWindow.clipboardData
+        Select Case True
+            Case Len(StoreText)
+            'Guardar en portapapeles
+                .setData "text", X
+            Case Else
+            'Leer de portapapeles
+                Clipboard = .GetData("text")
+        End Select
+        End With
+    End With
+End Function
+
+'Programa
+Sub Workbook_Open()
+    Application.EnableEvents = True
+    Application.Calculation = xlCalculationAutomatic
+    If Not ThisWorkbook.Sheets("Config").Range("deBug") Then
+        On Error GoTo ErrorHandler
+    End If
+    'Cargar contraseñas
+    Call contra
+    'Desproteger pagina principal
+    Call ProtegerObras("U")
+    'Decir a detector de cambios que se esta realizando cambios de forma autoamtica, no guardar en memoria
+    autom = True
+    'Variables para barra de progreso
+    progreso2 = 1
+    progreso = 1 / 7
+    frac = 0
+    frac2 = 0
+    'Inicializar barra de progreso
+    ufProgressObr.LabelProgress.Width = 0
+    ufProgressObr.LabelProgress2.Width = 0
+    ufProgressObr.Proceso.Caption = "Inicializando hoja."
+    ufProgressObr.TiempoEstimado.Caption = ""
+    ufProgressObr.TituloObra.Caption = ""
+    ufProgressObr.SubProceso.Caption = "Definiendo nombres de hojas."
+    ufProgressObr.Caption = "Inicialización de documento."
+    ufProgressObr.Show
+    'Abreviaciones para paginas
+    Set Obras = ThisWorkbook.Sheets("Obras")
+    Set Error = ThisWorkbook.Sheets("Errores")
+    Set Config = ThisWorkbook.Sheets("Config")
+    Set Memoria = ThisWorkbook.Sheets("Memoria")
+    Set MemFunc = ThisWorkbook.Sheets("MemFunc.")
+    Set fdObj = CreateObject("Scripting.FileSystemObject")
+    Call ActualizarBarra2
+    Call ReiniciarBarra2
+    progreso2 = 1
+    ufProgressObr.SubProceso.Caption = "Definiendo numeros de columnas."
+    'Numero de columnas de pagina
+    colNum = ThisWorkbook.Sheets("Obras").Range("Num").Column
+    colC = ThisWorkbook.Sheets("Obras").Range("Cliente").Column
+    colA = ThisWorkbook.Sheets("Obras").Range("Año").Column
+    colP = ThisWorkbook.Sheets("Obras").Range("Provincia").Column
+    colId = ThisWorkbook.Sheets("Obras").Range("Identificador").Column
+    colObr = ThisWorkbook.Sheets("Obras").Range("NumObra").Column
+    colNom = ThisWorkbook.Sheets("Obras").Range("Nombre").Column
+    colRetr = ThisWorkbook.Sheets("Obras").Range("Retrasos").Column
+    colRuta = ThisWorkbook.Sheets("Obras").Range("Ruta").Column
+    colTitulo = ThisWorkbook.Sheets("Obras").Range("Titulo").Column
+    colNotas = ThisWorkbook.Sheets("Obras").Range("Notas").Column
+    Call ActualizarBarra2
+    Call ReiniciarBarra2
+    progreso2 = 1
+    ufProgressObr.SubProceso.Caption = "Definiendo variables."
+    'Prefijo obras
+    pref = "PR"
+    vezError = 1
+    'Cargar estado de verificador de contraseñas
+    CorrectoContraseña = Memoria.Range("contraCorrecto")
+    'Numero de primera fila con datos
+    filaDato = ThisWorkbook.Sheets("Obras").Range("Header").row + 1
+    Call ActualizarBarra2
+    Call ReiniciarBarra2
+    progreso2 = 1
+    ufProgressObr.SubProceso.Caption = "Contando filas con datos."
+    'Desactivar actualizacion de pantalla
+    Application.ScreenUpdating = False
+    Obras.Select
+    Set selectedCell = Selection
+    'Proteger hoja de memoria
+    Memoria.Protect Password:=contraseñaPaginas
+    'Conseguir nombre de archivo
+    Dim NombreArchivo As String
+    NombreArchivo = ThisWorkbook.FullName
+    'Nombre del documento para futuro uso.
+    Config.Range("NombreArchivo") = Right(NombreArchivo, Len(NombreArchivo) - InStrRev(NombreArchivo, "\"))
+    'Si es la primera vez que se abre sin datos
+    If WorksheetFunction.CountA(Range(filaDato + 1 & ":" & filaDato + 1)) < 2 Then
+        filas = 1
+    Else
+        filas = Range(Cells(filaDato, colA), Cells(filaDato, colA).End(xlDown)).Count
+        'Rellenar formula en filas que tengan año
+        Range(Cells(filaDato, colNum), Cells(filas + filaDato - 1, colNum)).FillDown
+        Cells(filaDato, colRetr).Formula = Config.Range("H2").Formula
+        Range(Cells(filaDato, colRetr), Cells(filas + filaDato - 1, colRetr)).FillDown
+    End If
+    Call ActualizarBarra2
+    Call ReiniciarBarra2
+    progreso2 = 1
+    'Al abrir documento guardar en memoria
+    Call GuardarEnMemoria
+    'Poner la variable forzar salida en falso
+    forzar = False
+    'Guardar memoria en ultima funcional conocida
+    Call UltimaFuncional("I")
+    ufProgressObr.Proceso.Caption = "Terminando inicialización de hoja."
+    Obras.Select
+    selectedCell.Select
+    Application.ScreenUpdating = True
+    Call ProtegerObras("P")
+    'Decir a detector de cambios que se ha acabado de realizar cambios de forma autoamtica
+    autom = False
+    'Descargar barra de progreso
+    Unload ufProgressObr
+    Exit Sub
+
+ErrorHandler:
+    'Si ocurre algun error ejecutar
+    MsgBox "Ha ocurrido un error abriendo el documento, se requiere un reinicio. Descripción del error: " & Err.Description, vbExclamation, "Error 01"
+    ThisWorkbook.Sheets("Obras").Range("Titulo").Select
+    Application.ScreenUpdating = True
+    Call ProtegerObras("P")
+    End
+End Sub
+
+Private Sub Workbook_BeforeSave(ByVal SaveAsUI As Boolean, Cancel As Boolean)
+    If Not ThisWorkbook.Sheets("Config").Range("deBug") Then
+        On Error GoTo ErrorHandler
+    End If
+    Application.Calculation = xlCalculationAutomatic
+    Call InicioTimerGestion
+    'Decir a detector de cambios que se esta realizando cambios de forma autoamtica, no guardar en memoria
+    autom = True
+    Call ProtegerObras("U")
+    'Borrar portapapeles
+    Application.CutCopyMode = False
+    Obras.Select
+    Set selectedCell = Selection
+    Application.ScreenUpdating = False
+    'Inicializar parametros
+    frac = 0
+    progreso = 0
+    frac2 = 0
+    progreso2 = 0
+    cantidElem = 0
+    vezError = 1
+    'Sumar uno a cuenta de ejecucion
+    MemFunc.Unprotect Password:=contraseñaPaginas
+    ThisWorkbook.Sheets("MemFunc.").Range("NumeroEjecucion") = ThisWorkbook.Sheets("MemFunc.").Range("NumeroEjecucion") + 1
+    MemFunc.Protect Password:=contraseñaPaginas
+    'Cuantos elementos hay que gestionar
+    n = 2
+    Memoria.Select
+    Do While Memoria.Cells(n, 9) <> "" Or Memoria.Cells(n, 2) <> ""
+        If Memoria.Cells(n, 9) <> "" Then
+            'Hay un identificador, sumar uno
+            cantidElem = cantidElem + 1
+        End If
+        n = n + 1
+    Loop
+    If cantidElem = 0 Then cantidElem = 1
+    'Mirar si se ha elegido meter informacion en memoria en vez de crear carpetas
+    noCrear = Config.Range("NoCrear")
+    'Numero de fracciones de la barra de progreso
+    If Not noCrear Then
+        progreso = (1 / cantidElem) / 6
+        segPerOp = 4
+    Else
+        progreso = 1 / (cantidElem + 2)
+        segPerOp = 0.5
+    End If
+    'Inicializar barra de progreso
+    ufProgressObr.LabelProgress.Width = 0
+    ufProgressObr.LabelProgress2.Width = 0
+    ufProgressObr.Proceso.Caption = "Verificando datos.."
+    ufProgressObr.TiempoEstimado.Caption = "Tiempo estimado para completar la operación: " & cantidElem * segPerOp & " segundos."
+    ufProgressObr.TituloObra.Caption = "Titulo de obra: "
+    ufProgressObr.SubProceso.Caption = "Iniciando barra de progreso."
+    ufProgressObr.Show
+    progreso2 = 1 / 2
+    Call ActualizarBarra2
+    ufProgressObr.SubProceso.Caption = "Contando elementos."
+    Obras.Select
+    'Contar bien numero de filas
+    If WorksheetFunction.CountA(Range(filaDato + 1 & ":" & filaDato + 1)) < 2 Then
+        filas = 1
+    Else
+        filas = Range(Cells(filaDato, colA), Cells(filaDato, colA).End(xlDown)).Count
+    End If
+    Call ActualizarBarra2
+    Call ReiniciarBarra2
+    'Si se guarda y no hay errores, ejecutar programa
+    Call errores
+    If i = 2 Then
+        ufProgressObr.Proceso.Caption = "Verificacion completada."
+        If noCrear Then
+            MsgBoxCustom_Set vbYes, "Continuar"
+            MsgBoxCustom_Set vbNo, "Cambiar modo"
+            MsgBoxCustom_Set vbCancel, "Cancelar"
+            MsgBoxCustom ans, "SE ESTÁ EJECUTANDO EL PROGRAMA EN MODO LECTURA, NO SE CREARÁN CARPETAS CON LA INFORMACIÓN NUEVA APORTADA, CONTINUAR?", (vbYesNoCancel + vbInformation)
+            If ans = 6 Then
+                'Meter en memoria
+            ElseIf ans = 7 Then
+                'Se ha decidido cambiar el modo
+                noCrear = False
+                Config.Range("NoCrear").Value = False
+            Else
+                'Cerrar macro
+                Unload ufProgressObr
+                Exit Sub
+            End If
+        End If
+        Call Programa
+    ElseIf i > 2 Then
+        'Si no se ha forzado el cierre del documento mostrar mensaje de error
+        If forzar = False Then
+            MsgBox "Hay errores, mira tabla de Errores", vbCritical
+            Unload ufProgressObr
+            Application.ScreenUpdating = True
+            Exit Sub
+        End If
+    End If
+    'Si se ha llegado a este punto, guardar nueva memoria como funcional
+    ufProgressObr.Proceso.Caption = "Guardando en memoria."
+    Call UltimaFuncional
+    'Mirar de nuevo si hay algun nuevo error tras ralizar programa
+    ufProgressObr.Proceso.Caption = "Verificando si hay errores."
+    Call errores
+    If i = 2 Then
+        'No hay errores, no notificar
+    ElseIf i > 2 Then
+        'Hay algun error, notificar
+        MsgBox "Hay errores, mira tabla de Errores", vbCritical
+    End If
+    ufProgressObr.Proceso.Caption = "Finalizando macro."
+    Obras.Select
+    selectedCell.Select
+    Application.ScreenUpdating = True
+    'Decir a detector de cambios que se ha acabado de realizar cambios de forma autoamtica
+    autom = False
+    Unload ufProgressObr
+    'Guardar el documento una vez acabado el programa
+    Application.EnableEvents = False
+    ActiveWorkbook.Save
+    Application.EnableEvents = True
+    'Mensaje de confirmacion
+    Call FinalTimerGestion
+    If Config.Range("Confirm") Then
+        MsgBox "Gestionados " & m - 1 & " elementos sin ningún error." & vbCrLf & "Tiempo de ejecución: " & Round(elapsedTime, 2) & " segundos", vbInformation
+    End If
+    Call ProtegerObras("P")
+    Exit Sub
+
+ErrorHandler:
+        'Si ocurre algun error ejecutar
+        MsgBox "Ha ocurrido un error guardando el documento: " & Err.Description & vbCrLf & "Se requiere reinicio de hoja, pulse el botón.", vbExclamation, "Error 02"
+        Application.ScreenUpdating = True
+        Unload ufProgressObr
+        ThisWorkbook.Sheets("Obras").Select
+        ThisWorkbook.Sheets("Obras").Range("Titulo").Select
+        Call ProtegerObras("P")
+End Sub
+
+Private Sub Workbook_BeforeClose(Cancel As Boolean)
+    'Decir a detector de cambios que se esta realizando cambios de forma autoamtica, no guardar en memoria
+    autom = True
+    Call ProtegerObras("U")
+    Application.ScreenUpdating = False
+    Obras.Select
+    Set selectedCell = Selection
+    If WorksheetFunction.CountA(Range(filaDato + 1 & ":" & filaDato + 1)) < 2 Then
+        filas = 1
+    Else
+        filas = Range(Cells(filaDato, colA), Cells(filaDato, colA).End(xlDown)).Count
+    End If
+    'Si se cierra el excel y no hay errores, ejecutar programa
+    Call errores
+    If i = 2 Then
+        Call Programa
+        'Reiniciar si pedir contraseña o no
+        Config.Range("volverAmostrar") = False
+        'Reiniciar verificador de contraseña
+        Memoria.Unprotect Password:=contraseñaPaginas
+        Memoria.Range("contraCorrecto") = False
+        Memoria.Protect Password:=contraseñaPaginas
+    Else
+        'Dejar elegir al usuario si corregir errores o cerrar el documento sin corregir
+        OutPut = MsgBox("Hay errores, cerrar documento aún asi?", vbQuestion + vbYesNo)
+        'Si se elgie cerrar, no mostrar dialogo de error de la función que se activa al guardar documento
+        If OutPut = 6 Then
+            forzar = True
+            'Reiniciar si pedir contraseña o no
+            Config.Range("volverAmostrar") = False
+            'Reiniciar verificador de contraseña
+            Memoria.Unprotect Password:=contraseñaPaginas
+            Memoria.Range("contraCorrecto") = False
+            Memoria.Protect Password:=contraseñaPaginas
+        Else
+            MsgBox "Mirar tabla de errores para mas detalle"
+            Cancel = True
+            forzar = False
+        End If
+    End If
+    selectedCell.Select
+    Application.ScreenUpdating = True
+    'Decir a detector de cambios que se ha acabado de realizar cambios de forma autoamtica
+    autom = False
+    'Guardar el documento una ultima vez
+    Application.EnableEvents = False
+    ActiveWorkbook.Save
+    DoEvents
+    Call ProtegerObras("P")
+End Sub
+
+Sub Programa()
+    autom = True
+    'Mirar si rutas de carpeta clientes existen, no avanzar hasta que existan todas
+    Call carpetasCliente
+    m = 1
+    n = 2
+    marc = 2
+    Call ContarElementos
+    DoEvents
+    If total > 0 And Not CorrectoContraseña Then
+        'La contraseña introducida no es la correcta
+        MsgBox "Contraseña incorrecta", vbInformation, "Error contra"
+        Call Reestablecer
+        End
+    End If
+    ufProgressObr.LabelProgress.Width = 0
+    'Inicializar contador de posicion
+    pos = 0
+    'Mirar en pagina de memoria que fila se ha cambiado por el identificador
+    Memoria.Select
+    Do While Memoria.Cells(marc, 9) <> "" Or Memoria.Cells(marc, 2) <> ""
+        'Reiniciar marcador de salir
+        salir = False
+        If ThisWorkbook.Sheets("Config").Range("deBug") Then
+            Debug.Print "fila " & marc & ". Texto " & Memoria.Cells(marc, 9)
+        End If
+        If Memoria.Cells(marc, 9) = "M" Then
+            Call ReiniciarBarra2
+            ufProgressObr.Caption = "Gestionando elemento nº " & m & " de " & cantidElem
+            ufProgressObr.Proceso.Caption = "Preparando para modificación de elemento."
+            ufProgressObr.TituloObra.Caption = "Titulo de obra: " & Obras.Cells(marc + filaDato - 2, colNom).Text
+            'Con ese identificador se requiere cambio al nombre de carpeta
+            Call Cambio(marc + filaDato - 2)
+            If Not salir Then
+                Call PonerRutaNom(marc + filaDato - 2)
+            End If
+            m = m + 1
+            ufProgressObr.TituloObra.Caption = "Titulo de obra: "
+        ElseIf Memoria.Cells(marc, 9) = "N" Then
+            Call ReiniciarBarra2
+            ufProgressObr.Caption = "Gestionando elemento nº " & m & " de " & cantidElem
+            ufProgressObr.Proceso.Caption = "Preparando para creación de nuevo elemento."
+            ufProgressObr.TituloObra.Caption = "Titulo de obra: " & Obras.Cells(marc + filaDato - 2, colNom).Text
+            'Con ese identificador se requiere crear nueva carpeta
+            Call nuevaCarpeta(marc + filaDato - 2)
+            If Not salir Then
+                Call PonerRutaNom(marc + filaDato - 2)
+            End If
+            m = m + 1
+            ufProgressObr.TituloObra.Caption = "Titulo de obra: "
+        ElseIf Memoria.Cells(marc, 9) = "B" Then
+            Call ReiniciarBarra2
+            ufProgressObr.Caption = "Gestionando elemento nº " & m & " de " & cantidElem
+            ufProgressObr.Proceso.Caption = "Preparando para gestión de rectificación de identificadores."
+            ufProgressObr.TituloObra.Caption = "Titulo de obra: " & Obras.Cells(marc + filaDato - 2, colNom).Text
+            ufProgressObr.SubProceso.Caption = "Contando elementos."
+            'Con ese identificador se notifica que se ha borrado una carpeta en la subcarpeta de año
+            Call Identificadores(marc + filaDato - 2)
+            If Not salir Then
+                'Hacer cambio de titulo y ruta de carpeta
+                Call Cambio(marc + filaDato - 2, "B")
+            End If
+            m = m + 1
+            ufProgressObr.TituloObra.Caption = "Titulo de obra: "
+        End If
+        marc = marc + 1
+    Loop
+    ufProgressObr.Caption = "Finalizando gestión de elementos."
+    'Al acabar de hacer cambios guardar estado en memoria
+    Call GuardarEnMemoria
+    'Al acabar programa, copiar formato de primera fila y pegar a todo el excel
+    Call formatoTabla
+End Sub
+
+Sub GuardarEnMemoria()
+    ufProgressObr.SubProceso.Caption = "Guardando en memoria."
+    progreso2 = 1 / 4
+    'Borrar portapapeles
+    Application.CutCopyMode = False
+    'Seleccionar y desproteger pagina de memoria
+    Memoria.Select
+    Memoria.Unprotect Password:=contraseñaPaginas
+    'Guardar rango de objetos en string
+    Dim rangoN As String
+    Dim UltFila As Long
+    Dim rangoAcc As Range
+    ufProgressObr.SubProceso.Caption = "Seleccionando rango de memoria."
+    'Mirar si en memoria hay solo una fila de informacion
+    If WorksheetFunction.CountA(Range("3:3")) > 6 Then
+        'Si hay mas de una fila
+        UltFila = Range(Cells(2, 2), Cells(2, 2).End(xlDown)).Count + 2
+    Else
+        'Si solo hay una fila no seleccionar nada mas
+        UltFila = 3
+    End If
+    Call ActualizarBarra2
+    'Ver si despues del rango hay alguna celda con formato
+    Do While Memoria.Cells(UltFila, 9) <> ""
+        UltFila = UltFila + 1
+    Loop
+    'Quitar formato y contenidos de memoria
+    ufProgressObr.SubProceso.Caption = "Borrando formato de memoria."
+    With Cells.Interior
+        .Pattern = xlNone
+        .TintAndShade = 0
+        .PatternTintAndShade = 0
+    End With
+    With Cells.Font
+        .ColorIndex = xlAutomatic
+        .TintAndShade = 0
+    End With
+    Call ActualizarBarra2
+    ufProgressObr.SubProceso.Caption = "Copiando nuevos datos."
+    'Buscar elementos modificados y guardar numero de fila en array
+    Set rangoAcc = Memoria.Range(Cells(2, 9), Cells(UltFila - 1, 9))
+    progreso2 = (1 / 4) / rangoAcc.Count
+    'Rangos para seleccionar los datos
+    Dim rngDatos As Range
+    Dim rngRuta As Range
+    Dim rngCopiar As Range
+    'Iterar por el rango buscando celdas no vacias, si no estan vacias pegar información actualizada en memoria
+    Obras.Select
+    For Each cell In rangoAcc
+        If Not IsEmpty(cell.Value) Then
+            'Pegar datos actualizados de pagina de obras
+            Set rngDatos = Obras.Range(Cells(cell.row + filaDato - 2, colNum), Cells(cell.row + filaDato - 2, colNom))
+            Set rngRuta = Obras.Cells(cell.row + filaDato - 2, colRuta)
+            Set rngCopiar = Union(rngDatos, rngRuta)
+            rngCopiar.Copy
+            DoEvents
+            Memoria.Cells(cell.row, 1).PasteSpecial Paste:=xlPasteValues, Operation:=xlNone, SkipBlanks _
+                :=True, Transpose:=False
+            DoEvents
+            'Borrar identificador
+            Memoria.Cells(cell.row, 9).ClearContents
+            'Borrar portapapeles
+            Application.CutCopyMode = False
+        End If
+        Call ActualizarBarra2
+    Next cell
+    progreso2 = 1 / 4
+    Call ActualizarBarra2
+    ufProgressObr.SubProceso.Caption = "Finalizando guardado en Memoria."
+    'Borrar portapapeles
+    Application.CutCopyMode = False
+    Memoria.Protect Password:=contraseñaPaginas
+    Obras.Select
+    Call ActualizarBarra2
+    Call ReiniciarBarra2
+End Sub
+
+Sub errores()
+    If Not ThisWorkbook.Sheets("Config").Range("deBug") Then
+        On Error GoTo ErrorHandler
+    End If
+    Dim Error As Worksheet
+    Dim rangoDup As Range
+    Dim dup, todayYear As Long
+    Dim ultError As Long
+
+    progreso2 = 1 / 4
+    Set Error = ThisWorkbook.Sheets("Errores")
+    ultError = Error.Range("UltError").Value
+    If ultError = 1 Then ultError = 2
+    todayYear = Year(Date)
+    ufProgressObr.SubProceso.Caption = "Comenzando verificación."
+    Call ActualizarBarra2
+    'Si hay cambios comprobar si hay errores o no, si no hay cambios ignorar.
+    If ActiveWorkbook.Saved = False Then
+        'Desproteger memoria para mas adelante
+        Memoria.Unprotect Password:=contraseñaPaginas
+        'Borrar memoria de errores
+        If vezError = 1 Then
+            ufProgressObr.SubProceso.Caption = "Reestableciendo marcadores de duplicados."
+            'Reestablecer color de numeros de obra
+            Obras.Range(Cells(filaDato, colObr), Cells(filas + filaDato - 1, colObr)).Font.ColorIndex = 1
+            ufProgressObr.SubProceso.Caption = "Borrando errores anteriores."
+            Error.Select
+            Error.Range(Cells(2, 1), Cells(ultError, 9)).ClearContents
+            DoEvents
+        End If
+        Call ActualizarBarra2
+        'Valores iniciales a las variables
+        i = 2           'Primera fila de pagina de errores
+        n = filaDato    'Primera fila de pagina de Obras
+        dup = 0         'Inicializar numero de duplicados
+        'Si hay algo escrito desde la columna de cliente hasta columna de nombre ver si falta algún dato importante
+        ufProgressObr.SubProceso.Caption = "Verificando datos de obras."
+        Call Cliente
+        Call Provincia
+        ufProgressObr.SubProceso.Caption = "Verificando fila "
+        Do While WorksheetFunction.CountA(Range(Cells(n, colC), Cells(n, colNom))) > 0
+            'Si no se ha verificado de antes, o se ha marcado con algúna accion verificar información
+            If Memoria.Cells(n - filaDato + 2, 10) = "" Or Memoria.Cells(n - filaDato + 2, 9) <> "" Then
+                ufProgressObr.SubProceso.Caption = "Verificando fila " & n - filaDato + 2
+                'No hay cliente o no es correcto
+                If Cells(n, colC) = "" Or Not ExisteEnRango(Obras.Cells(n, colC).Value, rangoCliente.Address) Then
+                    Error.Cells(i, 2) = "E"
+                End If
+                'No hay año o no es correcto
+                If Cells(n, colA) = "" Or Not IsNumeric(Cells(n, colA)) Or Cells(n, colA) > todayYear Then
+                    Error.Cells(i, 3) = "E"
+                End If
+                'No hay provincia o no es correcta
+                If Cells(n, colP) = "" Or Not ExisteEnRango(Obras.Cells(n, colP).Value, rangoProvincia.Address) Then
+                    Error.Cells(i, 4) = "E"
+                End If
+                'Nº de obra no es un numero, o contiene una letra
+                If Cells(n, colObr) = "" Or Not IsNumeric(Cells(n, colObr)) Then
+                    Error.Cells(i, 6) = "E"
+                End If
+                'No hay nombre o contiene un carácter inválido
+                If Cells(n, colNom) = "" Or Not NombreValidoCarpeta(Cells(n, colNom)) Then
+                    Error.Cells(i, 7) = "E"
+                End If
+                'Marcar como verificado
+                Memoria.Cells(n - filaDato + 2, 10) = "V"
+            End If
+            'La ruta establecida no es correcta, solo hacer esto en la segunda verificación
+            If vezError = 2 Then
+                Call VerificarRuta(n)
+                If rutaMalB Then
+                    Error.Cells(i, 9) = "E"
+                End If
+            End If
+            Error.Select
+            Set rango = Error.Range(Cells(i, 1), Cells(i, 9))
+            'Si algúno tiene error, guardar numero de fila
+            If Application.WorksheetFunction.CountA(rango) > 0 Then
+                Error.Cells(i, 1) = n - filaDato + 1
+                ActiveSheet.Hyperlinks.Add Anchor:=Error.Cells(i, 1), Address:="", SubAddress:= _
+                    "Obras!" & n & ":" & n
+                i = i + 1
+            End If
+            n = n + 1
+            Obras.Select
+        Loop
+        Call ActualizarBarra2
+        ufProgressObr.SubProceso.Caption = "Mirando si hay numeros de obras duplicadas.."
+        'Mirar por duplicados en numeros de obra
+        Set rangoDup = Range(Cells(filaDato, colObr), Cells(filas + filaDato - 1, colObr))
+        For Each cell In rangoDup
+            If WorksheetFunction.CountIf(rangoDup, cell.Value) > 1 Then
+                'Marcar numero de obra en rojo
+                cell.Font.ColorIndex = 3
+                'Apuntar en pagina de errores
+                Error.Cells(i, 1) = cell.row - filaDato + 1
+                'Poner hipervinculo
+                ActiveSheet.Hyperlinks.Add Anchor:=Error.Cells(i, 1), Address:="", SubAddress:= _
+                    "Obras!" & cell.row & ":" & cell.row
+                'Marcar error con una E
+                Error.Cells(i, 6) = "E"
+                dup = dup + 1
+                i = i + 1
+            End If
+        Next
+        Call ActualizarBarra2
+        If dup > 1 Then
+            MsgBox "Se han encontrado " & dup & " duplicados", vbCritical
+        End If
+    ElseIf ActiveWorkbook.Saved = True Then
+        'No hay cambios, no se miran errores
+        ufProgressObr.SubProceso.Caption = "No hay cambios, saltando corrección de errores."
+        Call ActualizarBarra2
+        Call ActualizarBarra2
+        Call ActualizarBarra2
+    End If
+    'Borrar portapapeles
+    Application.CutCopyMode = False
+    'Reiniciar barra de subprocesos
+    Call ReiniciarBarra2
+    'Proteger memoria
+    Memoria.Protect Password:=contraseñaPaginas
+    vezError = vezError + 1
+    Exit Sub
+
+ErrorHandler:
+        'Si ocurre algun error ejecutar
+        MsgBox "Ha ocurrido un error confirmando información: " & Err.Description, vbExclamation, "Error 03"
+        Application.ScreenUpdating = True
+        'Proteger memoria
+        Memoria.Protect Password:=contraseñaPaginas
+        Call Reestablecer
+        End
+End Sub         'Barra implementada
+
+Sub formatoTabla()
+    'Desactivar actualizacion de pantalla y copiar y pegar el formato de la primera fila a el resto de la tabla
+    Application.CutCopyMode = False
+    Obras.Select
+    Rows(filaDato & ":" & filaDato).Select
+    Selection.Copy
+    DoEvents
+    If WorksheetFunction.CountA(Range(filaDato + 1 & ":" & filaDato + 1)) > 6 Then
+        Range(Selection, Selection.End(xlDown)).Select
+        Selection.PasteSpecial Paste:=xlPasteFormats, Operation:=xlNone, _
+            SkipBlanks:=False, Transpose:=False
+        filas = Range(Cells(filaDato, colA), Cells(filaDato, colA).End(xlDown)).Count
+        'Rellenar formula en filas que tengan año
+        Range(Cells(filaDato, colNum), Cells(filas + filaDato - 1, colNum)).FillDown
+        Cells(filaDato, colRetr).Formula = Config.Range("H2").Formula
+        Range(Cells(filaDato, colRetr), Cells(filas + filaDato - 1, colRetr)).FillDown
+    End If
+    'Borrar portapapeles y activar actualizacion de pantalla
+    autom = False
+    Application.CutCopyMode = False
+End Sub
+
+Sub carpetasCliente()
+    'Mirar si se encuentran carpetas de clientes
+    Call Cliente
+    For Each cell In rangoCliente
+        If Not fdObj.FolderExists(cell.Offset(0, 1).Text) Then
+            MsgBox "No existe la carpeta de cliente " & cell.Text, vbCritical
+            Exit Sub
+        End If
+    Next cell
+End Sub
+
+Sub BorrarCarpeta(ByVal borrar As String, ByVal recontar As String)
+    If Right(borrar, 1) = "\" Then
+        borrar = Left(borrar, Len(borrar) - 1)
+    End If
+    If fdObj.FolderExists(borrar) = False Then
+        MsgBox "No existe la carpeta " & borrar
+        Exit Sub
+    End If
+    If Not ThisWorkbook.Sheets("Config").Range("deBug") Then
+        On Error GoTo ErrorHandler
+    End If
+    If recontar = "S" Then
+        'Como se ha borrado una carpeta, recalcular numeros de identificador marcando obras en misma carpeta como borrado
+        ThisWorkbook.Sheets("Memoria").Unprotect Password:=contraseñaPaginas
+        ThisWorkbook.Sheets("Memoria").Select
+        'Conseguir año de la carpeta
+        Dim carpeta As Object
+        Set carpeta = fdObj.GetFolder(borrar)
+        Dim carpetaYear As Integer
+        carpetaYear = carpeta.ParentFolder.Name
+        'Conseguir provincia de la carpeta
+        Dim carpetaProv As String
+        carpetaProv = carpeta.ParentFolder.ParentFolder.Name
+        n = 2
+        Do While ThisWorkbook.Sheets("Memoria").Cells(n, 2) <> ""
+            'Si es provincia correcta
+            If ThisWorkbook.Sheets("Memoria").Cells(n, 4).Text = carpetaProv Then
+                'Si es año correcto
+                If ThisWorkbook.Sheets("Memoria").Cells(n, 3).Value = carpetaYear Then
+                    'Si es la carpeta afectada marcar cada obra como borrado
+                    ThisWorkbook.Sheets("Memoria").Cells(n, 9) = "B"
+                End If
+            End If
+            n = n + 1
+        Loop
+    End If
+    'Si cualquier archivo dentro de la carpeta esta abierto, sacar un mensaje
+    Do
+        'Mirar si hay algun archivo en uso
+        If IsAnyFileLocked(borrar) Then
+            'Sacar mensaje a usuario
+            Dim result As Integer
+            result = MsgBox("Algunos archivos en la carpeta ' " & borrar & _
+             " ' están en uso, reintentar?", vbQuestion + vbRetryCancel)
+            If result = vbRetry Then
+                'Reintentar
+                DoEvents
+            Else
+                'Si se elige cancelar, salir del loop y no borrar carpeta, enseñar mensaje
+                Clipboard (borrar)
+                MsgBox "No se ha eliminado la carpeta vieja, se ha copiado la ruta en el portapaples. Borrar cuando sea posible", vbInformation
+                Exit Do
+            End If
+        Else
+            'No hay archivos en uso, borrar archivos
+            fdObj.deletefile borrar & "\*.*", True
+            'Borrar subcarpetas
+            fdObj.deletefolder borrar & "\*.*", True
+            'Borrar carpeta original
+            RmDir borrar & "\"
+            Exit Do
+        End If
+    Loop
+    Obras.Select
+    'Borrar portapapeles
+    Application.CutCopyMode = False
+    Exit Sub
+
+ErrorHandler:
+        'Si ocurre algun error ejecutar
+        MsgBox "Ha ocurrido un error borrando la carpeta: " & Err.Description, vbExclamation, "Error 04"
+        Application.ScreenUpdating = True
+        Call Reestablecer
+        End
+End Sub
+
+Sub Cambio(ByVal fila As Long, Optional llamado As String)
+    If Not ThisWorkbook.Sheets("Config").Range("deBug") Then
+        On Error GoTo ErrorHandler
+    End If
+    Dim movido As Boolean
+    Dim nuevaCarpeta As String
+    Dim rutaCarpeta As String
+    Dim rutaClientes As String
+    Dim nuevoCliente As String
+    Dim viejoCliente As String
+    Dim nuevaProvincia As String
+    Dim viejaProvincia As String
+    Dim nuevoyear As String
+    Dim viejoyear As String
+    Dim nuevoNombre As String
+    Dim rutaC As String
+    Dim filaCliente As Integer
+    Dim celdaEncontrada As Range
+    'Guardar nuevos y viejos datos
+    nuevoCliente = Obras.Cells(fila, colC).Text
+    viejoCliente = Memoria.Cells(fila - filaDato + 2, 2)
+    nuevoyear = Obras.Cells(fila, colA).Text
+    viejoyear = Memoria.Cells(fila - filaDato + 2, 3)
+    nuevaProvincia = Obras.Cells(fila, colP).Text
+    viejaProvincia = Memoria.Cells(fila - filaDato + 2, 4)
+    'Comparar, si uno es diferente, movido
+    If nuevoCliente <> viejoCliente Or nuevoyear <> viejoyear Or nuevaProvincia <> viejaProvincia Then
+        movido = True
+    Else
+        movido = False
+    End If
+    'Crear nuevo titulo con los datos correctos
+    If movido Then
+        'Se ha movido de carpeta, poner nuevo identificador
+        Call CrearTitulo(fila, "S")
+    Else
+        'No se ha movido de carpeta, no modificar el identificador
+        Call CrearTitulo(fila, "N")
+    End If
+    'Usar ruta antigua para cambiar nombre a nueva carpeta
+    ufProgressObr.Proceso.Caption = "Realizando cambio de ruta para carpeta."
+    progreso2 = 1 / 5
+    'Ruta de carpeta donde se guardan los clientes
+    If Not noCrear Then
+        Call Cliente
+        ufProgressObr.SubProceso.Caption = "Verificando información de obra."
+        'Buscar cliente en rango de clientes
+        Set celdaEncontrada = rangoCliente.Find(What:=Obras.Cells(fila, colC), LookIn:=xlValues, LookAt:=xlWhole)
+        'Si se ha encontrado, conseguir ruta
+        If Not celdaEncontrada Is Nothing Then
+            filaCliente = celdaEncontrada.row
+            rutaC = Config.Cells(filaCliente, 3).Text
+        Else
+            MsgBox "No existe el cliente '" & Obras.Cells(fila, colC) & "'"
+            salir = True
+            Exit Sub
+        End If
+        Call ActualizarBarra2
+        ufProgressObr.SubProceso.Caption = "Generando nueva ruta de carpeta."
+        rutaClientes = fdObj.GetParentFolderName(rutaC)
+        'Ruta de carpeta vieja
+        rutaCarpeta = Obras.Cells(fila, colRuta)
+        'Nuevo nombre de carpeta
+        nuevoNombre = Obras.Cells(fila, colTitulo).Text
+        'Crear nueva ruta
+        nuevaCarpeta = rutaClientes & "\" & nuevoCliente & "\" & nuevaProvincia & "\" & nuevoyear & "\" & nuevoNombre & "\"
+        Call ActualizarBarra2
+        'Si existe la carpeta en la ruta cambiar su nombre
+        If fdObj.FolderExists(rutaCarpeta) Then
+            rutaCarpeta = Obras.Cells(fila, colRuta) & "\"
+            'Si ya existe la carpeta que se ha pedido modificar, no hacer nada
+            If Dir(nuevaCarpeta, vbDirectory) <> "" Then
+                GoTo CarpetaNoMod
+            End If
+            ufProgressObr.SubProceso.Caption = "Creando nueva carpeta."
+            'Crear carpeta con nuevo nombre sin subcarpetas, ya que se van a pegar del antiguo
+            Config.Range("Obra") = Obras.Cells(fila, colObr)
+            Call crearCarpeta(nuevaCarpeta, "N")
+            Call ActualizarBarra2
+            ufProgressObr.SubProceso.Caption = "Copiando archivos a nueva carpeta."
+            'Copiar archivos de carpeta vieja a nueva carpeta
+            Call CopiarArchivos(rutaCarpeta, nuevaCarpeta)
+            Call ActualizarBarra2
+            ufProgressObr.SubProceso.Caption = "Verificando manualmente contenidos."
+            'Asegurar que la nueva carpeta se ha creado bien
+            Clipboard (nuevaCarpeta)
+            If llamado = "B" Then
+                OutPut = 6
+            Else
+                OutPut = MsgBox("Se ha cambiado de nombre a la nueva carpeta. Se ha copiado la ruta de la nueva carpeta al portapapeles, asegurar que están todos los archivos," & _
+                    " sino, pegarlos manualmente." & vbCrLf & "Cuándo se haya asegurado que se ha creado bien, pulse Si", vbYesNo + vbExclamation)
+            End If
+            If OutPut = 6 Then
+                'Borrar carpeta vieja y todos sus elementos
+                ufProgressObr.SubProceso.Caption = "Borrando vieja carpeta y todos sus elementos."
+                'Ver si hay que recontar numeros identificadores de carpetas
+                If llamado = "B" Then
+                    Call BorrarCarpeta(rutaCarpeta, "S")
+                Else
+                    Call BorrarCarpeta(rutaCarpeta, "N")
+                End If
+            Else
+                'Se ha decidido no continuar con la operación, reestablecer desde ultima funcional
+                MsgBox "Se reestablecerá el documento", vbInformation, "Error 05"
+                Call Reestablecer
+                End
+            End If
+            Call ActualizarBarra2
+        Else
+            ufProgressObr.Proceso.Caption = "No existe la antigua carpeta, creando nueva carpeta."
+            'No existe la carpeta, crear nueva
+            Call CrearRuta(fila, "S")
+            Call ActualizarBarra2
+            Config.Range("Obra") = Obras.Cells(fila, colObr)
+            Call ActualizarBarra2
+            Call crearCarpeta(Obras.Cells(fila, colRuta), "S")
+            Call ActualizarBarra2
+        End If
+    End If
+
+CarpetaNoMod:
+        'Crear nueva ruta con nombre correcto
+        Call CrearRuta(fila, "N")
+        'Poner ruta correcta en nombre
+        Call PonerRutaNom(fila)
+        'Borrar portapapeles
+        Application.CutCopyMode = False
+        'Reiniciar barra de subprocesos
+        Call ReiniciarBarra2
+        Exit Sub
+
+ErrorHandler:
+        'Si ocurre algun error ejecutar
+        MsgBox "Ha ocurrido un error realizando el cambio a la carpeta: " & Err.Description, vbExclamation, "Error 06"
+        Application.ScreenUpdating = True
+        Call Reestablecer
+        End
+End Sub         'Barra implementada
+
+Sub nuevaCarpeta(ByVal fila As Long)
+    Dim rutaCrear As String
+    Dim rangoDatos As Range
+    If Not ThisWorkbook.Sheets("Config").Range("deBug") Then
+        On Error GoTo ErrorHandler
+    End If
+    Obras.Select
+    Set rangoDatos = Obras.Range(Cells(fila, colC), Cells(fila, colNom))
+    'Mirar si hay algun dato escrito en la fila
+    If WorksheetFunction.CountA(rangoDatos) = 0 Then
+        salir = True
+    Else
+        'Crear carpeta con nombre adecuado y subcarpetas
+        If Not noCrear Then
+            Call CrearRuta(fila, "S")
+        Else
+            Call CrearRuta(fila, "N")
+        End If
+        'Guardar ruta en string y llamar crear carpeta
+        rutaCrear = Obras.Cells(fila, colRuta).Text
+        Config.Range("Obra") = Obras.Cells(fila, colObr)
+        If Not noCrear Then
+            ufProgressObr.Proceso.Caption = "Creando nueva carpeta con subcarpetas y documentos seleccionados."
+            Call crearCarpeta(rutaCrear, "S")
+        End If
+        'Borrar portapapeles
+        Application.CutCopyMode = False
+    End If
+    Exit Sub
+
+ErrorHandler:
+        'Si ocurre algun error ejecutar
+        MsgBox "Ha ocurrido un error creando la nueva carpeta: " & Err.Description, vbExclamation, "Error 07"
+        Application.ScreenUpdating = True
+        Call Reestablecer
+        End
+End Sub         'Barra implementada
+
+Sub CrearRuta(ByVal fila As Long, ByVal cont As String)
+    Dim celdaEncontrada As Range
+    Dim rutaC As Integer
+    'Teniendo fila de la obra crear la ruta, poner en excel e insertar en nombre de obra
+    Call Cliente
+    'Buscar cliente en rango de clientes
+    Set celdaEncontrada = rangoCliente.Find(What:=Obras.Cells(fila, colC), LookIn:=xlValues, LookAt:=xlWhole)
+    'Si se ha encontrado, conseguir ruta
+    If Not celdaEncontrada Is Nothing Then
+        rutaC = celdaEncontrada.row
+        'Llamar a creador de titulo
+        Call CrearTitulo(fila, cont)
+        Obras.Cells(fila, colRuta) = Config.Cells(rutaC, 3) & "\" & Obras.Cells(fila, colP) & "\" & Obras.Cells(fila, colA) & "\" & Obras.Cells(fila, colTitulo)
+    Else
+        MsgBox "No existe el cliente '" & Obras.Cells(fila, colC) & "'"
+        salir = True
+        Exit Sub
+    End If
+End Sub
+
+Sub CrearTitulo(ByVal fila As Long, ByVal cont As String)
+    Dim celdaEncontrada As Range
+    Dim rutaExProv As String
+    Dim rutaC As String
+    Dim rutaP As String
+    Dim obraA As String
+    Dim filaC As Integer
+    Dim filaP As Integer
+    Dim OutPut As Integer
+    Call Cliente
+    'Buscar cliente en rango de clientes
+    Set celdaEncontrada = rangoCliente.Find(What:=Obras.Cells(fila, colC), LookIn:=xlValues, LookAt:=xlWhole)
+    'Si se ha encontrado, conseguir fila
+    If Not celdaEncontrada Is Nothing Then
+        filaC = celdaEncontrada.row
+        rutaC = celdaEncontrada.Offset(0, 1).Text
+    Else
+        MsgBox "No existe el cliente '" & Obras.Cells(fila, colC) & "'"
+        Exit Sub
+    End If
+    Call Provincia
+    'Buscar provincia en rango de provincia
+    Set celdaEncontrada = rangoProvincia.Find(What:=Obras.Cells(fila, colP), LookIn:=xlValues, LookAt:=xlWhole)
+    'Si se ha encontrado, conseguir fila
+    If Not celdaEncontrada Is Nothing Then
+        filaP = celdaEncontrada.row
+        rutaP = celdaEncontrada.Text
+    Else
+        MsgBox "No existe la provincia '" & Obras.Cells(fila, colP) & "'"
+        Exit Sub
+    End If
+    obraA = Obras.Cells(fila, colA).Value
+    ruta = rutaC & "\" & rutaP & "\" & obraA & "\"
+    Dim idObr As String
+    'Mirar si existe la provincia
+    rutaExProv = rutaC & "\" & rutaP & "\"
+    Dim carpeta As Object
+    'Si no existe carpeta de Provincia preguntar si crear nueva
+    If Not fdObj.FolderExists(rutaExProv) Then
+        OutPut = MsgBox("No existe la carpeta de provincia de " & Obras.Cells(fila, colP).Value & " en la carpeta de cliente " & Obras.Cells(fila, colC).Text _
+        & ". Crear nueva?", vbYesNo + vbQuestion)
+        'Si se elgie si, crear carpeta
+        If OutPut = 6 Then
+            Config.Range("Obra") = Obras.Cells(fila, colObr)
+            Call crearCarpeta(rutaExProv, "N")
+        Else
+            MsgBox "Se detendrá el programa.", vbInformation, "Error 08"
+            'Si se elige no, salir de la macro reestableciendo a ultima funcional
+            Call Reestablecer
+            End
+        End If
+    End If
+    Set carpeta = Nothing
+    'Si no existe carpeta de año preguntar si crear nueva
+    If Not fdObj.FolderExists(ruta) Then
+        OutPut = MsgBox("No existe la carpeta del año '" & Obras.Cells(fila, colA).Value & "' en la carpeta de provincia '" & Obras.Cells(fila, colP).Text _
+        & "' dentro de la carpeta de cliente '" & Obras.Cells(fila, colC).Text & "'. Crear nueva?", vbYesNo + vbQuestion)
+        'Si se elgie si, crear carpeta
+        If OutPut = 6 Then
+            Config.Range("Obra") = Obras.Cells(fila, colObr)
+            Call crearCarpeta(ruta, "N")
+        Else
+            MsgBox "Se detendrá el programa.", vbInformation, "Error 09"
+            'Si se elige no, salir de la macro reestableciendo a ultima funcional
+            Call Reestablecer
+            End
+        End If
+    End If
+    If cont = "S" Then
+        'Contar numero de carpetas en la ruta para numero de identificador
+        Call ContarCarpetas(ruta, fila)
+        'Si es un solo digito, sumarle un 0 a la izquierda
+        Dim numFormato As String
+        If numCarpetas < 10 Then
+            numFormato = Format(numCarpetas + 1, "00")
+        Else
+            numFormato = CStr(numCarpetas + 1)
+        End If
+        Obras.Cells(fila, colId) = Config.Cells(filaP, 5).Text & numFormato
+    End If
+    idObr = Obras.Cells(fila, colId)
+    'Formato de nombre de carpeta -> 'Prefijo(PR)' + 'Abreviatura cliente' 'Año' 'Identificador provincia' + 'Numero de carpeta' 'Numero de obra' 'Titulo de obra'
+    'PRIB 2022 AR05 101088911 LSAT Enlace Ali-Gobeo 1 y 2
+    Obras.Cells(fila, colTitulo) = pref & Config.Cells(filaC, 1).Text & " " & Obras.Cells(fila, colA) & _
+     " " & idObr & " " & Obras.Cells(fila, colObr) & " " & Obras.Cells(fila, colNom)
+End Sub
+
+Sub crearCarpeta(crear As String, subCarp As String)
+    Dim texto As String
+    Dim archivoNom As String
+    Dim nuevoNom As String
+    If fdObj.FolderExists(crear) Then
+        'MsgBox "Existe la carpeta"
+    Else
+        fdObj.CreateFolder (crear)
+        'Quitar atributo solo lectura
+        SetAttr crear, vbNormal
+        If subCarp = "S" Then
+            'Crear subcarpetas elegidas
+            n = 3
+            Config.Select
+            Do While Config.Cells(n, 6) <> ""
+                ufProgressObr.SubProceso.Caption = "Verificando tipo de archivo a crear."
+                fdObj.CreateFolder (crear & "\" & Config.Cells(n, 6).Text)
+                DoEvents
+                'Mirar si hay que crear subcarpeta o pegar un archivo
+                i = 7
+                Do While Config.Cells(n, i) <> ""
+                    texto = Config.Cells(n, i)
+                    'Mirar si el texto es un archivo válido
+                    If Len(Dir(texto)) > 0 Then
+                        progreso2 = 1 / 4
+                        'Si es un archivo, conseguir el nombre del archivo
+                        archivoNom = Mid(texto, InStrRev(texto, "\") + 1)
+                        'Mirar si es un archivo de Word
+                        If UCase(Right(archivoNom, 4)) = ".DOC" Or UCase(Right(archivoNom, 5)) = ".DOCX" Then
+                            'Crear ruta de destinación completa para pegar
+                            Dim destinationFilePath As String
+                            destinationFilePath = crear & "\" & Config.Cells(n, 6).Text & "\" & archivoNom
+                            fdObj.CopyFile texto, destinationFilePath
+                            'Poner numero de obra en el titulo
+                            nuevoNom = Left(archivoNom, Len(archivoNom) - Len(".docx")) & Config.Range("Obra").Text & ".docx"
+                            'Generar nueva ruta de archivo
+                            Dim newPath As String
+                            newPath = Left(destinationFilePath, Len(destinationFilePath) - Len(archivoNom)) & nuevoNom
+                            'Cambiar nombre
+                            Name destinationFilePath As newPath
+                            'Si es documento de control de diseño, abrir documento y poner numero de obra y fecha en marcador
+                            If InStr(1, archivoNom, "C1210100_ANEXO", vbTextCompare) > 0 Then
+                                ufProgressObr.SubProceso.Caption = "Abriendo documento."
+                                Call ActualizarBarra2
+                                Application.CutCopyMode = False
+                                Dim wdApp As Word.Application
+                                Dim wdDoccument As Word.Document
+                                Set wdApp = New Word.Application
+                                DoEvents
+                                wdApp.Visible = False
+                                Set wdDoccument = wdApp.Documents.Open(Filename:=newPath)
+                                ufProgressObr.SubProceso.Caption = "Dando formato a documento de control de diseño."
+                                Call ActualizarBarra2
+                                'Buscar y reemplazar
+                                Call FindAndReplaceBookmarks("Obra", Config.Range("Obra").Text, wdDoccument)
+                                Dim Hoy As String
+                                Hoy = Format(Date, "Long Date")
+                                Call FindAndReplaceBookmarks("FechaHoy", Hoy, wdDoccument)
+                                'Cerrar documento de word guardando cambios
+                                ufProgressObr.SubProceso.Caption = "Guardando nuevo documento."
+                                Call ActualizarBarra2
+                                wdDoccument.Close SaveChanges:=True
+                                'Cerrar Word
+                                ufProgressObr.SubProceso.Caption = "Cerrando documento."
+                                Call ActualizarBarra2
+                                wdApp.Quit
+                                Set wdApp = Nothing
+                                Set wdDoccument = Nothing
+                            Else
+                                'Es otro documento de word, solo pegar con numero obra
+                            End If
+                        Else
+                            'Es otro tipo de archivo, pegar en la carpeta
+                        End If
+                    Else
+                        ufProgressObr.SubProceso.Caption = "Creando subcarpetas."
+                        progreso2 = 1
+                        Call ActualizarBarra2
+                        'No es una ruta, crear subcarpeta
+                        fdObj.CreateFolder (crear & "\" & Config.Cells(n, 6).Text & "\" & Config.Cells(n, 7).Text)
+                        DoEvents
+                    End If
+                    i = i + 1
+                    'Reiniciar barras de progreso a 0, no avanzar proceso general
+                    ufProgressObr.LabelProgress2.Width = 0
+                    frac2 = 0
+                Loop
+                n = n + 1
+            Loop
+        End If
+    End If
+    Call ReiniciarBarra2
+End Sub         'Barra implementada
+
+Sub FindAndReplaceBookmarks(strSearch As String, strReplacement As String, doc As Word.Document)
+    With doc.Range.Find
+        'Especificar el texto a encontrar y el texto a reemplazar en la funcion
+        .Text = strSearch
+        .Forward = True
+        .replacement.ClearFormatting
+        .replacement.Text = strReplacement
+        'Ejecutar el comando de buscar y reemplazar
+        .Execute Replace:=wdReplaceAll, Forward:=True
+        DoEvents
+    End With
+End Sub
+
+Sub PonerRutaNom(ByVal fila As Long)
+    If ThisWorkbook.Sheets("Config").Range("deBug") Then
+        Debug.Print "poniendo ruta en fila " & fila
+    End If
+    ufProgressObr.SubProceso.Caption = "Poniendo ruta a nombre"
+    Dim rut As String
+    'Borrar portapapeles
+    Application.CutCopyMode = False
+    'Guardar ruta en portapapeles
+    Obras.Select
+    rut = Obras.Cells(fila, colRuta).Text
+    ActiveSheet.Hyperlinks.Add Anchor:=Obras.Cells(fila, colNom), Address:=rut
+    DoEvents
+    'Borrar portapapeles
+    Application.CutCopyMode = False
+End Sub
+
+Sub Reestablecer()
+    fila = filaDato
+    'Si ha ocurrido algún error en el prgorama, reestablecer datos desde memoria
+    autom = True
+    Application.ScreenUpdating = True
+    MsgBox "Ha ocurrido un error en la ejecución del programa o se ha decidido reestablecer maualmente" & _
+    ", se reestablecerá la información. Esto puede tardar unos minutos, por favor pulse Aceptar.", vbCritical, "Error 10"
+    'Limpiar portapapeles
+    Application.CutCopyMode = False
+    'Fracciones de progreso
+    frac = 0
+    frac2 = 0
+    progreso = 1 / 2
+    progreso2 = 1 / 2
+    ufProgressObr.Caption = "Reestableciendo documento."
+    ufProgressObr.Proceso.Caption = "Reestableciendo elementos."
+    ufProgressObr.SubProceso.Caption = "Borrando elementos defectuosos."
+    ufProgressObr.TiempoEstimado.Caption = ""
+    ufProgressObr.Show
+    'Desproteger pagina de obras
+    Call ProtegerObras("U")
+    'Copiar y reestablecer datos
+    ThisWorkbook.Sheets("Obras").Select
+    Range(Cells(filaDato, colC), Cells(filaDato, colRetr - 1)).Select
+    Range(Selection, Selection.End(xlDown)).Select
+    DoEvents
+    Selection.ClearContents
+    DoEvents
+    Range(Cells(filaDato, colRetr + 1), Cells(filaDato, colTitulo)).Select
+    Range(Selection, Selection.End(xlDown)).Select
+    DoEvents
+    Selection.ClearContents
+    DoEvents
+    Call ActualizarBarra2
+    ufProgressObr.SubProceso.Caption = "Pegando datos desde memoria funcional."
+    'Copiar ultima funcional dejando retrasos sin tocar
+    ThisWorkbook.Sheets("MemFunc.").Select
+    Range(Cells(2, colC - 1).End(xlDown), Cells(2, colRetr - 2)).Copy
+    DoEvents
+    ThisWorkbook.Sheets("Obras").Select
+    Cells(filaDato, colC).PasteSpecial Paste:=xlValues, Operation:=xlNone, SkipBlanks:=False, Transpose:=False
+    DoEvents
+    'Copiar y pegar rutas, nombres y notas de memoria func.
+    ThisWorkbook.Sheets("MemFunc.").Select
+    Range(Cells(2, colRetr), Cells(2, colTitulo - 1).End(xlDown)).Copy
+    DoEvents
+    ThisWorkbook.Sheets("Obras").Select
+    ThisWorkbook.Sheets("Obras").Cells(filaDato, colNotas).PasteSpecial Paste:=xlPasteValues
+    DoEvents
+    Call ActualizarBarra2
+    Call ReiniciarBarra2
+    ufProgressObr.Proceso.Caption = "Dando formato a elementos."
+    ufProgressObr.SubProceso.Caption = "Insertando ruta a nombres de obra."
+    progreso2 = 1 / filas
+    'Poner ruta en el nombre de cada obra
+    marc = 2
+    Do While ThisWorkbook.Sheets("Obras").Cells(fila, colC) <> ""
+        ufProgressObr.TituloObra.Caption = "Titulo de obra: " & Obras.Cells(marc + filaDato - 2, colNom).Text
+        Call PonerRutaNom(fila)
+        'Crear nombre de carpeta a partir de ruta
+        Dim path As String
+        Dim pathArray() As String
+        Dim nombreFinal As String
+        'Ruta de carpeta
+        path = ThisWorkbook.Sheets("Obras").Cells(fila, colRuta)
+        'Separar la ruta a un array
+        pathArray = Split(path, "\")
+        'Ultimo elemento del array es nombre de la carpeta
+        nombreFinal = pathArray(UBound(pathArray))
+        ThisWorkbook.Sheets("Obras").Cells(fila, colTitulo) = nombreFinal
+        marc = marc + 1
+        fila = fila + 1
+        Call ActualizarBarra2
+    Loop
+    Call ReiniciarBarra2
+    ufProgressObr.Proceso.Caption = "Finalizando reestablecimiento de documento."
+    autom = False
+    Application.CutCopyMode = False
+    MsgBox "La hoja debe reiniciarse, pulse el botón de reinicio en el Excel", vbInformation
+    ThisWorkbook.Sheets("Obras").Range("Titulo").Select
+    Unload ufProgressObr
+    Call ProtegerObras("P")
+    ThisWorkbook.Sheets("Memoria").Protect Password:=contraseñaPaginas
+End Sub
+
+Sub UltimaFuncional(Optional llamador As String)
+    'Guardar en memoria funcional cada vez que se ejecuta el programa
+    If ThisWorkbook.Sheets("MemFunc.").Range("NumeroEjecucion") >= 1 Or llamador = "I" Then
+        ufProgressObr.SubProceso.Caption = "Borrando memoria antigua."
+        progreso2 = 1 / 3
+        'Borrar portapapeles
+        Application.CutCopyMode = False
+        MemFunc.Select
+        MemFunc.Unprotect Password:=contraseñaPaginas
+        'Reiniciar numero de ejecuciones de programa
+        ThisWorkbook.Sheets("MemFunc.").Range("NumeroEjecucion") = 0
+        'Borrar contenidos de ultimo funcional
+        Range("2:2").Select
+        Range(Selection, Selection.End(xlDown)).ClearContents
+        Call ActualizarBarra2
+        ufProgressObr.SubProceso.Caption = "Copiando datos actuales."
+        'Copiar datos de pagina de Obras y guardar
+        Obras.Select
+        Range(Cells(filaDato, colNum), Cells(filaDato, colTitulo)).Select
+        'Mirar si en obras hay solo una fila de informacion
+        If WorksheetFunction.CountA(Range(filaDato + 1 & ":" & filaDato + 1)) > 6 Then
+            'Si hay mas de una fila
+            Range(Selection, Selection.End(xlDown)).Copy
+        Else
+            'Si solo hay una fila no seleccionar nada mas
+            Range(Cells(filaDato, colNum), Cells(filaDato, colTitulo)).Copy
+        End If
+        DoEvents
+        Call ActualizarBarra2
+        ufProgressObr.SubProceso.Caption = "Pegando datos."
+        'Pegar ultima memoria funcional
+        'MemFunc.Select
+        MemFunc.Cells(2, 1).PasteSpecial Paste:=xlPasteValues
+        Call ActualizarBarra2
+        ufProgressObr.SubProceso.Caption = "Finalizando el guardado en memoria."
+        MemFunc.Protect Password:=contraseñaPaginas
+        'Borrar portapapeles
+        Application.CutCopyMode = False
+        Call ReiniciarBarra2
+    End If
+End Sub             'Barra imlpementada
+
+Sub Identificadores(ByVal fila As Long)
+    ufProgressObr.Proceso.Caption = "Recalculando identificadores de obras."
+    Dim celdaEncontrada As Range
+    Dim filaP As Integer
+    'Cada vez que se llama, sumar uno en la posicion
+    pos = pos + 1
+    Call Provincia
+    'Buscar provincia en rango de provincia
+    Set celdaEncontrada = rangoProvincia.Find(What:=Obras.Cells(fila, colP), LookIn:=xlValues, LookAt:=xlWhole)
+    'Si se ha encontrado, conseguir fila
+    If Not celdaEncontrada Is Nothing Then
+        filaP = celdaEncontrada.row
+    Else
+        MsgBox "No existe la provincia " & Obras.Cells(fila, colP)
+        Exit Sub
+    End If
+    'Dar formato correcto a numeración
+    Dim numFormato As String
+    If pos < 10 Then
+        numFormato = Format(pos, "00")
+    End If
+    Obras.Cells(fila, colId) = Config.Cells(filaP, 5).Text & numFormato
+    Call ActualizarBarra
+End Sub
+
+Sub Cliente()
+    Config.Select
+    Dim clientes As Integer
+    clientes = 0
+    Do While Config.Cells(clientes + 3, 2) <> ""
+        clientes = clientes + 1
+    Loop
+    If clientes = 1 Then
+        'Si hay un cliente rango:
+        Set rangoCliente = Config.Range("B3")
+    ElseIf clientes > 1 Then
+        'Si hay mas de un cliente rango:
+        Set rangoCliente = Config.Range(Cells(3, 2), Cells(3, 2).End(xlDown))
+    End If
+    Obras.Select
+End Sub
+
+Sub Provincia()
+    Config.Select
+    Dim provincias As Integer
+    provincias = 0
+    Do While Config.Cells(provincias + 3, 4) <> ""
+        provincias = provincias + 1
+    Loop
+    If provincias = 1 Then
+        'Si hay una provincia rango:
+        Set rangoProvincia = Config.Range("D3")
+    ElseIf provincias > 1 Then
+        'Si hay mas de una provincia rango:
+        Set rangoProvincia = Range(Cells(3, 4), Cells(3, 4).End(xlDown))
+    End If
+    Obras.Select
+End Sub
+
+'Grupo de funciones y sub para encontrar algun archivo bloqueado o archivo en uso
+Function IsAnyFileLocked(folderPath As String) As Boolean
+    Dim file As Variant
+    'Iterar por todos los archivos en la colección
+    For Each file In GetFiles(folderPath)
+        'Mirar si el archivo esta bloqueado
+        If IsFileLocked(file) Then
+            IsAnyFileLocked = True
+            Exit Function
+        End If
+    Next file
+    'No se ha encontrado archivos bloqueados
+    IsAnyFileLocked = False
+End Function
+
+Function GetFiles(folderPath As String) As Collection
+    Dim folder As Object
+    Dim subfolder As Object
+    Dim file As Object
+    Dim filesCollection As Collection
+
+    Set folder = fdObj.GetFolder(folderPath)
+    Set filesCollection = New Collection
+    'Función para conseguir todos los archivos en la carpeta
+    Call GetFilesRecursive(folder, filesCollection)
+    Set GetFiles = filesCollection
+    Set file = Nothing
+    Set subfolder = Nothing
+    Set folder = Nothing
+End Function
+
+Sub GetFilesRecursive(folder As Object, ByRef filesCollection As Collection)
+    Dim file As Object
+    Dim subfolder As Object
+    For Each file In folder.Files
+        filesCollection.Add file.path
+    Next file
+    For Each subfolder In folder.SubFolders
+        Call GetFilesRecursive(subfolder, filesCollection)
+    Next subfolder
+End Sub
+
+Function IsFileLocked(filePath As Variant) As Boolean
+    On Error Resume Next
+    Open filePath For Binary Access Read Lock Read As #1
+    Close #1
+    IsFileLocked = False
+    If Err.Number <> 0 Then
+        'El archivo no es accesible
+        IsFileLocked = True
+        Err.Clear
+    Else
+        IsFileLocked = False
+    End If
+End Function
+
+
+Sub CopiarArchivos(sourceFolder As String, destinationFolder As String)
+    Dim objFile As Object
+    Dim objSubFolder As Object
+    'Mirar si existe la carpeta para copiar
+    If fdObj.FolderExists(sourceFolder) Then
+        'Mirar si existe la carpeta a pegar
+        If Not fdObj.FolderExists(destinationFolder) Then
+            'No existe la carpeta a pegar
+            MsgBox "No existe la carpeta a pegar", vbCritical
+            Exit Sub
+        End If
+        'Conseguir archivos de la carpeta para copiar
+        For Each objFile In fdObj.GetFolder(sourceFolder).Files
+            'Copiar cada archivo a carpeta a pegar
+            fdObj.CopyFile objFile.path, destinationFolder & objFile.Name
+            DoEvents
+        Next objFile
+        'Copiar cada subcarpeta
+        For Each objSubFolder In fdObj.GetFolder(sourceFolder).SubFolders
+            fdObj.CopyFolder objSubFolder.path, destinationFolder & objSubFolder.Name
+            DoEvents
+        Next objSubFolder
+    Else
+        MsgBox "Carpeta a copiar no existe", vbCritical
+        Exit Sub
+    End If
+End Sub
+
+Sub ContarCarpetas(ByVal ruta As String, ByVal fila As Long)
+    numCarpetas = 0
+    'Si existe la carpeta de la ruta contar
+    If Dir(ruta, vbDirectory) <> "" Then
+        Dim nombreCarpeta As String
+        nombreCarpeta = Dir(ruta, vbDirectory)
+        'Mirar cada carpeta
+        Do While nombreCarpeta <> ""
+            'Mirar si es una carpeta
+            If (GetAttr(ruta & "\" & nombreCarpeta) And vbDirectory) = vbDirectory And nombreCarpeta <> "." And nombreCarpeta <> ".." Then
+                'Si es una carpeta sumar 1 a cantidad
+                numCarpetas = numCarpetas + 1
+            End If
+            nombreCarpeta = Dir
+        Loop
+        'MsgBox "Numero de carpetas en el directorio : " & numCarpetas
+    Else
+        MsgBox "No existe la carpeta " & ruta, vbCritical
+    End If
+End Sub
+
+Sub InicioTimerGestion()
+    Set timerApoyos = New Timer
+    timerApoyos.StartTimer
+End Sub
+
+Sub FinalTimerGestion()
+    timerApoyos.StopTimer
+    elapsedTime = timerApoyos.GetElapsedTime
+End Sub
+
+Private Sub ActualizarBarra()
+    'Fracción por cada llamada
+    frac = progreso + frac
+    'Actualizar barra de progreso
+    With ufProgressObr
+        .LabelProgress.Width = frac * (.FrameProgress.Width)
+        .Repaint
+    End With
+    DoEvents
+End Sub
+
+Private Sub ActualizarBarra2()
+    'Fracción por cada llamada
+    ' Application.Wait Now + #12:00:01 AM#
+    frac2 = progreso2 + frac2
+    'Actualizar barra de progreso
+    With ufProgressObr
+        .LabelProgress2.Width = frac2 * (.FrameProgress2.Width)
+    End With
+    DoEvents
+End Sub
+
+Private Sub ReiniciarBarra2()
+    'Reiniciar barra de subprocesos
+    ' Application.Wait Now + #12:00:01 AM#
+    ufProgressObr.SubProceso.Caption = ""
+    ufProgressObr.LabelProgress2.Width = 0
+    frac2 = 0
+    progreso2 = 0
+    'Sumar una fraccion para el progreso de la barra general
+    Call ActualizarBarra
+End Sub
+
+Sub ContarElementos()
+    cantidElemM = 0
+    cantidElemN = 0
+    cantidElemB = 0
+    Do While Memoria.Cells(n, 9) <> "" Or Memoria.Cells(n, 2) <> ""
+        If Memoria.Cells(n, 9) = "M" Then
+            cantidElemM = cantidElemM + 1
+        ElseIf Memoria.Cells(n, 9) = "N" Then
+            cantidElemN = cantidElemN + 1
+        ElseIf Memoria.Cells(n, 9) = "B" Then
+            cantidElemB = cantidElemB + 1
+        End If
+        n = n + 1
+    Loop
+    total = cantidElemM + cantidElemN + cantidElemB
+    'Si hay mas de un elemento a modificar, pedir contraseña
+    If total > 0 Then
+        'Si se ha pedido antes, y se ha elegido no volver a mostrar, no mostrar
+        If Config.Range("volverAmostrar").Value Then
+            'No volver a mostrar
+        Else
+            ufContraseña.Show
+            DoEvents
+        End If
+    End If
+End Sub
+
+Sub VerificarRuta(ByVal filaVer As Long)
+    Dim rutaCarpetaVer As String
+    rutaCarpetaVer = Obras.Cells(filaVer, colRuta)
+    If fdObj.FolderExists(rutaCarpetaVer) Then
+        rutaMalB = False
+    Else
+        rutaMalB = True
+    End If
+End Sub
+
+Public Sub ProtegerObras(ByVal accion As String)
+    If accion = "P" Then
+        ThisWorkbook.Sheets("Obras").Protect Password:=contraseñaPaginas, DrawingObjects:=False, Contents:=True, Scenarios:= _
+        False, AllowFormattingCells:=True, AllowFormattingColumns:=True, _
+        AllowFormattingRows:=True, AllowInsertingColumns:=True, AllowInsertingRows _
+        :=True, AllowInsertingHyperlinks:=True, AllowDeletingColumns:=True, _
+        AllowDeletingRows:=True, AllowFiltering:=True, AllowUsingPivotTables:=True
+    ElseIf accion = "U" Then
+        ThisWorkbook.Sheets("Obras").Unprotect Password:=contraseñaPaginas
+    End If
+End Sub

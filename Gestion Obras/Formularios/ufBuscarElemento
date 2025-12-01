@@ -1,0 +1,323 @@
+Option Explicit
+
+Dim i As Long
+Dim listaFilas As Object
+Dim listaNoCoincide As Object
+Dim filaSeleccionada As Long
+Dim frac As Double
+Dim progreso As Double
+Dim rutaCarpeta As String
+Dim Obras As Worksheet
+
+Private Sub BotonAbrirCarpeta_Click()
+    'Conseguir fila de elemento seleccionado
+    Call ElementoSeleccionado
+    rutaCarpeta = Obras.Cells(filaSeleccionada, ThisWorkbook.colRuta)
+    Shell "explorer.exe " & rutaCarpeta, vbNormalFocus
+End Sub
+
+Private Sub BotonBorrar_Click()
+    'Conseguir fila de elemento seleccionado
+    Call ElementoSeleccionado
+    'Pedir contraseña, si no se ha metido antes
+    If ThisWorkbook.Sheets("Config").Range("volverAmostrar").Value Then
+        'No volver a mostrar
+    Else
+        ufContraseña.Show
+        DoEvents
+        'Ver si la contraseña metida es la correcta
+        If Not CorrectoContraseña Then
+            'La contraseña introducida no es la correcta
+            Exit Sub
+        End If
+    End If
+    Call BorrarFila(filaSeleccionada)
+    Call BotonLimpiarTexto_Click
+End Sub
+
+Private Sub BotonBuscar_Click()
+    'Al pulsar buscar, mirar si se ha rellenado el numero de obra, el titulo o los dos
+    Dim numero As String
+    Dim titulo As String
+
+    numero = CajaNumero.Value
+    titulo = CajaTitulo.Value
+    'Ver si se ha aportado informacion de la obra
+    If numero = "" And titulo = "" Then
+        MsgBox "Rellene al menos una de las cajas con datos de la obra a buscar.", vbCritical
+        Call BotonLimpiarTexto_Click
+        Exit Sub
+    End If
+    'Habilitar los botones
+    BotonAbrirCarpeta.Enabled = True
+    BotonBorrar.Enabled = True
+    'Algoritmo de busqueda
+    Call Buscar(numero, titulo)
+    If i = 0 Then
+        MsgBox "No se ha encontrado obra que conicida con la información aportada. Intentelo de nuevo.", vbInformation
+        Call BotonLimpiarTexto_Click
+    ElseIf i > 0 Then
+        'Se ha encontrado obras que coinciden, cargar para mostrar y elegir
+        Call PoblarLista
+    End If
+    Me.Repaint
+End Sub
+
+Private Sub BotonLimpiarTexto_Click()
+    progreso = 1 / 6
+    'Borrar los cuadros de texto y el cuadro de resultados
+    CajaNumero.Value = ""
+    Call ActualizarBarra
+    CajaTitulo.Value = ""
+    Call ActualizarBarra
+    CajaResultados.Clear
+    Call ActualizarBarra
+    'Borrar el array de resultados
+    Set listaFilas = CreateObject("System.Collections.ArrayList")
+    Call ActualizarBarra
+    'Cargar columnas y sus anchuras
+    CajaResultados.ColumnCount = 2
+    Call ActualizarBarra
+    CajaResultados.ColumnWidths = "65;150"
+    Call ActualizarBarra
+    Call ReiniciarBarra
+    'Deshabilitar los botones
+    BotonAbrirCarpeta.Enabled = False
+    BotonBorrar.Enabled = False
+End Sub
+
+Private Sub BotonSalir_Click()
+    'Al pulsar el boton de cancelar, limpiar texto y cerrar el userForm
+    Call BotonLimpiarTexto_Click
+    UnhookListScroll
+    Unload Me
+End Sub
+
+Private Sub UserForm_Initialize()
+    'Alinear en el centro de la pantalla activa
+    With ufBuscarElemento
+        .StartUpPosition = 0
+        .Left = Application.Left + (0.5 * Application.Width) - (0.5 * .Width)
+        .Top = Application.Top + (0.5 * Application.Height) - (0.5 * .Height)
+    End With
+    'Al iniciar, borrar datos de cajas
+    Call BotonLimpiarTexto_Click
+    'Inicializar barra de progreso
+    Me.LabelBusqueda.Width = 0
+    'Variable de worksheet
+    Set Obras = ThisWorkbook.Sheets("Obras")
+End Sub
+
+Private Sub Buscar(ByVal numeroObr As String, ByVal tituloObr As String)
+    Dim rngNum As Range
+    Dim rngTit As Range
+    Call ReiniciarBarra
+    'Rangos de nombres y titulos de obras
+    Set rngNum = Obras.Range(Cells(ThisWorkbook.filaDato, ThisWorkbook.colObr), Cells(ThisWorkbook.filaDato + ThisWorkbook.filas - 1, ThisWorkbook.colObr))
+    Set rngTit = Obras.Range(Cells(ThisWorkbook.filaDato, ThisWorkbook.colNom), Cells(ThisWorkbook.filaDato + ThisWorkbook.filas - 1, ThisWorkbook.colNom))
+    Set listaFilas = CreateObject("System.Collections.ArrayList")
+    If numeroObr <> "" And tituloObr <> "" Then
+        'Se han rellenado los dos cuadros, primero buscar por numero de obra
+        Call BuscarEnRango(rngNum, numeroObr)
+        Call ReiniciarBarra
+        'Crear lista de no coincidentes
+        Set listaNoCoincide = CreateObject("System.Collections.ArrayList")
+        'Con la lista de numero de obra coincidente filtrar por titulo
+        Dim n As Long
+        Dim X As Long
+        X = 0
+        Dim rowIndex As Long
+        progreso = 1 / (listaFilas.Count - 1)
+        'Buscar elemento en el rango
+        For n = 0 To listaFilas.Count - 1
+            rowIndex = listaFilas(n)
+            Call ActualizarBarra
+            'Si el titulo de la fila no coincide con el titulo introducido, quitar fila de lista
+            If Not UCase(Obras.Cells(rowIndex, 8)) Like "*" & UCase(tituloObr) & "*" Then
+                listaNoCoincide.Add n
+                X = X + 1
+            End If
+        Next n
+        'Eliminar elementos de lista
+        If X > 0 Then
+            X = 0
+            For X = listaNoCoincide.Count - 1 To 0 Step -1
+                'Quitar filas guardadas en lista secundaria
+                listaFilas.RemoveAt listaNoCoincide(X)
+            Next X
+        End If
+        i = listaFilas.Count
+    ElseIf numeroObr <> "" Then
+        Call BuscarEnRango(rngNum, numeroObr)
+    ElseIf tituloObr <> "" Then
+        Call BuscarEnRango(rngTit, tituloObr)
+    End If
+End Sub
+
+Private Sub PoblarLista()
+    Dim ws As Worksheet
+    Dim rowIndex As Long
+    Dim n As Long
+    'Pagina de la información
+    Set ws = ThisWorkbook.Worksheets("Obras")
+    'Limpiar la caja de resultados
+    CajaResultados.Clear
+    'Iterar el array
+    For n = 0 To listaFilas.Count - 1
+        rowIndex = listaFilas(n)
+        'Si la fila es mayor a 5, mostrar su información
+        If rowIndex >= 5 Then
+            CajaResultados.AddItem
+            CajaResultados.List(CajaResultados.ListCount - 1, 0) = ws.Cells(rowIndex, 7).Value
+            CajaResultados.List(CajaResultados.ListCount - 1, 1) = ws.Cells(rowIndex, 8).Value
+        End If
+    Next n
+End Sub
+
+Private Sub ElementoSeleccionado()
+    Dim selectedRow As Long
+    'Mirar si hay un elemento seleccionado
+    If CajaResultados.ListIndex >= 0 Then
+        'Conseguir fila del elemento seleccionado
+        selectedRow = CajaResultados.ListIndex
+        filaSeleccionada = listaFilas(selectedRow)
+    Else
+        MsgBox "Seleccione un elemento.", vbInformation
+    End If
+End Sub
+
+Private Sub ActualizarBarra()
+    'Fracción por cada llamada
+    frac = progreso + frac
+    'Actualizar barra de progreso
+    With Me
+        .LabelBusqueda.Width = frac * (.FrameBusqueda.Width)
+    End With
+    DoEvents
+End Sub
+
+Private Sub ReiniciarBarra()
+    'Reiniciar barra
+    Me.LabelBusqueda.Width = 0
+    frac = 0
+    progreso = 0
+End Sub
+
+Private Sub BuscarEnRango(ByVal rango As Range, ByVal elemento As String)
+    Dim cell As Range
+    i = 0
+    progreso = 1 / ThisWorkbook.filas
+    'Buscar elemento en el rango
+    For Each cell In rango
+        Call ActualizarBarra
+        'Si se encuentza el elemento en cualquier parte de la celda, guardar el numero de fila en array
+        If UCase(cell.Value) Like "*" & UCase(elemento) & "*" Then
+            listaFilas.Add cell.row
+            i = i + 1
+        End If
+    Next cell
+End Sub
+
+Private Sub BorrarFila(ByVal filaBorrar As Long)
+    Application.EnableEvents = True
+    Dim OutPut As Integer
+    Dim boton As Button
+    'Desproteger la hoja
+    Call Application.ThisWorkbook.ProtegerObras("U")
+    'Guardar la ruta de la carpeta en el portapapeles
+    Call Application.ThisWorkbook.Clipboard(Obras.Cells(filaBorrar, ThisWorkbook.colRuta))
+    If Not ThisWorkbook.Sheets("Config").Range("NoCrear") Then
+        'Asegurar que se quiere borrar la carpeta
+        OutPut = MsgBox("Se borrará la carpeta con el nombre '" & Obras.Cells(filaBorrar, ThisWorkbook.colTitulo) & _
+        " '. Se borrarán todos los documentos y subcarpetas." & vbCrLf & "Se ha copiado la ruta de la carpeta al portapapeles por si se quiere hacer una copia." & _
+        vbCrLf & "Seguir con la operacion?", vbYesNo + vbQuestion)
+    Else
+        OutPut = MsgBox("Se borrará la entrada de la carpeta con el nombre '" & Obras.Cells(filaBorrar, ThisWorkbook.colTitulo) & "'" & _
+        vbCrLf & "Seguir con la operacion?", vbYesNo + vbQuestion)
+    End If
+    If OutPut = 6 Then
+        'Desactivar actualizacion y decir a detector de cambios que es automatizado
+        ThisWorkbook.autom = True
+        Application.ScreenUpdating = False
+        'Llamar a eliminador de carpeta, insertando ruta
+        If Not ThisWorkbook.Sheets("Config").Range("NoCrear") Then
+            Call ThisWorkbook.BorrarCarpeta(Obras.Cells(filaBorrar, ThisWorkbook.colRuta), "S")
+        End If
+        'Borrar la fila de la hoja de obras
+        Obras.Select
+        Obras.Range(filaBorrar & ":" & filaBorrar).Delete
+        'Borrar fila de memoria
+        ThisWorkbook.Sheets("Memoria").Unprotect Password:=contraseñaPaginas
+        ThisWorkbook.Sheets("Memoria").Select
+        ThisWorkbook.Sheets("Memoria").Range(filaBorrar - ThisWorkbook.filaDato + 2 & ":" & filaBorrar - ThisWorkbook.filaDato + 2).Delete
+        ThisWorkbook.Sheets("Memoria").Protect Password:=contraseñaPaginas
+        Obras.Select
+        Application.ScreenUpdating = True
+        ThisWorkbook.autom = False
+    Else
+        'Se ha elegido por error, no hacer nada
+    End If
+    Call Application.ThisWorkbook.ProtegerObras("P")
+End Sub
+
+Private Sub UserForm_QueryClose(Cancel As Integer, CloseMode As Integer)
+    Call BotonSalir_Click
+End Sub
+
+Private Sub CajaResultados_MouseMove(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
+    HookListScroll Me, Me.CajaResultados
+End Sub
+
+Private Sub CajaNumero_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+    Dim userInput As String
+    Dim validChars As String
+    Dim char As String
+    'Carácteres válidos
+    validChars = "0123456789"
+    userInput = CajaNumero.Text
+    char = Chr(KeyAscii)
+    'Mirar si el caracter introducido esta en la lista de aceptables
+    If InStr(validChars & Chr(8), char) = 0 Then
+        'No es valido, borrar con NULL
+        KeyAscii = 0
+    End If
+End Sub
+
+Private Sub TextBox_KeyDown(ByVal KeyCode As MSForms.ReturnInteger)
+    If KeyCode = 13 Then ' Mirar si se presiona la tecla "Enter" (KeyCode 13).
+        KeyCode = 0 ' Borrar el codigo de boton presionado para no avanzar al siguiente elemento
+        Call BotonBuscar_Click
+    End If
+End Sub
+
+Private Sub CajaTitulo_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    Call TextBox_KeyDown(KeyCode)
+End Sub
+
+Private Sub CajaNumero_KeyDown(ByVal KeyCode As MSForms.ReturnInteger, ByVal Shift As Integer)
+    Call TextBox_KeyDown(KeyCode)
+End Sub
+
+Private Sub CajaTitulo_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+    Dim userInput As String
+    Dim invalidChars As String
+    Dim char As String
+    'Carácteres válidos
+    invalidChars = "\/:*?""<>|"
+    userInput = CajaTitulo.Text
+    char = Chr(KeyAscii)
+    'Mirar si el caracter introducido esta en la lista de no aceptables
+    If InStr(invalidChars & Chr(8), char) > 0 Then
+        'No es valido, borrar con NULL
+        KeyAscii = 0
+    End If
+End Sub
+
+Private Sub CajaResultados_DblClick(ByVal Cancel As MSForms.ReturnBoolean)
+    Dim selectedItem As String
+    'Si hay un elemento seleccionado, cerrar user form y seleccionar elemento en el excel
+    If CajaResultados.ListIndex <> -1 Then
+        Call ElementoSeleccionado
+        Obras.Rows(filaSeleccionada).Select
+    End If
+End Sub
