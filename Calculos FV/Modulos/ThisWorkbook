@@ -1,0 +1,33 @@
+Option Explicit
+
+'Mensajes a mostrar cuando se abre el libro
+Private Sub Workbook_Open()
+    'Enseñar las demás páginas (si las macros están activadas)
+    Call DemasHojas("M")
+    'Esconder página de pasoso a seguir para activar macros
+    ThisWorkbook.Sheets(1).Visible = False
+    ThisWorkbook.Sheets(2).Select
+    'MsgBox "Ez da gomendatzen koloreztutako orrialdeak zabaldu edo modifikatzea.", vbExclamation
+End Sub
+
+'Al cerrar el libro, volver a la posición inicial y guardar
+Private Sub Workbook_BeforeClose(Cancel As Boolean)
+    ThisWorkbook.Sheets(1).Visible = True
+    ThisWorkbook.Sheets(1).Select
+    Call DemasHojas("E")
+    ActiveWorkbook.Save
+End Sub
+
+Private Sub DemasHojas(ByVal ens As String)
+    Dim i As Long
+    'Loopear por todas las hojas, empezando desde la segunda, y mostrar o ocultarlas
+    If ens = "M" Then
+        For i = 2 To ThisWorkbook.Sheets.count
+            ThisWorkbook.Sheets(i).Visible = True
+        Next i
+    Else
+        For i = 2 To ThisWorkbook.Sheets.count
+            ThisWorkbook.Sheets(i).Visible = False
+        Next i
+    End If
+End Sub

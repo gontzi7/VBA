@@ -1,0 +1,34 @@
+Option Explicit
+
+Private Sub UserForm_Initialize()
+    'Centrar en pantalla
+    With Me
+        .StartUpPosition = 0
+        .Left = Application.Left + (0.5 * Application.Width) - (0.5 * .Width)
+        .Top = Application.Top + (0.5 * Application.Height) - (0.5 * .Height)
+    End With
+End Sub
+
+Private Sub AceptarAyudCC_Click()
+    'Poner el metodo elegido en lista, si se ha elegido uno
+    If A1CC Then
+        DatosCC.MetCC.value = "A1"
+    ElseIf A2CC Then
+        DatosCC.MetCC.value = "A2"
+    ElseIf B1CC Then
+        DatosCC.MetCC.value = "B1"
+    ElseIf B2CC Then
+        DatosCC.MetCC.value = "B2"
+    ElseIf CCC Then
+        DatosCC.MetCC.value = "C"
+    Else
+        MsgBox "Elegir un metodo de instalación", vbInformation
+        Exit Sub
+    End If
+    'Descargar después de poner metodo
+    Unload Me
+End Sub
+
+Private Sub CancelarAyudCC_Click()
+    Unload Me
+End Sub

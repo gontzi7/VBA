@@ -1,0 +1,372 @@
+Option Explicit
+
+Dim BT As Worksheet, D As Worksheet, D1 As Worksheet
+Dim rng As Range, cell As Range
+Dim tip As String
+Dim NormativaEleg As String, recept As String, distr As String
+Dim cancl As Boolean, aut As Boolean
+Dim OutPut As Integer
+'Memoria configuraciones
+Dim NormI As String, MetI As String, AislI As String, MatI As String, EntI As String, AgrI As String, cdtI As Double, TenpI As String, ProfI As String, ResI As String
+Dim fTenpI As String, fAgrI As String, fResI As String, fProfI As String
+
+Private Function ComaAPunto(value As Variant) As Variant
+    'Comprobar si el valor es numerico
+    If IsNumeric(value) Then
+        'Convertir valor a string, reemplazar coma por punto
+        ComaAPunto = Replace(CStr(value), ",", ".")
+    Else
+        'Si no es numerico, convertir coma a punto y devolver
+        ComaAPunto = Replace(value, ",", ".")
+    End If
+End Function
+
+Private Sub CancelarCC_Click()
+    cancl = True
+    Unload Me
+End Sub
+
+Private Sub AplicarCC_Click()
+    cancl = False
+    aut = True
+    Call PonerHoja
+    Unload Me
+End Sub
+
+Private Sub UserForm_QueryClose(Cancel As Integer, CloseMode As Integer)
+    If cancl Then
+        'Mensaje confirmación
+        OutPut = MsgBox("Si se cancela la operación, no se harán los cálculos con la configuración elegida, continuar?", vbYesNo + vbInformation)
+        If OutPut = 6 Then
+            'Poner valores iniciales
+            Call Iniciales("Salir")
+            Call Datos.ActualizarCC
+        Else
+            'No salir
+            Cancel = 1
+        End If
+    End If
+    Call Datos.ActualizarCC
+End Sub
+
+Private Sub AyudaCC_Click()
+    If NormativaEleg = recept Then
+        AyudaMetInstCC.Show vbModeless
+    Else
+        MsgBox "Elegir metodo de instalación para configurar factores de corrección."
+    End If
+End Sub
+
+Private Sub UserForm_Initialize()
+    'Centrar en pantalla
+    With Me
+        .StartUpPosition = 0
+        .Left = Application.Left + (0.5 * Application.Width) - (0.5 * .Width)
+        .Top = Application.Top + (0.5 * Application.Height) - (0.5 * .Height)
+    End With
+    'Nombres pagina
+    Set BT = ThisWorkbook.Sheets("Normativa BT")
+    Set D = ThisWorkbook.Sheets("Datos instalacion")
+    Set D1 = ThisWorkbook.Sheets("Datos")
+    'Inicializar tipo de instalación
+    tip = "CC"
+    'Cargar lista de normativa
+    Call ActualizarLista("Normat")
+    'Acortaciones normativa
+    recept = BT.Range("A94").value
+    distr = BT.Range("B94").value
+    cancl = True
+    aut = False
+    'Valores iniciales
+    Call Iniciales("Entrar")
+End Sub
+
+Private Sub Iniciales(ByVal momento As String)
+    'Al entrar, guardar valores iniciales
+    If momento = "Entrar" Then
+        aut = True
+        NormI = D.Range("Norm" & tip).value
+        MetI = D.Range("MetIns" & tip).value
+        AislI = D.Range("Aisl" & tip).value
+        MatI = D.Range("Mat" & tip).value
+        EntI = D.Range("Entub" & tip).value
+        AgrI = D.Range("Agrup" & tip).value
+        cdtI = D.Range("CdT" & tip).value
+        TenpI = ComaAPunto(D.Range("Tenp" & tip))
+        ProfI = ComaAPunto(D.Range("Prof" & tip))
+        ResI = D.Range("RTerr" & tip).value
+        'Factores manuales
+        fTenpI = D.Range("FtMan" & tip).value
+        fAgrI = D.Range("FagMan" & tip).value
+        fResI = D.Range("FrMan" & tip).value
+        fProfI = D.Range("FpMan" & tip).value
+        'Poner en cajetines
+        'MsgBox TenpI & " " & ProfI
+        Controls("Normat" & tip).value = NormI
+        Controls("Met" & tip).value = MetI
+        Controls("Mat" & tip).value = MatI
+        Controls("Aisl" & tip).value = AislI
+        Controls("Cdt" & tip).value = cdtI * 100
+        Controls("Ent" & tip).value = EntI
+        Controls("Tenp" & tip).value = TenpI
+        Controls("Agr" & tip).value = AgrI
+        Controls("Prof" & tip).value = ProfI
+        Controls("Rest" & tip).value = ResI
+        'Factores
+        Controls("Prof" & tip & "Man").value = D.Range("Fp" & tip).value
+        Controls("Tenp" & tip & "Man").value = D.Range("Ft" & tip).value
+        Controls("Rest" & tip & "Man").value = D.Range("Fr" & tip).value
+        Controls("Agr" & tip & "Man").value = D.Range("Fag" & tip).value
+        aut = False
+    ElseIf momento = "Salir" Then
+        Application.Calculation = xlCalculationManual
+        D.Range("Norm" & tip).value = NormI
+        D.Range("MetIns" & tip).value = MetI
+        D.Range("Aisl" & tip).value = AislI
+        D.Range("Mat" & tip).value = MatI
+        D.Range("Entub" & tip).value = EntI
+        D.Range("Agrup" & tip).value = AgrI
+        D.Range("CdT" & tip).value = cdtI
+        D.Range("Tenp" & tip).value = TenpI
+        D.Range("Prof" & tip).value = ProfI
+        D.Range("RTerr" & tip).value = ResI
+        'Factores manuales
+        D.Range("FtMan" & tip).value = fTenpI
+        D.Range("FagMan" & tip).value = fAgrI
+        D.Range("FrMan" & tip).value = fResI
+        D.Range("FpMan" & tip).value = fProfI
+        Application.Calculation = xlCalculationAutomatic
+    Else
+        'Incorrecto
+    End If
+End Sub
+
+Private Sub PonerHoja()
+    'Escribir configuración inicial de nuevo
+    D.Range("Norm" & tip).value = Controls("Normat" & tip).value
+    D.Range("MetIns" & tip).value = Controls("Met" & tip).value
+    D.Range("Aisl" & tip).value = Controls("Aisl" & tip).value
+    D.Range("Mat" & tip).value = Controls("Mat" & tip).value
+    D.Range("Entub" & tip).value = Controls("Ent" & tip).value
+    D.Range("Agrup" & tip).value = Controls("Agr" & tip).value
+    D.Range("CdT" & tip).value = Controls("Cdt" & tip).value / 100
+    D.Range("CdT" & tip).NumberFormat = "0.00%"
+    D.Range("Tenp" & tip).value = Controls("Tenp" & tip).value
+    D.Range("Prof" & tip).value = Controls("Prof" & tip).value
+    D.Range("RTerr" & tip).value = Controls("Rest" & tip).value
+    'Factores manuales (si se ha elegido)
+    If Controls("Manual" & tip).value Then
+        D.Range("FtMan" & tip).value = Controls("Tenp" & tip & "Man").value
+        D.Range("FagMan" & tip).value = Controls("Agr" & tip & "Man").value
+        D.Range("FrMan" & tip).value = Controls("Rest" & tip & "Man").value
+        D.Range("FpMan" & tip).value = Controls("Prof" & tip & "Man").value
+    End If
+End Sub
+
+Private Sub ManualCC_Click()
+    If Controls("Manual" & tip).value Then
+        'Activar campos para establecer valores manuales
+        Controls("Tenp" & tip & "Man").Enabled = True
+        Controls("Rest" & tip & "Man").Enabled = True
+        Controls("Agr" & tip & "Man").Enabled = True
+        Controls("Prof" & tip & "Man").Enabled = True
+    Else
+        'Desactivar campos
+        Controls("Tenp" & tip & "Man").Enabled = False
+        Controls("Rest" & tip & "Man").Enabled = False
+        Controls("Agr" & tip & "Man").Enabled = False
+        Controls("Prof" & tip & "Man").Enabled = False
+        'Cargar factores de la pagina
+        Controls("Tenp" & tip & "Man").value = D.Range("Ft" & tip).value
+        Controls("Rest" & tip & "Man").value = D.Range("Fr" & tip).value
+        Controls("Agr" & tip & "Man").value = D.Range("Fag" & tip).value
+        Controls("Prof" & tip & "Man").value = D.Range("Fp" & tip).value
+    End If
+End Sub
+
+Private Sub PredCC_Click()
+    'Cargar valores predeterminados
+    Controls("Normat" & tip).value = D1.Range("D2").value
+    Controls("Met" & tip).value = D1.Range("D3").value
+    Controls("Mat" & tip).value = D1.Range("D4").value
+    Controls("Aisl" & tip).value = D1.Range("D5").value
+    Controls("Cdt" & tip).value = D1.Range("D6").value * 100
+    Controls("Ent" & tip).value = D1.Range("D7").value
+    Controls("Tenp" & tip).value = D1.Range("D8")
+    Controls("Agr" & tip).value = D1.Range("D9").value
+    Controls("Prof" & tip).value = D1.Range("D10")
+    Controls("Rest" & tip).value = D1.Range("D11").value
+End Sub
+
+Private Sub NPredCC_Click()
+    'Guardar nuevos valores predeterminados
+    D1.Range("D2").value = Controls("Normat" & tip).value
+    D1.Range("D3").value = Controls("Met" & tip).value
+    D1.Range("D4").value = Controls("Mat" & tip).value
+    D1.Range("D5").value = Controls("Aisl" & tip).value
+    D1.Range("D6").value = Controls("Cdt" & tip).value / 100
+    D1.Range("D6").NumberFormat = "0.00%"
+    D1.Range("D7").value = Controls("Ent" & tip).value
+    D1.Range("D8").value = Controls("Tenp" & tip)
+    D1.Range("D9").value = Controls("Agr" & tip).value
+    D1.Range("D10").value = Controls("Prof" & tip)
+    D1.Range("D11").value = Controls("Rest" & tip).value
+End Sub
+
+Private Sub NormatCC_Change()
+    NormativaEleg = Controls("Normat" & tip).value
+    'Cargar aislamiento, material y metodo de instalación para elegir
+    Call ActualizarLista("Met")
+    Call ActualizarLista("Aisl")
+    Call ActualizarLista("Mat")
+    'Borrar demás listas
+    Call ActualizarLista("Ent")
+    Call ActualizarLista("Agr")
+    Call ActualizarLista("Rest")
+End Sub
+
+Private Sub MetCC_Change()
+    'Actualizar lista de configuración enterrado
+    Call ActualizarLista("Ent")
+    Call ActualizarLista("Agr")
+    Call ActualizarLista("Rest")
+End Sub
+
+Private Sub EntCC_Change()
+    Call ActualizarLista("Agr")
+    Call ActualizarLista("Rest")
+End Sub
+
+Private Sub AgrCC_Exit(ByVal Cancel As MSForms.ReturnBoolean)
+    'Escribir configuración en hoja
+    With D
+        .Range("Norm" & tip).value = Controls("Normat" & tip).value
+        .Range("MetIns" & tip).value = Controls("Met" & tip).value
+        .Range("Aisl" & tip).value = Controls("Aisl" & tip).value
+        .Range("Mat" & tip).value = Controls("Mat" & tip).value
+        .Range("Entub" & tip).value = Controls("Ent" & tip).value
+        .Range("Agrup" & tip).value = Controls("Agr" & tip).value
+    End With
+    'Mostrar factores en caja
+    Controls("Agr" & tip & "Man").value = D.Range("Fag" & tip).value
+End Sub
+
+Private Sub RestCC_Exit(ByVal Cancel As MSForms.ReturnBoolean)
+    'Escribir configuración en hoja
+    With D
+        .Range("RTerr" & tip).value = Controls("Rest" & tip).value
+    End With
+    'Mostrar factores en caja
+    Controls("Rest" & tip & "Man").value = D.Range("Fr" & tip).value
+End Sub
+
+Private Sub TenpCC_Exit(ByVal Cancel As MSForms.ReturnBoolean)
+    'Escribir configuración en hoja
+    With D
+        .Range("Tenp" & tip).value = Controls("Tenp" & tip).value
+    End With
+    'Mostrar factores en caja
+    Controls("Tenp" & tip & "Man").value = D.Range("Ft" & tip).value
+End Sub
+
+Private Sub ProfCC_Exit(ByVal Cancel As MSForms.ReturnBoolean)
+    'Escribir configuración en hoja
+    With D
+        .Range("Prof" & tip).value = Controls("Prof" & tip).value
+    End With
+    'Mostrar factores en caja
+    Controls("Prof" & tip & "Man").value = D.Range("Fp" & tip).value
+End Sub
+
+Private Sub CdtCC_Exit(ByVal Cancel As MSForms.ReturnBoolean)
+    'Escribir configuración en hoja
+    With D
+        .Range("CdT" & tip).value = Controls("Cdt" & tip).value / 100
+        .Range("CdT" & tip).NumberFormat = "0.00%"
+    End With
+End Sub
+
+Private Sub ActualizarLista(ByVal nom As String)
+    Dim listNom As MSForms.ComboBox
+    Dim rng As Range
+    Dim Listo As Boolean
+    'Nombre lista a rellenar
+    Set listNom = Controls(nom & tip)
+    Listo = True
+    'Diferentes rangos a rellenar según configuración actual
+    Select Case nom
+        Case "Normat"
+            Set rng = BT.Range("A94:B94")
+        Case "Met"
+            If NormativaEleg = recept Then Set rng = BT.Range("K97:K102")   'Receptoras
+            If NormativaEleg = distr Then Set rng = BT.Range("K103:K105")   'Distribución
+        Case "Aisl"
+            If NormativaEleg = recept Then Set rng = BT.Range("O97:O98")    'Receptoras
+            If NormativaEleg = distr Then Set rng = BT.Range("O99:O100")    'Distribución
+        Case "Mat"
+            Set rng = BT.Range("C94:D94")
+        Case "Ent"
+            If Controls("Met" & tip).value = "D" Then
+                Set rng = BT.Range("N97:N98")   'Metodo instalación "D"
+            ElseIf Controls("Met" & tip).value = "Enterrado" Then
+                Set rng = BT.Range("N97:N99")   'Metodo instalación "Enterrado"
+            ElseIf Controls("Met" & tip).value = "Aéreo" Then
+                Set rng = BT.Range("N100")   'Metodo instalación "Enterrado"
+            ElseIf Controls("Met" & tip).value = "" Then
+                Set rng = BT.Range("V1")   'Elegir metodo de instalaición primero
+                Listo = False
+            Else
+                Set rng = BT.Range("O2")   'Otro metodo instalación
+            End If
+        Case "Agr"
+            If Controls("Met" & tip).value = "A1" Or Controls("Met" & tip).value = "A2" Then
+                Set rng = BT.Range("L102")   'Metodo instalación "A1" o "A2"
+            ElseIf Controls("Met" & tip).value = "B1" Or Controls("Met" & tip).value = "B2" Then
+                Set rng = BT.Range("L103")   'Metodo instalación "B1" o "B2"
+            ElseIf Controls("Met" & tip).value = "C" Then
+                Set rng = BT.Range("L103:L105")   'Metodo instalación "C"
+            ElseIf Controls("Met" & tip).value = "D" And Controls("Ent" & tip).value = "Entubado" Then
+                Set rng = BT.Range("M97:M100")   'Metodo instalación "D" y "Entubado"
+            ElseIf Controls("Met" & tip).value = "D" And Controls("Ent" & tip).value = "Directamente enterrado" Then
+                Set rng = BT.Range("L97:L101")   'Metodo instalación "D" y "Directamente enterrado"
+            ElseIf Controls("Met" & tip).value = "D" And Controls("Ent" & tip).value = "" Then
+                Set rng = BT.Range("V2")   'Metodo instalación "D" y no se ha elegido configuracion enterrado
+            ElseIf Controls("Met" & tip).value = "Enterrado" And Controls("Ent" & tip).value = "Al aire, protegido del sol" Then
+                Set rng = BT.Range("O2")   'Metodo instalación "Aéreo", N/A
+            ElseIf Controls("Met" & tip).value = "Enterrado" And Controls("Ent" & tip).value = "Entubado" Or Controls("Ent" & tip).value = "Directamente enterrado" Then
+                Set rng = BT.Range("L106:L110")   'Metodo instalación "Enterrado"
+            ElseIf Controls("Met" & tip).value = "Enterrado" And Controls("Ent" & tip).value = "" Then
+                Set rng = BT.Range("V2")   'Metodo instalación "D" y no se ha elegido configuracion enterrado
+            ElseIf Controls("Met" & tip).value = "En galería" Then
+                Set rng = BT.Range("L111:L113")   'Metodo instalación "En galería"
+            ElseIf Controls("Met" & tip).value = "Aéreo" Then
+                Set rng = BT.Range("O2")   'Metodo instalación "Aéreo", N/A
+            ElseIf Controls("Met" & tip).value = "" Then
+                Set rng = BT.Range("V1")   'Elegir metodo de instalaición primero
+                Listo = False
+            Else
+                Set rng = BT.Range("O2")   'Otro metodo instalación
+            End If
+        Case "Rest"
+            If Controls("Met" & tip).value = "Enterrado" Or Controls("Met" & tip).value = "D" Then
+                If Controls("Ent" & tip).value = "Al aire, protegido del sol" Then
+                    Set rng = BT.Range("O2")
+                Else
+                    Set rng = BT.Range("S65:S74")
+                End If
+            Else
+                Set rng = BT.Range("O2")
+            End If
+        Case Else
+            MsgBox "No se puede actualizar lista"
+    End Select
+    'Quitar lo que había antes
+    listNom.Clear
+    'Rellenar con elementos de rango
+    'MsgBox nom & " " & rng.Address
+    For Each cell In rng
+        listNom.AddItem cell.value
+    Next cell
+    'MsgBox Listo & " " & nom
+    If Not Listo Then listNom.value = BT.Range("V1").value
+End Sub

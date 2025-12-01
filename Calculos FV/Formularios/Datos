@@ -1,0 +1,1297 @@
+Option Explicit
+
+Dim Fitx As String
+Dim rng As Range, cell As Range
+Dim dataArray() As Variant, dataArray2() As Variant, dataArray3() As Variant
+Dim i As Long, j As Long, a As Long, b As Long
+Dim fd As FileDialog
+Dim OutPut As Integer, cantTabl As Integer
+Dim LibAbierto As Boolean, Error As Boolean
+Dim progreso As Double, frac As Double, progreso2 As Double, frac2 As Double
+Dim LibBase As Workbook, PagBase As Worksheet
+Dim LibCopia As Workbook, PagCop As Worksheet
+Dim Dts As Worksheet, Inst As Worksheet, PagMT As Worksheet, NormMT As Worksheet
+Dim sheetNames As Variant, tableSheets As Variant, formatSheets As Variant
+Dim tiempTrsc As Double
+Dim Temporiz As Timer
+Dim lastRow As Long, lastRow2 As Long, lastRow3 As Long
+Dim wordApp As Object, wordDoc As Object, wordTable As Object
+Dim tableRange As Range
+Dim tipo As String
+
+'========================================================================================================================
+'========================================================================================================================
+'Funciones o ayudantes generales
+Private Function ComaAPunto(value As Variant) As Variant
+    'Comprobar si el valor es numerico
+    If IsNumeric(value) Then
+        'Convertir valor a string, reemplazar coma por punto
+        ComaAPunto = Replace(CStr(value), ",", ".")
+    Else
+        'Si no es numerico, convertir coma a punto y devolver
+        ComaAPunto = Replace(value, ",", ".")
+    End If
+End Function
+
+Private Function ZenbatKaraktereStringean(ByVal testu As String, ByVal karaktere As String) As Integer
+    Dim i As Integer
+    Dim count As Integer
+    count = 0
+    For i = 1 To Len(testu)
+        If Mid(testu, i, 1) = karaktere Then
+            count = count + 1
+        End If
+    Next i
+    ZenbatKaraktereStringean = count
+End Function
+
+Private Sub CargarLista(ByVal Nombre As MSForms.ComboBox, ByVal rng As Range)
+    'Quitar lo que había antes
+    Nombre.Clear
+    'Rellenar de nuevo con valores de rango
+    For Each cell In rng
+        Nombre.AddItem cell.value
+    Next cell
+End Sub
+
+Private Sub TextBox_KeyPress(ByVal tb As MSForms.TextBox, ByVal KeyAscii As MSForms.ReturnInteger, ByVal Dez As String)
+    Dim userInput As String
+    Dim validCharsDez As String
+    Dim validCharsFul As String
+    Dim comp As String
+    Dim char As String
+    'Caracteres admitidos por tipo
+    validCharsDez = "0123456789.,"
+    validCharsFul = "0123456789"
+    Select Case Dez
+        'Variable Dez para cargar caracteres válidos
+        Case "D"
+            comp = validCharsDez
+        Case "F"
+            comp = validCharsFul
+    End Select
+    userInput = tb.Text
+    char = Chr(KeyAscii)
+    'Comprobar si caracter escrito esta en la lista
+    If InStr(comp & Chr(8), char) = 0 Then
+        'Ez da baliozkoa, ezabatu NULLekin
+        KeyAscii = 0
+    End If
+    If Dez = "N" Or Dez = "D" Then
+        'Sartutako testuak puntu bat badu, aldatu eta koma bat jarri.
+        If InStr("." & Chr(8), char) > 0 Then
+            'Puntuak komekin ordezkatu
+            KeyAscii = 44
+        End If
+        'Koma bat baino gehiago badago, ezabatu bigarrena eta/edo hurrengoak
+        If ZenbatKaraktereStringean(userInput, ",") > 0 And KeyAscii = 44 Or KeyAscii = 46 Then
+            'Ezabatu NULLekin
+            KeyAscii = 0
+        End If
+    End If
+End Sub
+
+Private Sub Salir_Click()
+    Unload Me
+End Sub
+
+Private Sub ImpPvsyst_Click()
+    DatoPvsyst.Show
+End Sub
+
+'========================================================================================================================
+'========================================================================================================================
+'Código checklist
+    Private Sub DatoCableado_Click()
+        If DatoCableado.Caption = "Fallo" Then
+            MsgBox "Hay más de un tramo en el que los valores por defecto no cumplen normativa (sección necesaria demasiado grande)." & vbCrLf _
+                & "Busque celdas en rojo por las tablas de cálculos para corregirlos.", vbInformation
+        Else
+            MultiPage1.value = 2
+        End If
+    End Sub
+
+    Private Sub DatoInvers_Click()
+        MultiPage1.value = 1
+    End Sub
+
+    Private Sub DatoPlaca_Click()
+        MultiPage1.value = 1
+    End Sub
+
+    Private Sub DatoProyect_Click()
+        MultiPage1.value = 3
+    End Sub
+
+    Private Sub DatoPVCASE_Click()
+        MultiPage1.value = 0
+    End Sub
+
+    Private Sub NomCableado_Click()
+        If DatoCableado.Caption = "Fallo" Then
+            MsgBox "Hay más de un tramo en el que los valores por defecto no cumplen normativa (sección necesaria demasiado grande u otros problemas)." & vbCrLf _
+                & "Busque celdas en rojo por las tablas de cálculos para corregirlos.", vbInformation
+        Else
+            MultiPage1.value = 2
+        End If
+    End Sub
+
+    Private Sub NomInvers_Click()
+        MultiPage1.value = 1
+    End Sub
+
+    Private Sub NomPlaca_Click()
+        MultiPage1.value = 1
+    End Sub
+
+    Private Sub NomProyect_Click()
+        MultiPage1.value = 3
+    End Sub
+
+    Private Sub NomPVCASE_Click()
+        MultiPage1.value = 0
+    End Sub
+
+    Private Sub EstadoCL()
+        'Verificar si está introducida la información necesaria para crear documentos
+        Dim estado As Variant
+        Dim checkN As String
+        Dim checkN2 As String
+
+        'Array de nombres para checkear
+        estado = Array("PVCASE", "Placa", "Invers", "Proyect", "Cableado")
+        For i = LBound(estado) To UBound(estado)
+            checkN = "Dato" & estado(i)
+            checkN2 = "Nom" & estado(i)
+            'Comprobar estado de identificadores (verdad / mentira)
+            'MsgBox Dts.Range(estado(i) & "Int").Value
+            If Dts.Range(estado(i) & "Int").value Then 'Verdad
+                Controls(checkN).Caption = "OK"
+                Controls(checkN).ForeColor = RGB(0, 190, 0)
+                Controls(checkN2).ForeColor = RGB(0, 190, 0)
+            Else    'Mentira
+                Controls(checkN).Caption = "Falta"
+                Controls(checkN).ForeColor = RGB(255, 0, 0)
+                Controls(checkN2).ForeColor = RGB(255, 0, 0)
+            End If
+            'Si hay algun tramo mal en cuanto a seccion, cambiar estado de cableado
+            If Not Dts.Range("A8") And estado(i) = "Cableado" Then
+                Controls(checkN).Caption = "Fallo"
+                Controls(checkN).ForeColor = RGB(255, 230, 0)
+                Controls(checkN2).ForeColor = RGB(255, 230, 0)
+            End If
+        Next i
+    End Sub
+
+'========================================================================================================================
+'========================================================================================================================
+'Código cableado
+    Private Sub TextTenpCC_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+        Call TextBox_KeyPress(Me.TextTenpCC, KeyAscii, "D")
+    End Sub
+
+    Private Sub TextProfCC_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+        Call TextBox_KeyPress(Me.TextProfCC, KeyAscii, "D")
+    End Sub
+
+    Private Sub TextCdtCC_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+        Call TextBox_KeyPress(Me.TextCdtCC, KeyAscii, "D")
+    End Sub
+
+    Private Sub TextTenpBT_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+        Call TextBox_KeyPress(Me.TextTenpBT, KeyAscii, "D")
+    End Sub
+
+    Private Sub TextProfBT_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+        Call TextBox_KeyPress(Me.TextProfBT, KeyAscii, "D")
+    End Sub
+
+    Private Sub TextIccBT_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+        Call TextBox_KeyPress(Me.TextIccBT, KeyAscii, "D")
+    End Sub
+
+    Private Sub TextTccBT_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+        Call TextBox_KeyPress(Me.TextTccBT, KeyAscii, "D")
+    End Sub
+
+    Private Sub TextCdtBT_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+        Call TextBox_KeyPress(Me.TextCdtBT, KeyAscii, "D")
+    End Sub
+
+    Private Sub VMT_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+        Call TextBox_KeyPress(Me.VMT, KeyAscii, "F")
+    End Sub
+
+    Private Sub ProfMT_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+        Call TextBox_KeyPress(Me.ProfMT, KeyAscii, "D")
+    End Sub
+
+    Private Sub SepMT_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+        Call TextBox_KeyPress(Me.SepMT, KeyAscii, "D")
+    End Sub
+
+    Private Sub ConfigurarCC_Click()
+        DatosCC.Show vbModeless
+    End Sub
+
+    Private Sub ConfigurarBT_Click()
+        DatosBT.Show vbModeless
+    End Sub
+
+    Public Sub ActualizarCC()
+        Call act("CC")
+    End Sub
+
+    Public Sub ActualizarBT()
+        Call act("BT")
+    End Sub
+
+    Private Sub SerieCC_Click()
+        'Poner valores de serie en instalacion CC
+        tipo = "CC"
+        Application.Calculation = xlCalculationManual
+        Controls("TextNorm" & tipo).value = Dts.Range("D2").value
+        Controls("TextMet" & tipo).value = Dts.Range("D3").value
+        Controls("TextMat" & tipo).value = Dts.Range("D4").value
+        Controls("TextAisl" & tipo).value = Dts.Range("D5").value
+        Controls("TextCdt" & tipo).value = Dts.Range("D6").value * 100
+        Controls("TextEnt" & tipo).value = Dts.Range("D7").value
+        Controls("TextTenp" & tipo).value = Dts.Range("D8")
+        Controls("TextAgr" & tipo).value = Dts.Range("D9").value
+        Controls("TextProf" & tipo).value = Dts.Range("D10")
+        Controls("TextRest" & tipo).value = Dts.Range("D11").value
+
+        Dts.Range("Norm" & tipo).value = NormI
+        Dts.Range("MetIns" & tipo).value = MetI
+        Dts.Range("Aisl" & tipo).value = AislI
+        Dts.Range("Mat" & tipo).value = MatI
+        Dts.Range("Entub" & tipo).value = EntI
+        Dts.Range("Agrup" & tipo).value = AgrI
+        Dts.Range("CdT" & tipo).value = cdtI
+        Dts.Range("Tenp" & tipo).value = TenpI
+        Dts.Range("Prof" & tipo).value = ProfI
+        Dts.Range("RTerr" & tipo).value = ResI
+
+        Application.Calculation = xlCalculationAutomatic
+    End Sub
+
+    Private Sub SerieBT_Click()
+        'Poner valores de serie en instalacion BT
+        tipo = "BT"
+        Application.Calculation = xlCalculationManual
+        Controls("TextNorm" & tipo).Caption = Dts.Range("F2").value
+        Controls("TextMet" & tipo).Caption = Dts.Range("F3").value
+        Controls("TextMat" & tipo).Caption = Dts.Range("F4").value
+        Controls("TextAisl" & tipo).Caption = Dts.Range("F5").value
+        Controls("TextCdt" & tipo).value = Dts.Range("F6").value * 100
+        Controls("TextEnt" & tipo).Caption = Dts.Range("F7").value
+        Controls("TextTenp" & tipo).value = Dts.Range("F8")
+        Controls("TextAgr" & tipo).Caption = Dts.Range("F9").value
+        Controls("TextProf" & tipo).value = Dts.Range("F10")
+        Controls("TextRest" & tipo).Caption = Dts.Range("F11").value
+        Controls("TextIcc" & tipo).value = Dts.Range("F12").value
+        Controls("TextTcc" & tipo).value = Dts.Range("F13").value
+
+        Application.Calculation = xlCalculationAutomatic
+    End Sub
+
+    Private Sub act(ByVal tipo As String)
+        Controls("TextNorm" & tipo).Caption = Inst.Range("Norm" & tipo).value
+        Controls("TextMet" & tipo).Caption = Inst.Range("MetIns" & tipo).value
+        Controls("TextAisl" & tipo).Caption = Inst.Range("Aisl" & tipo).value
+        Controls("TextMat" & tipo).Caption = Inst.Range("Mat" & tipo).value
+        Controls("TextEnt" & tipo).Caption = Inst.Range("Entub" & tipo).value
+        Controls("TextAgr" & tipo).Caption = Inst.Range("Agrup" & tipo).value
+        Controls("TextRest" & tipo).Caption = Inst.Range("RTerr" & tipo).value
+        Controls("TextTenp" & tipo).value = Inst.Range("Tenp" & tipo).value
+        Controls("TextProf" & tipo).value = Inst.Range("Prof" & tipo).value
+        Controls("TextCdt" & tipo).value = Inst.Range("CdT" & tipo).value * 100
+        If tipo = "BT" Then
+            Controls("TextIcc" & tipo).value = Inst.Range("Icc" & tipo).value
+            Controls("TextTcc" & tipo).value = Inst.Range("Tcc" & tipo).value
+        End If
+        Call EstadoCL
+    End Sub
+
+    Private Sub Aplc_Click()
+        'Al pulsar aplicar, poner todos los datos en la hoja
+        For i = 0 To 1
+            If i = 0 Then tipo = "CC"
+            If i = 1 Then tipo = "BT"
+            Inst.Range("Tenp" & tipo).value = ComaAPunto(Controls("TextTenp" & tipo).value)
+            Inst.Range("Prof" & tipo).value = ComaAPunto(Controls("TextProf" & tipo).value)
+            Inst.Range("CdT" & tipo).value = Controls("TextCdt" & tipo).value / 100
+            Inst.Range("CdT" & tipo).NumberFormat = "0.00%"
+            If tipo = "BT" Then
+                Inst.Range("Icc" & tipo).value = ComaAPunto(Controls("TextIcc" & tipo).value)
+                Inst.Range("Tcc" & tipo).value = ComaAPunto(Controls("TextTcc" & tipo).value)
+            End If
+        Next i
+        'Si no se ha escrito nada en uno de los campos, escribir ""
+        IIF(Controls("MatMT").value = "", PagMT.Range("F3").Value = "", PagMT.Range("F3").FormulaR1C1 = "=""" & Controls("MatMT").value & """")
+        IIF(Controls("AislMT").value = "", PagMT.Range("G3").Value = "", PagMT.Range("G3").FormulaR1C1 = "=""" & Controls("AislMT").value & """")
+        IIF(Controls("NivMT").value = "", PagMT.Range("J3").Value = "", PagMT.Range("J3").FormulaR1C1 = "=""" & Controls("NivMT").value & """")
+        IIF(Controls("MetMT").value = "", PagMT.Range("H3").Value = "", PagMT.Range("H3").FormulaR1C1 = "=""" & Controls("MetMT").value & """")
+        IIF(Controls("SepMT").value = "", PagMT.Range("V3").value = "", PagMT.Range("V3").FormulaR1C1 = "=""" & Controls("SepMT").value & """")
+        IIF(Controls("RestMT").value = "", PagMT.Range("T3").Value = "", PagMT.Range("T3").FormulaR1C1 = "=""" & Controls("RestMT").value & """")
+        PagMT.Range("O3").FormulaR1C1 = "=" & Controls("VMT").value
+        PagMT.Range("S3").FormulaR1C1 = "=" & ComaAPunto(Controls("ProfMT").value)
+        'Marcador
+        Dts.Range("CableadoInt").value = True
+        Call EstadoCL
+    End Sub
+
+    Private Sub Limp_Click()
+        'Al pulsar, poner todos los datos en blanco
+        For i = 0 To 1
+            If i = 0 Then tipo = "CC"
+            If i = 1 Then tipo = "BT"
+            Controls("TextNorm" & tipo).Caption = ""
+            Controls("TextMet" & tipo).Caption = ""
+            Controls("TextAisl" & tipo).Caption = ""
+            Controls("TextMat" & tipo).Caption = ""
+            Controls("TextEnt" & tipo).Caption = ""
+            Controls("TextAgr" & tipo).Caption = ""
+            Controls("TextRest" & tipo).Caption = ""
+            Controls("TextTenp" & tipo).value = ""
+            Controls("TextProf" & tipo).value = ""
+            Controls("TextCdt" & tipo).value = ""
+            If tipo = "BT" Then
+                Controls("TextIcc" & tipo).value = ""
+                Controls("TextTcc" & tipo).value = ""
+            End If
+        Next i
+        Controls("MatMT").value = ""
+        Controls("AislMT").value = ""
+        Controls("NivMT").value = ""
+        Controls("MetMT").value = ""
+        Controls("VMT").value = ""
+        Controls("ProfMT").value = ""
+        Controls("SepMT").value = ""
+        Controls("RestMT").value = ""
+        'Marcador
+        Dts.Range("CableadoInt").value = False
+        Call EstadoCL
+    End Sub
+
+'========================================================================================================================
+'========================================================================================================================
+'Código inicialización
+    Private Sub UserForm_Initialize()
+        'Centrar en pantalla
+        With Me
+            .StartUpPosition = 0
+            .Left = Application.Left + (0.5 * Application.Width) - (0.5 * .Width)
+            .Top = Application.Top + (0.5 * Application.Height) - (0.5 * .Height)
+        End With
+        'Inicializar barras de progreso
+        LabelProgress.Width = 0
+        LabelProgress2.Width = 0
+        frac = 0
+        frac2 = 0
+        'Abreviaciones paginas
+        Set Dts = ThisWorkbook.Sheets("Datos")
+        Set Inst = ThisWorkbook.Sheets("Datos instalacion")
+        Set PagMT = ThisWorkbook.Sheets("Calculos MT")
+        Set NormMT = ThisWorkbook.Sheets("Normativa MT")
+        'Hacer formulario reajustable
+        Call MakeFormResizeable(Me)
+        'Datos cálculos
+        Call act("CC")
+        Call act("BT")
+        Call CargarLista(Me.MatMT, NormMT.Range("X11:X12"))
+        Call CargarLista(Me.AislMT, NormMT.Range("W11:W12"))
+        Call CargarLista(Me.NivMT, NormMT.Range("Y11:Y14"))
+        Call CargarLista(Me.MetMT, NormMT.Range("W13:W14"))
+        Call CargarLista(Me.RestMT, NormMT.Range("AB7:AB16"))
+        Call CargarLista(Me.SepMT, NormMT.Range("AA11:AA15"))
+        'Datos resumen PVCASE
+        Call CargarResumen
+        'Datos placa e inversor
+        Call CargarEquipos("carga")
+        'Prueba páginas
+        MultiPage1.value = -1
+        'Marcador
+        Dts.Range("CableadoInt").value = False
+        'Inicializar formulario
+        Call EstadoCL
+    End Sub
+
+    Private Sub UserForm_Resize()
+        Call AdjustSizeOfControls
+        'Inicializar formulario
+        Call EstadoCL
+    End Sub
+
+    Private Sub CargarEquipos(ByVal modo As String)
+        If modo = "carga" Then  'Cargar datos desde página
+            'Placa
+            PWp.value = Inst.Range("Wp").value
+            PVmpp.value = Inst.Range("Vmpp").value
+            PImpp.value = Inst.Range("Impp").value
+            PIsc.value = Inst.Range("Isc").value
+            'Inversor
+            IPn.value = Inst.Range("PnInv").value
+            IPm.value = Inst.Range("PmaxInv").value
+            IVn.value = Inst.Range("VnInv").value
+            IFdp.Enabled = False
+            IFdp.value = IPn.value / IPm.value
+        ElseIf modo = "ponP" Then    'Poner datos en página
+            'Placa
+            Inst.Range("Wp").value = PWp.value
+            Inst.Range("Vmpp").value = ComaAPunto(PVmpp.value)
+            Inst.Range("Impp").value = ComaAPunto(PImpp.value)
+            Inst.Range("Isc").value = ComaAPunto(PIsc.value)
+        ElseIf modo = "ponI" Then    'Poner datos en página
+            'Inversor
+            Inst.Range("PnInv").value = IPn.value
+            Inst.Range("PmaxInv").value = IPm.value
+            Inst.Range("VnInv").value = IVn.value
+            Inst.Range("CosPhi").value = ComaAPunto(IFdp.value)
+        Else
+            'No válido
+        End If
+        Call EstadoCL
+    End Sub
+
+'========================================================================================================================
+'========================================================================================================================
+'Código elementos instalación
+    Private Sub LimpiarP_Click()
+        PWp.value = ""
+        PVmpp.value = ""
+        PImpp.value = ""
+        PIsc.value = ""
+    End Sub
+
+    Private Sub AplicarP_Click()
+        Call CargarEquipos("ponP")
+    End Sub
+
+    Private Sub LimpiarI_Click()
+        IPn.value = ""
+        IPm.value = ""
+        IVn.value = ""
+        IFdp.Enabled = False
+        IFdp.value = ""
+    End Sub
+
+    Private Sub AplicarI_Click()
+        Call CargarEquipos("ponI")
+    End Sub
+
+'========================================================================================================================
+'========================================================================================================================
+'Código introducción datos desde PVCASE
+    Private Sub MeterPVCASE_Click()
+        On Error GoTo ErrorHandler
+        'Desactivar actualizaciones
+        Application.ScreenUpdating = False
+        Error = False
+        LibAbierto = False
+        'Valores inciales barra progreso
+        LabelProgress.Width = 0
+        LabelProgress2.Width = 0
+        frac = 0
+        frac2 = 0
+        If DatoPVCASE.Caption = "OK" Then
+            'Mostrar mensaje de confirmación si existen datos de antes
+            OutPut = MsgBox("Se han detectado datos en el libro. Si se decide seguir, se sobreescribirán los datos existentes." & vbCrLf & _
+                "Continuar?", vbInformation + vbYesNo)
+        Else
+            OutPut = 6
+        End If
+        If OutPut = 6 Then
+            'Abrir explorador y conseguir ruta
+            Fitx = ElegirArchivo()
+            If Fitx = "cancelado" Then Exit Sub 'Se ha cancelado la busqueda
+            'Inicializar barra de progreso
+            Proceso.Caption = "Abriendo archivo.."
+            progreso = 1 / 3
+            'Iniciar temporizador
+            Call StartTimer
+            Tiempo.Caption = Temporiz.CurrentElapsed
+            'Calculación manual para que no tarde tanto en pegar los datos
+            Application.Calculation = xlCalculationManual
+            'Teniendo la ruta, abrir y pegar datos en origen
+            Call CopiarPaginasDesdeLibro(Fitx)
+            'Ajustar rangos de tablas con formulas
+            Call AdjustTableRanges
+            'Nombres de tramos
+            Call FormatAndCopyStrings
+            'Activar actualizacion de pantalla
+            Application.ScreenUpdating = True
+            Application.CutCopyMode = False
+            'Establecer calculación automática
+            Application.Calculation = xlCalculationAutomatic
+            'Finalizar timer
+            Call EndTimer
+            Call EstadoCL
+            If Not Error Then
+                'Valores iniciales barras de progreso
+                Proceso.Caption = "Proceso completado sin errores!"
+                MsgBox "Se han introducido los datos PVCASE sin errores.", vbInformation
+                LabelProgress.Width = 0
+                LabelProgress2.Width = 0
+                frac = 0
+                frac2 = 0
+            End If
+            'Actualizar datos
+            Call CargarResumen
+        ElseIf OutPut = 7 Then
+            'Usuario ha dicho que no.
+        End If
+        Exit Sub
+ErrorHandler:
+        'Si ocurre un error, ejecutar
+        MsgBox "Ha ocurrido un error mientras se copiaban los datos: " & Err.Description, vbExclamation, "Error 01"
+        If LibAbierto Then
+            'Cerrar archivo BOM
+            LibBase.Close SaveChanges:=False
+        End If
+        ActiveWindow.Visible = True
+        'Limpiar objetos
+        Set fd = Nothing
+        'Activar actualizacion de pantalla
+        Application.ScreenUpdating = True
+        Application.CutCopyMode = False
+        'Establecer calculación automática
+        Application.Calculation = xlCalculationAutomatic
+        Proceso.Caption = "Se ha encontrado un error en la ejecución."
+    End Sub
+
+    Private Function ElegirArchivo() As String
+        'Crear objeto FileDialog como seleccionador de archivos
+        Set fd = Application.FileDialog(msoFileDialogFilePicker)
+        'Filtros para tipo de archivo
+        fd.Filters.Clear
+        fd.Filters.Add "PVCASE BOM_Data", "*.xlsx"
+        fd.AllowMultiSelect = False
+        'Título de explorador
+        fd.Title = "Elegir archivo PVCASE BOM_Data."
+        'Confirmar que es archivo válido
+        If fd.Show = -1 Then
+            ElegirArchivo = fd.SelectedItems(1)
+        Else
+            'Si el usuario ha cerrado la ventana, devolver "cancelado"
+            ElegirArchivo = "cancelado"
+        End If
+        'Limpiar objetos
+        Set fd = Nothing
+    End Function
+
+    Private Sub CopiarPaginasDesdeLibro(sourcePath As String)
+        Dim exitePag As Boolean
+        'Libro abierto como destino
+        Set LibCopia = ThisWorkbook
+        'Abrir libro de PVCASE
+        Set LibBase = Workbooks.Open(sourcePath)
+        'Fracción barra secundaria
+        progreso2 = 1 / (LibBase.Sheets.count * LibCopia.Sheets.count)
+        ActiveWindow.Visible = False
+        LibAbierto = True
+        'Loopear por cada pagina
+        For Each PagBase In LibBase.Sheets
+            exitePag = False
+            'Mirar si existe una pagina con el mismo nombre en el origen (siempre deberia de existir)
+            For Each PagCop In LibCopia.Sheets
+                Proceso.Caption = "Comprobando la existencia de página " & PagCop.Name
+                Call ActualizarBarra2
+                Tiempo.Caption = Temporiz.CurrentElapsed
+                If PagCop.Name = PagBase.Name Then
+                    exitePag = True
+                    Exit For
+                End If
+            Next PagCop
+            'Si existe la pagina, copiar datos a ella
+            If exitePag Then
+                Proceso.Caption = "Borrando datos anteriores.."
+                PagCop.Cells.Clear 'Borrar datos de la pagina base
+                Proceso.Caption = "Pegando nuevos datos.."
+                PagBase.Cells.Copy PagCop.Range("A1")
+            'Si no existe la pagina en el libro base, crear una y pegar datos
+            Else
+                Proceso.Caption = "No existe página con nombre '" & PagCop.Name & "'. Creando nueva pagina.."
+                PagBase.Copy After:=LibCopia.Sheets(LibCopia.Sheets.count)
+                LibCopia.Sheets(LibCopia.Sheets.count).Name = PagBase.Name
+            End If
+        Next PagBase
+        'Cerrar libro base sin guardar cambios
+        Proceso.Caption = "Cerrando libro..."
+        LibBase.Close SaveChanges:=False
+        LibAbierto = False
+        ActiveWindow.Visible = True
+        'Subproceso finalizado
+        Call ReiniciarBarra2
+    End Sub
+
+    Sub AdjustTableRanges()
+        On Error GoTo ErrorHandler
+
+        Dim wsData As Worksheet, wsTable As Worksheet
+        
+        'Crear array con nombres de paginas de datos
+        sheetNames = Array("Inverter To String", "Transformer To Inverter", "Grid to Transformer")
+        'Crear array de nombres de paginas correspondientes de cálculos para extender tablas
+        tableSheets = Array("Calculos CC", "Calculos CA", "Calculos MT")
+        Proceso.Caption = "Borrando tablas y hojas de formato..."
+        Call Reiniciar_Click
+        'Fracción barra secundaria
+        'MsgBox UBound(sheetNames)
+        progreso2 = 1 / (UBound(sheetNames) + 1)
+        'Loopear cada nombre de pagina
+        For i = LBound(sheetNames) To UBound(sheetNames)
+            Call ActualizarBarra2
+            Tiempo.Caption = Temporiz.CurrentElapsed
+            'Setear paginas de dato y tablas
+            Set wsData = ThisWorkbook.Sheets(sheetNames(i))
+            Set wsTable = ThisWorkbook.Sheets(tableSheets(i))
+            'Encontrar la última fila con información de la columna "B" de la página
+            Proceso.Caption = "Buscando última fila de datos.."
+            lastRow = wsData.Cells(wsData.Rows.count, "B").End(xlUp).Row
+            'Nuevo rango de la tabla a establecer
+            Set tableRange = wsTable.Range("A2").Resize(lastRow, wsTable.Cells(2, wsTable.Columns.count).End(xlToLeft).Column)
+            'Dar nuevo tamaño a la tabla
+            Proceso.Caption = "Dando formato correcto a tabla.."
+            wsTable.ListObjects(1).Resize tableRange
+        Next i
+        'Subproceso finalizado
+        Call ReiniciarBarra2
+        Exit Sub
+ErrorHandler:
+        'Si ocurre un error, ejecutar
+        MsgBox "Ha ocurrido un error mientras se daba formato a las tablas: " & Err.Description, vbExclamation, "Error 02"
+        ActiveWindow.Visible = True
+        'Activar actualizacion de pantalla
+        Application.ScreenUpdating = True
+        Application.CutCopyMode = False
+        'Establecer calculación automática
+        Application.Calculation = xlCalculationAutomatic
+        Proceso.Caption = "Se ha encontrado un error en la ejecución."
+        Error = True
+    End Sub
+
+    Private Sub Reiniciar_Click()
+        On Error GoTo ErrorHandler
+
+        Dim wsTable As Worksheet
+
+        tableSheets = Array("Calculos CC", "Calculos CA", "Calculos MT")
+        formatSheets = Array("Formato CC", "Formato CA", "Formato MT")
+        Proceso.Caption = "Reiniciando libro.."
+        'Reiniciar formato de calculos
+        For i = LBound(tableSheets) To UBound(tableSheets)
+            'Setear hoja para reiniciar estado
+            Set wsTable = ThisWorkbook.Sheets(tableSheets(i))
+            'Formato de tabla de serie (una fila)
+            Set tableRange = wsTable.Range("A2").Resize(2, wsTable.Cells(2, wsTable.Columns.count).End(xlToLeft).Column)
+            wsTable.ListObjects(1).Resize tableRange
+            'Borrar datos menos primera fila (formulas)
+            wsTable.Rows("4:" & wsTable.Rows.count).ClearContents
+        Next i
+        'Reiniciar formato de tablas de formato
+        For i = LBound(formatSheets) To UBound(formatSheets)
+            ThisWorkbook.Sheets(formatSheets(i)).Cells.Clear
+        Next i
+        Proceso.Caption = "Reinicio de libro completado!"
+        Call EstadoCL
+        Exit Sub
+ErrorHandler:
+        'Si ocurre un error, ejecutar
+        MsgBox "Ha ocurrido un error mientras reiniciaban los formatos de las tablas: " & Err.Description, vbExclamation, "Error 03"
+        ActiveWindow.Visible = True
+        'Activar actualizacion de pantalla
+        Application.ScreenUpdating = True
+        Application.CutCopyMode = False
+        'Establecer calculación automática
+        Application.Calculation = xlCalculationAutomatic
+        Error = True
+    End Sub
+
+    Sub FormatAndCopyStrings()
+        On Error GoTo ErrorHandler
+
+        Dim wsSource As Worksheet, wsSource2 As Worksheet, wsSource3 As Worksheet, wsTarget As Worksheet, wsTarget2 As Worksheet, wsTarget3 As Worksheet
+        Dim formattedString As String, formattedInv As String, formattedTrf As String, prevQuant As String, formattedMT As String, anter As String, prevQuant2 As String
+        Dim regex As Object, matches As Object
+        
+        'Hojas de origen y objetivos
+        Set wsSource = ThisWorkbook.Sheets("Inverter To String")
+        Set wsSource2 = ThisWorkbook.Sheets("Transformer To Inverter")
+        Set wsSource3 = ThisWorkbook.Sheets("Grid to Transformer")
+        Set wsTarget = ThisWorkbook.Sheets("Calculos CC")
+        Set wsTarget2 = ThisWorkbook.Sheets("Calculos CA")
+        Set wsTarget3 = ThisWorkbook.Sheets("Calculos MT")
+
+        Proceso.Caption = "Inicializando parametros para estandarización de nombres.."
+        'Cantidad de elementos en hojas de origen
+        lastRow = wsSource.Cells(wsSource.Rows.count, "B").End(xlUp).Row
+        lastRow2 = wsSource2.Cells(wsSource2.Rows.count, "B").End(xlUp).Row
+        lastRow3 = wsSource3.Cells(wsSource3.Rows.count, "B").End(xlUp).Row
+        'Redimensionar los arrays para que contengan la cantidad indicada de nombres
+        ReDim dataArray(1 To lastRow - 1, 1 To 2)
+        ReDim dataArray2(1 To lastRow2 - 1, 1 To 3)
+        ReDim dataArray3(1 To lastRow3 - 1, 1 To 2)
+        'Inicializar objeto regexp para extraer numeros de string
+        Set regex = CreateObject("VBScript.RegExp")
+        regex.Global = True
+        regex.Pattern = "\d+"
+        'Fracción barra secundaria
+        progreso2 = 1 / lastRow
+        'Loopear por cada fila de la hoja de origen
+        For i = 2 To lastRow
+            Proceso.Caption = "Estandarizando celda nº " & i & " de " & lastRow
+            Call ActualizarBarra2
+            Tiempo.Caption = Temporiz.CurrentElapsed
+            'Encontrar todos los numeros en la celda
+            Set matches = regex.Execute(wsSource.Cells(i, 2).value)
+            'Construir nombres a partir de numeros encontrados en celda
+            If matches.count >= 3 Then
+                formattedString = "String " & matches(0) & "-" & matches(1) & "-" & matches(2)
+                formattedInv = "Inverter T" & matches(0) & "-INV" & matches(1)
+                formattedTrf = "Transformer T" & matches(0)
+                If Not anter = matches(0) Then formattedMT = "CT" & anter & "-CT" & matches(0)
+                anter = matches(0)
+            Else
+                'Caso en el que hay menos de 3 numeros
+                formattedString = "String"
+                For j = 0 To matches.count - 1
+                    formattedString = formattedString & " " & matches(j)
+                Next j
+            End If
+            'Guardar nombres en array, para pegarlos luego
+            dataArray(i - 1, 1) = formattedInv
+            dataArray(i - 1, 2) = formattedString
+            'Nombres de tabla CA
+            If i = 2 Then   'Iniciar array2 con primer nombre
+                dataArray2(1, 1) = formattedTrf
+                dataArray2(1, 2) = formattedInv
+                a = 2
+            ElseIf formattedInv <> dataArray2(a - 1, 2) Then    'Si el nobre de inversor es diferente al anterior, guardar
+                dataArray2(a, 1) = formattedTrf
+                dataArray2(a, 2) = formattedInv
+                dataArray2(a - 1, 3) = prevQuant
+                a = a + 1
+            End If
+            prevQuant = matches(2)
+            'Nombres de tabla MT
+            If lastRow3 <= 2 Then GoTo Saltar
+            If i <= 3 Then   'Iniciar array3 con primer nombre
+                dataArray3(1, 1) = formattedMT
+                b = 2
+            ElseIf formattedMT <> dataArray3(b - 1, 1) Then    'Si el nobre de inversor es diferente al anterior, guardar
+                dataArray3(b, 1) = formattedMT
+                dataArray3(b - 1, 2) = prevQuant2
+                b = b + 1
+            End If
+Saltar:
+            prevQuant2 = matches(1)
+        Next i
+        'Última cantidad de strings
+        dataArray2(a - 1, 3) = prevQuant
+        If lastRow3 <= 2 Then
+            'Sólo hay un CT
+            dataArray3(1, 2) = prevQuant2
+            dataArray3(1, 1) = "CT1-Red"
+        Else
+            'Última cantidad de inversores
+            dataArray3(b - 1, 2) = prevQuant2
+            'Reordenar matriz de media tensión sobreescribir primer dato
+            Dim temp As Variant
+            For a = LBound(dataArray3, 1) To UBound(dataArray3, 1) - 1
+                dataArray3(a, 1) = dataArray3(a + 1, 1)
+            Next a
+            'Nombre correcto a último tramo
+            dataArray3(a, 1) = "CT" & anter & "-Red"
+            ReDim Preserve dataArray3(1 To lastRow3 - 1, 1 To lastRow3 - 1)
+            'Dar la vuelta a matriz, primer CT abajo
+            For j = 1 To 2
+                For i = LBound(dataArray3, j) To (UBound(dataArray3, j) - LBound(dataArray3, j)) \ 2 + LBound(dataArray3, j)
+                    temp = dataArray3(i, j)
+                    dataArray3(i, j) = dataArray3(UBound(dataArray3, j) - (i - LBound(dataArray3, j)), j)
+                    dataArray3(UBound(dataArray3, j) - (i - LBound(dataArray3, j)), j) = temp
+                Next i
+            Next j
+        End If
+        'Escribir valores desde array a tablas
+        Proceso.Caption = "Escribiendo valores estandarizados a tabla.."
+        wsTarget.Range("A3").Resize(UBound(dataArray, 1), 2).value = dataArray      'CC
+        wsTarget2.Range("A3").Resize(UBound(dataArray2, 1), 3).value = dataArray2   'BT
+        wsTarget3.Range("A3").Resize(UBound(dataArray3, 1), 2).value = dataArray3   'MT1
+        'Limpiar objetos
+        Proceso.Caption = "Limpiando objetos.."
+        Set matches = Nothing
+        Set regex = Nothing
+        'Subproceso finalizado
+        Call ReiniciarBarra2
+        Exit Sub
+ErrorHandler:
+        'Si ocurre un error, ejecutar
+        MsgBox "Ha ocurrido un error mientras se daba formato a los nombres de tramo: " & Err.Description, vbExclamation, "Error 04"
+        'Limpiar objetos
+        Set matches = Nothing
+        Set regex = Nothing
+        ActiveWindow.Visible = True
+        'Activar actualizacion de pantalla
+        Application.ScreenUpdating = True
+        Application.CutCopyMode = False
+        'Establecer calculación automática
+        Application.Calculation = xlCalculationAutomatic
+        Proceso.Caption = "Se ha encontrado un error en la ejecución."
+        Error = True
+    End Sub
+
+    Private Sub CargarResumen()
+        On Error GoTo ErrorHandler
+    
+        Dim listas As Variant, esq As Variant
+        Dim rangoTabla As Range
+        Dim filaUlt As Long, colUlt As Long
+        'Empezar por el resumen de instalación
+        NomPr.Caption = Inst.Range("M1").value
+        CapPr.Caption = Inst.Range("N2").value
+        NmodPr.Caption = Inst.Range("N3").value
+        PotMPr.Caption = Inst.Range("N4").value
+        NstringPr.Caption = Inst.Range("N5").value
+        NinvPr.Caption = Inst.Range("N6").value
+        NCTPr.Caption = Inst.Range("N7").value
+        SeccDCPr.Caption = Inst.Range("Q5").value
+        SeccBTPr.Caption = Inst.Range("Q6").value
+        SeccMTPr.Caption = Inst.Range("Q7").value
+        MetrDCPr.Caption = Inst.Range("Q2").value
+        MetrBTPr.Caption = Inst.Range("Q3").value
+        MetrMTPr.Caption = Inst.Range("Q4").value
+        'Cargar tablas a lista
+        listas = Array("CC", "BT", "MT")
+        esq = Array(12, 14, 16)
+        colUlt = 1
+        For i = LBound(listas) To UBound(listas)
+            'Rango de tabla
+            filaUlt = Inst.Cells(9, esq(i)).End(xlDown).Row
+            'MsgBox filaUlt
+            Set rangoTabla = Inst.Range(Inst.Cells(10, esq(i)), Inst.Cells(filaUlt, colUlt + esq(i)))
+            'Configuracion lista
+            'Controls("Lista" & listas(i)).Clear
+            With Controls("Lista" & listas(i))
+                .ColumnHeads = True
+                .ColumnCount = 2
+                .ColumnWidths = "60;45"
+                .RowSource = rangoTabla.Address
+            End With
+        Next i
+    Exit Sub
+ErrorHandler:
+        'Si ocurre un error, ejecutar
+        MsgBox "Ha ocurrido un error mientras se cargaba el resumen: " & Err.Description, vbExclamation, "Error 08"
+        MsgBox listas(i)
+        ActiveWindow.Visible = True
+        'Activar actualizacion de pantalla
+        Application.ScreenUpdating = True
+        Application.CutCopyMode = False
+        'Establecer calculación automática
+        Application.Calculation = xlCalculationAutomatic
+        Proceso.Caption = "Se ha encontrado un error en la ejecución."
+    End Sub
+
+    Private Sub ActDat_Click()
+        Call CargarResumen
+    End Sub
+
+'========================================================================================================================
+'========================================================================================================================
+'Código pasar información a word
+    Private Sub TablasDoc_Click()
+        On Error GoTo ErrorHandler
+        'Comprobar que no haya cables invalidos para generar word
+        If Not Dts.Range("A8") Then
+            'Hay algun tramo que el cable no sea suficiente, informar
+            OutPut = MsgBox("Hay algún tramo que hay que verificar manualmente, ya que las características por defecto no son suficientes." & vbCrLf _
+                & "Los tramos conflictivos tienen la celda de sección elegida marcadas en rojo." & vbCrLf _
+                & "Continuar con la impresión del documento?", vbYesNo + vbCritical, "Error en cálculo automático de secciones")
+            If OutPut = 6 Then
+                'Se quiere continuar con la impresión, salir de If
+            Else
+                'Se quiere revisar el error, terminar Sub
+                Exit Sub
+            End If
+        End If
+        Error = False
+        'Barra de progreso
+        LabelProgress.Width = 0
+        LabelProgress2.Width = 0
+        frac = 0
+        frac2 = 0
+        Proceso.Caption = "Cargando tablas a copiar.."
+        progreso = 1 / 9
+        'Iniciar temporizador
+        Call StartTimer
+        Tiempo.Caption = Temporiz.CurrentElapsed
+        Call FormatearTabla("CC", 4)
+        Call FormatearTabla("CA", 4)
+        Call FormatearTabla("MT", 13)
+
+        'MsgBox "AHORA"
+        Proceso.Caption = "Trabajos en Excel terminados, abriendo documento Word.."
+        'Abrir documento para pegar tablas
+        Set wordApp = CreateObject("Word.Application")
+        wordApp.Visible = False
+        Set wordDoc = wordApp.Documents.Add
+        Tiempo.Caption = Temporiz.CurrentElapsed
+        Call ActualizarBarra
+        Proceso.Caption = "Dando formato a documento.."
+        'Formato de documento, página A3 y horizontal
+        With wordDoc.PageSetup
+            .PaperSize = 6  ' wdPaperA3
+            .Orientation = 1  ' wdOrientLandscape
+        End With
+        'Quitar espacios antes y después de párrafo
+        wordDoc.Application.Selection.ParagraphFormat.SpaceAfter = 0
+        wordDoc.Application.Selection.ParagraphFormat.SpaceBefore = 0
+        Call ActualizarBarra
+        Proceso.Caption = "Preparando para pegar tablas.."
+        cantTabl = 1
+        Tiempo.Caption = Temporiz.CurrentElapsed
+        'Pegar tablas de los tipos seleccionados
+        Call PegarTablas("CC")
+        Call PegarTablas("CA")
+        Call PegarTablas("MT")
+        Proceso.Caption = "Limpiando objetos.."
+        'Limpiar portapapeles
+        Application.CutCopyMode = False
+        'Limpiar objetos
+        Set wordTable = Nothing
+        Set wordDoc = Nothing
+        Call ActualizarBarra
+        'Finalizar timer
+        Call EndTimer
+        Tiempo.Caption = Temporiz.CurrentElapsed
+        If Not Error Then
+            'Valores iniciales barras de progreso
+            Proceso.Caption = "Proceso completado sin errores!"
+            'Enseñar documento word
+            wordApp.Visible = True
+            Set wordApp = Nothing
+            LabelProgress.Width = 0
+            LabelProgress2.Width = 0
+            frac = 0
+            frac2 = 0
+            Call EstadoCL
+        End If
+        Exit Sub
+ErrorHandler:
+        'Si ocurre un error, ejecutar
+        MsgBox "Ha ocurrido un error mientras se daba formato a los nombres de tramo: " & Err.Description, vbExclamation, "Error 06"
+        wordApp.Visible = True
+        'Limpiar objetos
+        Set wordTable = Nothing
+        Set wordDoc = Nothing
+        Set wordApp = Nothing
+        ActiveWindow.Visible = True
+        'Activar actualizacion de pantalla
+        Application.ScreenUpdating = True
+        Application.CutCopyMode = False
+        'Establecer calculación automática
+        Application.Calculation = xlCalculationAutomatic
+        Proceso.Caption = "Se ha encontrado un error en la ejecución."
+    End Sub
+
+    Private Sub FormatearTabla(ByVal secc As String, ByVal comp As Integer)
+        On Error GoTo ErrorHandler
+
+        Dim wsSrc As Worksheet, wsFmt As Worksheet
+        Dim lastRow As Long, lastCol As Long
+
+        Dim i As Long, startMergeRow As Long, mergeStart As Long
+        Dim colorIndex As Integer, currentGroupColor As Long, rowColorToggle As Boolean, color1 As Long, color2 As Long
+
+        'Hojas de valores y de formato, relativas a como se llame al subproceso
+        Set wsSrc = ThisWorkbook.Sheets("Calculos " & secc)
+        Set wsFmt = ThisWorkbook.Sheets("Formato " & secc)
+        Proceso.Caption = "Limpiando formato de hoja de formato.."
+        'Reiniciar hoja de formato
+        Tiempo.Caption = Temporiz.CurrentElapsed
+        wsFmt.Cells.Clear
+        wsFmt.Columns("A:A").WrapText = False
+        Proceso.Caption = "Buscando última fila y columna de datos a pegar.."
+        'Encontrar última fila y columna de la tabla de valores
+        lastRow = wsSrc.Cells(wsSrc.Rows.count, 1).End(xlUp).Row
+        lastCol = wsSrc.Cells(2, wsSrc.Columns.count).End(xlToLeft).Column - 1
+        Proceso.Caption = "Copiando titulos y datos de tabla a formato.."
+        'Copiar primeras dos filas (titulos) con formato
+        wsSrc.Range(wsSrc.Cells(1, 1), wsSrc.Cells(2, lastCol)).Copy
+        wsFmt.Cells(1, 1).PasteSpecial Paste:=xlPasteAll
+        'Copiar solo valores de las demás celdas
+        wsSrc.Range(wsSrc.Cells(3, 1), wsSrc.Cells(lastRow, lastCol)).Copy
+        wsFmt.Cells(3, 1).PasteSpecial Paste:=xlPasteValues
+        Proceso.Caption = "Formateando primera columna.."
+        Tiempo.Caption = Temporiz.CurrentElapsed
+        'Ajustar texto a celda
+        With wsFmt.Columns("A:A")
+            .WrapText = True
+            .HorizontalAlignment = xlCenter
+            .VerticalAlignment = xlCenter
+        End With
+        'Bordes de nombre
+        wsFmt.Range("A3:A1048576").Borders(xlInsideHorizontal).LineStyle = xlContinuous
+    'Inicializar ajustes de color
+    Proceso.Caption = "Inicializando ajustes de color.."
+        color1 = RGB(128, 192, 255) 'Azul para primer bloque
+        color2 = RGB(255, 154, 77) 'Naranja para segundo bloque
+        currentGroupColor = color1
+        colorIndex = 1
+        rowColorToggle = False 'Empezar sin toggle de color
+        
+        'Unir celdas consecutivas con primer nombre y dar color alternativo a cada grupo y fila
+        Application.DisplayAlerts = False
+        startMergeRow = 3
+        mergeStart = startMergeRow
+        progreso2 = 1 / (lastRow - startMergeRow + 1)
+        For i = startMergeRow + 1 To lastRow
+            'Si el siguiente valor de la primera fila es diferente al de referencia, juntar
+            Tiempo.Caption = Temporiz.CurrentElapsed
+            Call ActualizarBarra2
+            If wsFmt.Cells(i, 1).value <> wsFmt.Cells(mergeStart, 1).value Then
+                Proceso.Caption = "Dando formato a grupo de inversor.."
+                'Juntar celdas de nombre y dar color
+                If i - 1 > mergeStart Then
+                    wsFmt.Range(wsFmt.Cells(mergeStart, 1), wsFmt.Cells(i - 1, 1)).Merge
+                    wsFmt.Range(wsFmt.Cells(mergeStart, 1), wsFmt.Cells(i - 1, 1)).Interior.Color = currentGroupColor - RGB(30, 30, 30) 'Color oscuro
+                End If
+                
+                'Aplicar color alternativo a filas del grupo actual
+                For j = mergeStart To i - 1
+                    If rowColorToggle Then
+                        wsFmt.Rows(j).Interior.Color = currentGroupColor 'Color claro
+                    Else
+                        wsFmt.Rows(j).Interior.Color = currentGroupColor - RGB(30, 30, 30) ' Color oscuro
+                    End If
+                    rowColorToggle = Not rowColorToggle 'Pasar a siguiente sombreado de color
+                    'Color rojo a celdas si no cumple
+                    If wsFmt.Cells(j, comp) = "Ajustar valores" Then
+                        wsFmt.Rows(j).Interior.Color = RGB(255, 0, 0)   'Rojo
+                    End If
+                Next j
+
+                'Cambiar colores por grupo (alternar entre azul y verde)
+                If colorIndex = 1 Then
+                    currentGroupColor = color2 'Azul claro para grupo 2
+                    colorIndex = 2
+                Else
+                    currentGroupColor = color1 'Verde claro para grupo 1 o siguiente
+                    colorIndex = 1
+                End If
+                rowColorToggle = False 'Resetear el toggle de color para siguiente grupo
+                mergeStart = i
+            End If
+            Proceso.Caption = "Estudiando fila nº " & i & " de " & lastRow
+        Next i
+
+        'Gestionar último grupo igual que los anteriores
+        If lastRow > mergeStart Then
+            Proceso.Caption = "Gestionando último grupo.."
+            wsFmt.Range(wsFmt.Cells(mergeStart, 1), wsFmt.Cells(lastRow, 1)).Merge
+            wsFmt.Range(wsFmt.Cells(mergeStart, 1), wsFmt.Cells(lastRow, 1)).Interior.Color = currentGroupColor - RGB(30, 30, 30)
+            For j = mergeStart To lastRow
+                If rowColorToggle Then
+                    wsFmt.Rows(j).Interior.Color = currentGroupColor
+                Else
+                    wsFmt.Rows(j).Interior.Color = currentGroupColor - RGB(30, 30, 30)
+                End If
+                rowColorToggle = Not rowColorToggle
+                'Color rojo a celdas si no cumple
+                If wsFmt.Cells(j, comp) = "Ajustar valores" Then
+                    wsFmt.Rows(j).Interior.Color = RGB(255, 0, 0)   'Rojo
+                End If
+            Next j
+        End If
+        Proceso.Caption = "Estableciendo formato para porcentajes " & secc
+        'Columnas para poner porcentaje
+        Dim colPorc As Variant
+        Select Case secc
+            Case "CC"
+                colPorc = Array("F", "L", "S")
+            Case "CA"
+                colPorc = Array("G", "M", "S")
+            Case "MT"
+                colPorc = Array("K", "Q")
+        End Select
+        'Poner formato porcentaje
+        For i = LBound(colPorc) To UBound(colPorc)
+            wsFmt.Columns(colPorc(i) & ":" & colPorc(i)).NumberFormat = "0.00%"
+        Next i
+        Tiempo.Caption = Temporiz.CurrentElapsed
+        Application.DisplayAlerts = True
+        Proceso.Caption = "Se ha terminado de formatear la tabla de " & secc
+        Call ReiniciarBarra2
+        Exit Sub
+ErrorHandler:
+        'Si ocurre un error, ejecutar
+        MsgBox "Ha ocurrido un error mientras se daba formato a las tablas para pegar en Word: " & Err.Description, vbExclamation, "Error 05"
+        ActiveWindow.Visible = True
+        'Activar actualizacion de pantalla
+        Application.ScreenUpdating = True
+        Application.CutCopyMode = False
+        'Establecer calculación automática
+        Application.Calculation = xlCalculationAutomatic
+        Application.DisplayAlerts = True
+        Proceso.Caption = "Se ha encontrado un error en la ejecución."
+        Error = True
+    End Sub
+
+    Sub PegarTablas(ByVal tip As String)
+        On Error GoTo ErrorHandler
+
+        Dim wsFmt2 As Worksheet
+        Dim lastRow As Long, lastCol As Long
+
+        Set wsFmt2 = ThisWorkbook.Sheets("Formato " & tip)
+        'Barra de progreso
+        progreso2 = 1 / 6
+        'Limpiar portapapeles
+        Application.CutCopyMode = False
+        'Encontrar última fila y columna de tabla a pegar
+        Proceso.Caption = "Copiando tabla " & tip & " desde Excel.."
+        lastRow = wsFmt2.Cells(wsFmt2.Rows.count, 2).End(xlUp).Row
+        lastCol = wsFmt2.Cells(2, wsFmt2.Columns.count).End(xlToLeft).Column
+        Set tableRange = wsFmt2.Range(wsFmt2.Cells(1, 1), wsFmt2.Cells(lastRow, lastCol))
+        'Copiar tabla
+        Tiempo.Caption = Temporiz.CurrentElapsed
+        tableRange.Copy
+        Call ActualizarBarra2
+        Proceso.Caption = "Pegando tabla " & tip & " a documento Word.."
+        'Pegar tabla después de la anteriormente pegada (si hay) reintentar 3 veces por si falla
+        Dim retryCount As Integer
+        retryCount = 3
+        On Error Resume Next
+        Do
+            wordDoc.Application.Selection.PasteExcelTable LinkedToExcel:=False, WordFormatting:=False, RTF:=False
+            Tiempo.Caption = Temporiz.CurrentElapsed
+            If Err.Number <> 0 Then
+                'Ha ocurrido un error
+                If retryCount > 0 Then
+                    Proceso.Caption = "Ha ocurrido un error pegando la tabla, reintentando.."
+                    retryCount = retryCount - 1
+                    Err.Clear
+                    Tiempo.Caption = Temporiz.CurrentElapsed
+                    'Volver a intentar en 2 segundos
+                    Application.Wait Now + #12:00:02 AM#
+                    Tiempo.Caption = Temporiz.CurrentElapsed
+                Else
+                    'Se ha reintentado 3 veces y sigue fallando
+                    MsgBox "Codigo ha fallado 3 veces seguidas, cerrando macro.."
+                    GoTo ErrorHandler
+                    Exit Sub
+                End If
+            Else
+                'Se ha ejecutado correctamente, salir del loop
+                Tiempo.Caption = Temporiz.CurrentElapsed
+                Exit Do
+            End If
+        Loop
+        Call ActualizarBarra2
+        'Elegir tabla recién pegada
+        Set wordTable = wordDoc.Tables(cantTabl)
+        Tiempo.Caption = Temporiz.CurrentElapsed
+        'Establecer puntero en la primera fila de la tabla
+        Call ActualizarBarra2
+        Proceso.Caption = "Tabla pegada correctamente, aplicando formato a tabla " & tip & " en Word.."
+        With wordTable
+            .Range.Font.Name = "Arial Narrow"
+            .Range.Font.Size = 6
+            .AutoFitBehavior 1 ' wdAutoFitWindow
+            'Quitar espacios antes y después de párrafo
+            .Range.ParagraphFormat.SpaceAfter = 0
+            .Range.ParagraphFormat.SpaceBefore = 0
+            .Range.Rows.Height = 5.669291   'Reajustar filas para que no haya huecos
+        End With
+        Call ActualizarBarra2
+        Tiempo.Caption = Temporiz.CurrentElapsed
+        'Primeras dos filas como titulo en todas las paginas
+        wordTable.Select
+        Call ActualizarBarra2
+        Tiempo.Caption = Temporiz.CurrentElapsed
+        'Application.Wait Now + #12:00:01 AM#
+        With wordDoc.Application.Selection
+            .MoveUp Unit:=5, count:=1
+            If cantTabl > 1 Then .MoveDown Unit:=5, count:=1
+            .MoveDown Unit:=5, count:=1, Extend:=1  'wdLine, wdExtend
+            'MsgBox "Comprobar"
+            .EndKey Unit:=10, Extend:=True
+            .Font.Size = 5
+            .Rows.HeadingFormat = True
+            If cantTabl > 1 Then .MoveUp Unit:=5, count:=1
+            If cantTabl > 1 Then .Delete Unit:=1, count:=1
+        End With
+        Call ActualizarBarra2
+        Proceso.Caption = "Estableciendo formato para la siguiente tabla.. "
+        Tiempo.Caption = Temporiz.CurrentElapsed
+        'Salto de sección al final
+        wordDoc.Application.Selection.EndKey Unit:=6    'wdStory
+        wordDoc.Application.Selection.InsertBreak Type:=2     'wdSectionBreakNextPage
+        wordDoc.Application.Selection.TypeParagraph 'Insertar parrafo para repetibilidad
+        'Pasar a siguiente tabla (si se va a copiar más de una)
+        cantTabl = cantTabl + 1
+        Call ReiniciarBarra2
+        Exit Sub
+ErrorHandler:
+        'Si ocurre un error, ejecutar
+        MsgBox "Ha ocurrido un error mientras se pegaba la tabla a documento word: " & Err.Description, vbExclamation, "Error 07"
+        wordApp.Visible = True
+        'Limpiar objetos
+        Set wordTable = Nothing
+        Set wordDoc = Nothing
+        Set wordApp = Nothing
+        ActiveWindow.Visible = True
+        'Activar actualizacion de pantalla
+        Application.ScreenUpdating = True
+        Application.CutCopyMode = False
+        'Establecer calculación automática
+        Application.Calculation = xlCalculationAutomatic
+        Proceso.Caption = "Se ha encontrado un error en la ejecución."
+        Error = True
+    End Sub
+
+'========================================================================================================================
+'========================================================================================================================
+'Timer
+Sub StartTimer()
+    Set Temporiz = New Timer
+    Temporiz.StartTimer
+End Sub
+
+Sub EndTimer()
+    Temporiz.StopTimer
+    tiempTrsc = Temporiz.GetElapsedTime
+End Sub
+
+'========================================================================================================================
+'========================================================================================================================
+'Barra dr progreso
+Private Sub ActualizarBarra()
+    'Fracción por cada llamada
+    frac = progreso + frac
+    'Actualizar barra de progreso
+    LabelProgress.Width = frac * (FrameProgress.Width)
+    Me.Repaint
+    DoEvents
+End Sub
+
+Private Sub ActualizarBarra2()
+    'Fracción por cada llamada
+    ' Application.Wait Now + #12:00:01 AM#
+    frac2 = progreso2 + frac2
+    'Actualizar barra de progreso secundaria
+    LabelProgress2.Width = frac2 * (FrameProgress2.Width)
+    DoEvents
+End Sub
+
+Private Sub ReiniciarBarra2()
+    'Reiniciar barra de progreso secundaria
+    ' Application.Wait Now + #12:00:01 AM#
+    'SubProceso.Caption = ""
+    LabelProgress2.Width = 0
+    frac2 = 0
+    progreso2 = 0
+    'Avanzar la barra de progreso primaria
+    Call ActualizarBarra
+End Sub
