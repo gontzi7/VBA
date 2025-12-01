@@ -1,1 +1,150 @@
+Option Explicit
 
+Dim listaNombresReps() As Variant
+Dim j As Long
+Dim rec As Variant, col As Collection
+Dim key As Variant
+'Parametros barra de progreso
+Dim progreso As Double, frac As Double
+
+Private Sub Cancelar_Click()
+    salirMacr = True
+    ContinuarEjecucion = True
+    Unload Me
+End Sub
+
+Private Sub Continuar_Click()
+    'Aplicar cambios a repeticiones
+    
+    'Continuar con ejecución
+    salirMacr = False
+    ContinuarEjecucion = True
+    'Desactivar actulaizaciones de pantalla
+    Application.ScreenUpdating = False
+    'Desactivar calculacion manual
+    Application.Calculation = xlCalculationManual
+    Application.DisplayAlerts = False
+    Unload Me
+End Sub
+
+Private Sub UserForm_Initialize()
+    'On Error Resume Next
+    'Poner en medio de la pantalla
+    With Me
+        .StartUpPosition = 0
+        .Left = Application.Left + (0.5 * Application.Width) - (0.5 * .Width)
+        .Top = Application.Top + (0.5 * Application.Height) - (0.5 * .Height)
+        .Show
+    End With
+    'Activar actualización de pantalla
+    Application.ScreenUpdating = False
+    'Activar calculacion automatica
+    Application.Calculation = xlCalculationManual
+    Application.DisplayAlerts = False
+    'Iniciar barra
+    Call IniciarBarra
+    Me.Proceso.Caption = "Construyendo diccionario.."
+    progreso = 1 / (2)
+    'Generar array por repetición
+
+    j = 1
+    For Each key In dict.Keys
+        Set col = dict(key)
+        If col.Count > 1 Then
+            ReDim Preserve listaNombresReps(1 To j + 1) '1 espacio más
+
+            listaNombresReps(j) = key
+
+            j = j + 1
+        End If
+    Next key
+    Call ActualizarBarra
+    'Poblar lista
+    Me.Proceso.Caption = "Poblando lista.."
+    cbRepetidos.List = listaNombresReps
+
+    Call ActualizarBarra
+    Me.Proceso.Caption = "Formulario iniciado."
+    Call ReiniciarBarra
+    'Activar actualización de pantalla
+    Application.ScreenUpdating = True
+    'Activar calculacion automatica
+    Application.Calculation = xlCalculationAutomatic
+    Application.DisplayAlerts = True
+End Sub
+
+Private Sub UserForm_QueryClose(Cancel As Integer, CloseMode As Integer)
+    salirMacr = True
+    ContinuarEjecucion = True
+End Sub
+
+Private Sub cbRepetidos_Click() 'Poblar información de repetición
+    On Error GoTo noExiste
+    ListaAbrev.Clear    'Limpiar anteriores contenidos
+
+    Set col = dict(cbRepetidos.value)
+
+    Dim i As Long
+    For i = 1 To col.Count
+        rec = col(i)
+        ListaAbrev.AddItem cbRepetidos.value & "(" & rec(1) & ")"
+        ' Debug.Print "  Addr=" & rec(0) & "  Sheet=" & rec(1)
+    Next i
+noExiste:
+End Sub
+
+Private Sub ListaAbrev_Click()
+    'Si hay un elemento seleccionado, cargar información
+    If ListaAbrev.ListIndex <> -1 Then
+        Num.Caption = ListaAbrev.ListIndex + 1 & "/" & ListaAbrev.ListCount
+    End If
+End Sub
+
+Private Sub ListaAbrev_DblClick(ByVal Cancel As MSForms.ReturnBoolean)
+    Dim sel As Long
+
+    'On Error GoTo noExiste
+    'Si hay un elemento seleccionado, cerrar user form y seleccionar elemento en el excel
+    If ListaAbrev.ListIndex <> -1 Then
+        Set col = dict(cbRepetidos.value)    'Nombre de línea
+
+        'Número seleccionado
+        sel = ListaAbrev.ListIndex + 1
+        rec = col(sel)  'Colección de línea elegida
+
+        MsgBox "  Addr=" & rec(0) & "  Sheet=" & rec(1)
+        ThisWorkbook.Sheets(rec(1)).Range(Cstr(rec(0))).Select
+    End If
+noExiste:
+End Sub
+'===============================================================================================================================================
+'Barra de progreso
+'===============================================================================================================================================
+Private Sub ActualizarBarra()
+    'Fracción por cada llamada
+    frac = progreso + frac
+    'Actualizar barra de progreso
+    With Me
+        .LabelProgress.Width = frac * (.FrameProgress.Width)
+        .Repaint
+    End With
+    DoEvents
+End Sub
+
+Private Sub ReiniciarBarra()
+    'Reiniciar barra de progreso secundaria
+    ' Application.Wait Now + #12:00:01 AM#
+    'SubProceso.Caption = ""
+    Me.LabelProgress.Width = 0
+    frac = 0
+    progreso = 0
+End Sub
+
+Private Sub IniciarBarra()
+    'Variables y textos
+    frac = 0
+    Me.LabelProgress.Width = 0
+    Me.Proceso.Caption = ""
+    'Variable de parada
+    Cerrar = False
+End Sub

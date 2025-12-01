@@ -1,0 +1,480 @@
+Option Explicit
+
+Dim DebugMensajes As Boolean
+Dim ws As Worksheet, principal As Worksheet, resultados As Worksheet
+Dim n As Long, rsrv As Long, i As Long
+Dim dict As Object
+'Arrays
+Dim listaNombres() As Variant, listaLineas() As Variant, listaMedicion() As Variant, tablaResultados() As Variant, tablaPrinc() As Variant, valores As Range
+Dim listaReserva() As Variant, listaSinReserva() As Variant
+'Parametros barra de progreso
+Dim progreso As Double, frac As Double
+
+'===============================================================================================================================================
+'Funciones formulario
+'===============================================================================================================================================
+Private Sub UserForm_Initialize()
+    'Poner en medio de la pantalla
+    With Me
+        .StartUpPosition = 0
+        .Left = Application.Left + (0.5 * Application.Width) - (0.5 * .Width)
+        .Top = Application.Top + (0.5 * Application.Height) - (0.5 * .Height)
+        .Show
+    End With
+    'Iniciar barra progreso
+    Call IniciarBarra
+    'Hacer ajustable
+    'Call MakeFormResizeable(Me)
+    Me.Proceso.Caption = "Iniciando buscador.."
+    progreso = 1 / 7
+    'Constantes
+    Set principal = ThisWorkbook.Sheets("Configuracion_cuadros")
+    Set resultados = ThisWorkbook.Sheets("TABLA DE RESULTADOS")
+    DebugMensajes = ThisWorkbook.Sheets("Busquedas").Range("Debug")
+
+    Set valores = resultados.ListObjects("RESULTADOS").DataBodyRange
+    tablaResultados = valores.Value
+
+    Call ActualizarBarra
+    'Guardar libro (por si crashea)
+    Me.Proceso.Caption = "Guardando libro.."
+    DoEvents
+    ThisWorkbook.Save
+
+    Call ActualizarBarra
+    Me.Proceso.Caption = "Cargando listas.."
+    'Cargar nombres de cuadro y líneas
+    Call CargarListas
+    Call ActualizarBarra
+
+    Me.Proceso.Caption = "Cargando mediciones de circuitos.."
+    'Cargar detalles de todas las líneas
+    Call CargarMediciones(True)
+    Call ActualizarBarra
+
+    'Activar actualización de pantalla
+    Application.ScreenUpdating = True
+    'Activar calculacion automatica
+    Application.Calculation = xlCalculationAutomatic
+    Application.DisplayAlerts = True
+    Application.EnableEvents = True
+
+    Me.Proceso.Caption = "Buscador iniciado."
+    Call ReiniciarBarra
+End Sub
+
+Private Sub UserForm_Resize()
+    'Call AdjustSizeOfControls
+End Sub
+
+Private Sub UserForm_QueryClose(Cancel As Integer, CloseMode As Integer)
+    UnHook_Mouse
+End Sub
+
+Private Sub UserForm_Deactivate()
+    UnHook_Mouse
+End Sub
+
+Private Sub UserForm_Terminate()
+    UnHook_Mouse
+End Sub
+'===============================================================================================================================================
+'Botones
+'===============================================================================================================================================
+Private Sub NomCuadros_Change()
+    Call FiltrarComboBox(Me.NomCuadros, listaNombres)
+End Sub
+
+Private Sub NomLineas_Change()
+    Call FiltrarComboBox(Me.NomLineas, listaLineas)
+End Sub
+
+Private Sub ReCargar_Click()
+    Call CargarListas(True)
+End Sub
+
+Private Sub NomLineas_Click()   'Al seleccionar línea poblar automaticamente el nombre de cuadro
+    If dict.Exists(NomLineas.Text) Then
+        Application.EnableEvents = False
+        NomCuadros.Text = dict(NomLineas.Text) & " -"  'Insertar nombre de cuadro
+        NomCuadros.ListIndex = 0    'Seleccionar primero
+        Application.EnableEvents = True
+    Else
+        'No existe en diccionario (imposible)
+        MsgBox "Imposible"
+    End If
+End Sub
+
+Private Sub NomCuadros_Enter()
+
+End Sub
+
+Private Sub MeterCuad_Click()
+
+End Sub
+
+Private Sub MeterLin_Click()
+
+End Sub
+
+Private Sub QuitarCuad_Click()
+
+End Sub
+
+Private Sub ActualizarMediciones_Click()
+
+End Sub
+
+Private Sub Limpiar_Click()
+
+End Sub
+
+Private Sub Buscar_Click()
+
+End Sub
+
+Private Sub ListaMediciones_DblClick(ByVal Cancel As MSForms.ReturnBoolean)
+    MsgBox ListaMediciones.List(ListaMediciones.ListIndex, 1)
+End Sub
+
+Private Sub MarcDesm_Click()
+    UnHook_Mouse
+    Call Hook_Mouse(Me.ListaSeleccionados)
+    If MarcDesm.Value = False Then  'Desmarcar
+        For i = 1 To ListaSeleccionados.ListCount
+            ListaSeleccionados.Selected(i - 1) = False             'Marcar seleccionado
+        Next i
+    Else    'Marcar
+        For i = 1 To ListaSeleccionados.ListCount
+            ListaSeleccionados.Selected(i - 1) = True             'Desmarcar seleccionado
+        Next i
+    End If
+End Sub
+
+Private Sub ActualizarLista_Click()
+    listaMediciones.Clear
+    If LinsReserva Then
+        'MsgBox UBound(listaReserva)
+        listaMediciones.List = listaReserva
+    Else
+        'MsgBox UBound(listaSinReserva)
+        listaMediciones.List = listaSinReserva
+    End If
+End Sub
+'===============================================================================================================================================
+'Principales
+'===============================================================================================================================================
+Sub CargarListas(Optional boton As Boolean)
+    Dim wsSrc As Worksheet, wsVal As Worksheet
+    Dim panel As String, line As String
+    Dim estCuad As ListObject, tabla As ListObject
+    Dim lastRow As Long, j As Long, cont As Long, k As Long
+    Dim panelLines As Object
+    Dim nomCuad As String
+    Dim arrTemp() As Variant
+
+    If Not DebugMensajes Then On Error GoTo ErrorHandler
+
+    'Desactivar actulaizaciones de pantalla
+    Application.ScreenUpdating = False
+    'Desactivar calculacion manual
+    Application.Calculation = xlCalculationManual
+    'Borrar portapapeles
+    Application.CutCopyMode = False
+    Application.EnableEvents = False
+
+    If boton Then   'Se llama desde botón
+        progreso = 1 / 4
+    End If
+
+    Set dict = CreateObject("Scripting.Dictionary")
+
+    'Borrar anteriores
+    Erase listaNombres
+    Erase listaLineas
+
+    'Tablas
+    Set tabla = principal.ListObjects("Nombre_cuadros")
+
+    Me.Proceso.Caption = "Cargando nombres de cuadros.."
+    'Nombres de cuadros
+    Set valores = tabla.DataBodyRange
+    arrTemp = valores.Value
+    tablaPrinc = valores.Value
+
+    ReDim listaNombres(1 To tabla.ListRows.Count)
+    For i = 1 To tabla.ListRows.Count
+        listaNombres(i) = arrTemp(i, 2) & " - " & arrTemp(i, 1)
+    Next i
+
+    Me.Proceso.Caption = "Añadiendo nombres de cuadros.."
+    Call PoblarLista(listaNombres, Me.NomCuadros)
+
+    'Nombre de líneas
+    Call ActualizarBarra
+    Me.Proceso.Caption = "Cargando nombres de lineas.."
+    rsrv = 0
+    'Cargar todos los paneles y sus respectivas líneas en diccionario
+    For j = 1 To tabla.ListRows.Count
+        nomCuad = tabla.ListColumns(2).DataBodyRange.Cells(j).Value
+
+        If ExistePagina(nomCuad) Then
+            Set wsSrc = ThisWorkbook.Sheets(nomCuad)
+            Set estCuad = wsSrc.ListObjects(nomCuad)
+            lastRow = estCuad.ListRows.Count
+
+            panel = Trim(nomCuad)   'Nombre panel
+
+            'Poblar array de líneas de alimentación
+            Erase arrTemp
+            Set valores = estCuad.DataBodyRange
+            arrTemp = valores.Value
+
+            'Contador
+            cont = 0
+            For i = 1 To lastRow
+                line = Trim(arrTemp(i, 3))
+                If Len(panel) > 0 And Len(line) > 0 And Trim(arrTemp(i, 2)) <> "RESERVA" Then
+                    dict.Add line, panel    'Línea como key (todos únicos), cuadro como item
+                    cont = cont + 1
+                End If
+                If Trim(arrTemp(i, 2)) = "RESERVA" Then
+                    rsrv = rsrv + 1
+                End If
+            Next i
+            'Fila en blanco si es cuadro entero reserva
+            If cont = 0 Then
+                line = panel & " - VACÍO"
+                dict.Add line, panel
+            End If
+        End If
+    Next j
+
+    Me.Proceso.Caption = "Añadiendo nombres de líneas.."
+
+    'Mover a array
+    ReDim listaLineas(1 To dict.Count)
+    Dim key As Variant
+    k = 1
+    For Each key In dict.Keys
+        listaLineas(k) = key
+        k = k + 1
+    Next key
+
+    'Contar líneas externas
+    For i = 1 To UBound(tablaPrinc, 1)
+        If tablaPrinc(i, 3) = "EXTERNO ------>" Then k = k + 1
+    Next i
+
+    Call PoblarLista(listaLineas, Me.NomLineas)
+    Call ActualizarBarra
+
+    Me.Proceso.Caption = "Generando lista de cuadros.."
+    For i = 1 To tabla.ListRows.Count
+        With ListaSeleccionados
+            .AddItem tablaPrinc(i, 1)       'Nombre cuadro
+            .Selected(i - 1) = True             'Marcar seleccionado
+        End With
+    Next i
+    Call ActualizarBarra
+
+    Me.Proceso.Caption = "Añadiendo información.."
+    Me.NumCuadros.Caption = tabla.ListRows.Count
+    Me.NumLineas.Caption = k
+    Me.NumReserva.Caption = rsrv
+    Me.NumLineasTotal.Caption = k + rsrv
+
+    If boton Then
+        Call ActualizarBarra
+        Me.Proceso.Caption = "Buscador reiniciado."
+        Call ReiniciarBarra
+    End If
+
+    Exit Sub
+ErrorHandler:
+    'Si ocurre algun error ejecutar
+    MsgBox "Ha ocurrido un error al cargar listas de nombres: " & Err.Description, vbExclamation, "Error 101"
+    'Activar actualización de pantalla
+    Application.ScreenUpdating = True
+    'Activar calculacion automatica
+    Application.Calculation = xlCalculationAutomatic
+    Application.DisplayAlerts = True
+    Application.EnableEvents = True
+    Unload Me
+End Sub
+
+Sub CargarMediciones(Optional todos As Boolean)
+    If Not DebugMensajes Then On Error GoTo ErrorHandler
+
+    'Ancho y título de columnas
+    With listaMediciones
+        .ColumnCount = 8
+        .ColumnWidths = "280;100;60;40;40;40;50;70"
+    End With
+
+    'Elementos
+    If todos Then
+        'Dimensionar arrays
+        ReDim listaReserva(1 To UBound(tablaResultados, 1), 1 To 8)
+        ReDim listaSinReserva (1 To CInt(Me.NumLineas.Caption) + CInt(Me.NumCuadros.Caption), 1 To 8)
+        ' MsgBox CInt(Me.NumLineas.Caption) + CInt(Me.NumCuadros.Caption)
+        ' MsgBox UBound(tablaResultados, 1)
+        n = 1   'Contador no reserva
+        For i = 1 To UBound(tablaResultados, 1)
+            listaReserva(i, 1) = tablaResultados(i, 2)   'Descripcion
+            listaReserva(i, 2) = tablaResultados(i, 1)  'Cuadro
+            listaReserva(i, 3) = tablaResultados(i, 17) 'Tipo aislami
+            listaReserva(i, 4) = tablaResultados(i, 18) 'Agrupamiento
+            listaReserva(i, 5) = tablaResultados(i, 19) 'Fase
+            listaReserva(i, 6) = tablaResultados(i, 20) 'Manguera
+            listaReserva(i, 7) = tablaResultados(i, 16) 'Sección
+            listaReserva(i, 8) = tablaResultados(i, 26) 'Longitud
+            If Not tablaResultados(i, 50) Then   'No es reserva
+                listaSinReserva(n, 1) = tablaResultados(i, 2)   'Descripcion
+                listaSinReserva(n, 2) = tablaResultados(i, 1)  'Cuadro
+                listaSinReserva(n, 3) = tablaResultados(i, 17) 'Tipo aislami
+                listaSinReserva(n, 4) = tablaResultados(i, 18) 'Agrupamiento
+                listaSinReserva(n, 5) = tablaResultados(i, 19) 'Fase
+                listaSinReserva(n, 6) = tablaResultados(i, 20) 'Manguera
+                listaSinReserva(n, 7) = tablaResultados(i, 16) 'Sección
+                listaSinReserva(n, 8) = tablaResultados(i, 26) 'Longitud
+                n = n + 1
+            End If
+        Next i
+        listaMediciones.List = listaReserva
+    Else
+        Dim elemento As Variant
+        For Each elemento In listaMedicion
+            listaMediciones.AddItem elemento
+        Next
+    End If
+
+    Exit Sub
+ErrorHandler:
+    'Si ocurre algun error ejecutar
+    MsgBox "Ha ocurrido un error al cargar listas de mediciones: " & Err.Description, vbExclamation, "Error 102"
+    'Activar actualización de pantalla
+    Application.ScreenUpdating = True
+    'Activar calculacion automatica
+    Application.Calculation = xlCalculationAutomatic
+    Application.DisplayAlerts = True
+    Application.EnableEvents = True
+    Unload Me
+End Sub
+
+'===============================================================================================================================================
+'Ayudantes
+'===============================================================================================================================================
+Sub PoblarLista(ByVal Arr As Variant, ByVal cb As MSForms.ComboBox)
+    'Limpiar la caja de resultados
+    cb.Clear
+    'Insertar array
+    cb.List = Arr
+End Sub
+
+Function ExistePagina(nombrePag As String, Optional wb As Workbook) As Boolean
+    Dim test As Worksheet
+    If wb Is Nothing Then
+        Set wb = ThisWorkbook 'Usar el libro actual, si no se ha especificado otro
+    End If
+    On Error GoTo ErrorHandler
+    Set test = wb.Sheets(nombrePag)
+    ExistePagina = True
+    Exit Function
+ErrorHandler:
+    'Ha ocurrido un error al abrir la pagina, no existe
+    ExistePagina = False
+End Function
+
+Private Sub FiltrarComboBox(ByVal cb As MSForms.ComboBox, ByVal Arr As Variant)
+    Dim arr2 As Variant
+    If cb.Text <> "" Then
+        'arr2 = Application.Transpose(Application.Index(Arr,0,1))
+        cb.DropDown
+        cb.List = Filter(Arr, cb.Text, True, vbTextCompare)
+    Else
+        cb.List = Arr
+    End If
+End Sub
+'===============================================================================================================================================
+'Barra de progreso
+'===============================================================================================================================================
+Private Sub ActualizarBarra()
+    'Fracción por cada llamada
+    frac = progreso + frac
+    'Actualizar barra de progreso
+    With Me
+        .LabelProgress.Width = frac * (.FrameProgress.Width)
+        .Repaint
+    End With
+    DoEvents
+End Sub
+
+Private Sub ReiniciarBarra()
+    'Reiniciar barra de progreso secundaria
+    ' Application.Wait Now + #12:00:01 AM#
+    'SubProceso.Caption = ""
+    Me.LabelProgress.Width = 0
+    frac = 0
+    progreso = 0
+End Sub
+
+Private Sub IniciarBarra()
+    'Variables y textos
+    frac = 0
+    Me.LabelProgress.Width = 0
+    Me.Proceso.Caption = ""
+    'Variable de parada
+    Cerrar = False
+End Sub
+
+'===============================================================================================================================================
+'Ruleta
+'===============================================================================================================================================
+Private Sub NomCuadros_MouseDown(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
+    UnHook_Mouse
+    Call Hook_Mouse(Me.NomCuadros)
+End Sub
+
+Private Sub NomCuadros_Exit(ByVal Cancel As MSForms.ReturnBoolean)
+    UnHook_Mouse
+End Sub
+
+Private Sub NomLineas_MouseDown(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
+    UnHook_Mouse
+    Call Hook_Mouse(Me.NomLineas)
+End Sub
+
+Private Sub NomLineas_Exit(ByVal Cancel As MSForms.ReturnBoolean)
+    UnHook_Mouse
+End Sub
+
+Private Sub ListaSeleccionados_MouseDown(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
+    UnHook_Mouse
+    Call Hook_Mouse(Me.ListaSeleccionados)
+End Sub
+
+Private Sub ListaSeleccionados_Exit(ByVal Cancel As MSForms.ReturnBoolean)
+    UnHook_Mouse
+End Sub
+
+Private Sub listaMediciones_MouseDown(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
+    UnHook_Mouse
+    Call Hook_Mouse(Me.listaMediciones)
+End Sub
+
+Private Sub listaMediciones_Exit(ByVal Cancel As MSForms.ReturnBoolean)
+    UnHook_Mouse
+End Sub
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+'Frame1 Specific Code
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+' Private Sub Frame1_Enter()
+'     Call Hook_Mouse(Me.Frame1)
+' End Sub
+' Private Sub Frame1_MouseDown(ByVal Button As Integer, ByVal Shift As Integer, ByVal X As Single, ByVal Y As Single)
+' Call Hook_Mouse(Me.Frame1)
+' End Sub
+' Private Sub Frame1_Exit(ByVal Cancel As MSForms.ReturnBoolean)
+'     UnHook_Mouse
+' End Sub
