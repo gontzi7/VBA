@@ -1,0 +1,288 @@
+Option Explicit
+
+Dim Datos As Worksheet
+Dim Conductores As Worksheet
+Dim progreso As Double
+Dim frac As Double
+Dim cantidApoyo As Integer
+Dim x As Long
+Dim resultado As Double
+Dim elapsedTime As Double
+Dim celdaSeleccionada As Range
+Dim timerEDS As Timer
+
+Function ExistePagina(nombrePag As String, Optional wb As Workbook) As Boolean
+    Dim test As Worksheet
+    If wb Is Nothing Then
+        Set wb = ThisWorkbook 'Usar el libro actual, si no se ha especificado otro
+    End If
+    On Error GoTo ErrorHandler
+    Set test = wb.Sheets(nombrePag)
+    ExistePagina = True
+    Exit Function
+ErrorHandler:
+    'Ha ocurrido un error al abrir la pagina, no existe
+    ExistePagina = False
+End Function
+
+Sub Calculos(Optional cerrar As String)
+    Call contra
+
+    Dim flecha As Double
+    Dim temp As Double
+    Dim tipoCond As String
+    Dim vano As Double
+    Dim j As Long
+    Dim segPerOp As Double
+    Dim segPerOpL As Double
+    Dim segPerOpC As Double
+    Dim ans As Integer
+    Dim texto As String
+    
+    Set Datos = ThisWorkbook.Sheets("Datos")
+    Set Conductores = ThisWorkbook.Sheets("Conductores")
+    Set celdaSeleccionada = Selection
+    'Desactivar actulaizaciones de pantalla
+    Application.ScreenUpdating = False
+    Application.Calculation = xlCalculationAutomatic
+    'Inicializar parametros
+    j = 2
+    x = 1
+    progreso = 0
+    frac = 0
+    segPerOpL = 11
+    segPerOpC = 2.5
+    cantidApoyo = Datos.Range("CuantosVanos").Value
+    'Resetear botones
+    Call MsgBoxCustom_Reset(0)
+    'Llamar a contador de columnas
+    Call Columnas
+    Datos.Select
+    'Borrar columna de EDS
+    Datos.Range("I2:I1048576").Select
+    Selection.ClearContents
+    Call InicioTimerEDS
+    'Valor de fracciones para barra de progreso
+    progreso = (1 / cantidApoyo) / 3
+    If Datos.Range("PaginasCalc") > 0 Then
+        'Avisar de que hay paginas calculadas
+        MsgBoxCustom_Set vbYes, "Borrar"
+        MsgBoxCustom_Set vbNo, "Continuar"
+        MsgBoxCustom_Set vbCancel, "Cancelar"
+        texto = "Se han detectado paginas de apoyos calculados, calcular EDS con estas paginas" & _
+        "" & " calculadas hara que el calculo del EDS tarde " & segPerOpL * cantidApoyo & " segundos, en vez de " & segPerOpC * cantidApoyo & " segundos, borrar?"
+        MsgBoxCustom ans, texto, (vbYesNoCancel + vbQuestion)
+        If ans = 6 Then
+            'Se ha decidido borrar las paginas
+            Call BorrarHojas("N")
+            segPerOp = segPerOpC
+            'Desactivar actulaizaciones de pantalla
+            Application.ScreenUpdating = False
+            Application.Calculation = xlCalculationAutomatic
+        ElseIf ans = 7 Then
+            'Se ha decidido seguir con el programa sin borrar apoyos
+            segPerOp = segPerOpL
+        Else
+            'Se ha decidido cancelar, salir de la macro
+            Call CerrarMacroEDS
+        End If
+    Else
+        'Si no hay paginas de apoyo calculadas
+        segPerOp = 2.5
+    End If
+    'Inicializar barra de progreso
+    ufProgress.LabelProgress.Width = 0
+    ufProgress.LabelCaption.Caption = "Inicializand calculo de EDS.." & vbCrLf & _
+        "Por favor, no abra o seleccione otro documento de excel."
+    ufProgress.TiempoEstimado.Caption = "Tiempo estimado para completar la operación: " & cantidApoyo * segPerOp & " segundos."
+    ufProgress.Show
+    Conductores.Unprotect Password:=contraseñaPaginas
+    'Loopear por cada apoyo hasta que no haya zona definida
+    Do While Datos.Cells(j, 1) <> ""
+        'Si es un apoyo y no un separador, calcular EDS
+        If Datos.Cells(j, 1) <> "Zona" And Datos.Cells(j + 1, 2) <> "" Then
+            'Borrar datos de memoria anteriores
+            tipoCond = ""
+            flecha = 0
+            vano = 0
+            temp = 0
+            ufProgress.LabelCaption.Caption = "Procesando vano nº " & x & " de " & cantidApoyo & vbCrLf & _
+                 "Guardando parametros en memoria.." & vbCrLf & _
+                 "Por favor, no abra o seleccione otro documento de excel."
+            Call ActualizarBarraEDS
+            tipoCond = Datos.Cells(j, colTipoCond).Text
+            flecha = Datos.Cells(j, colFlech).Value
+            temp = Datos.Cells(j, colTemp).Value
+            vano = Datos.Cells(j, colVano).Value
+            'Mirar si alguno de los valores es nulo
+            If tipoCond = "" Or flecha = 0 Or temp = 0 Or vano = 0 Then
+                MsgBox "No hay datos suficientes para el calculo de EDS en la linea nº " & j & vbCrLf & _
+                    "Se cerrará la macro, rellene datos necesarios y ejecute de nuevo.", vbCritical
+                Datos.Range(Cells(j, colFlech), Cells(j, colTemp)).Select
+                Call CerrarMacroEDS
+            End If
+            Call CalcularEDS(flecha, temp, tipoCond, vano)
+            'Si se ha encontrado un valor, poner en tabla de Datos
+            If resultado <> 0 Then
+                Datos.Select
+                Datos.Cells(j, colEDS) = resultado
+            Else
+                MsgBox "Solver no ha podido encontrar un valor de EDS para satisfacer los valores de flecha, temperatura y tipo de conductor.", vbInformation
+                Call CerrarMacroEDS
+            End If
+            x = x + 1
+        End If
+        j = j + 1
+    Loop
+    Call FinalTimerEDS
+    'Si se ha llamado desde creador de documentos no cerrar ni mostrar mensaje de confirmación
+    If cerrar = "" Then
+        If Datos.Range("Debug") Then
+            MsgBox "Terminado calculados " & x - 1 & " EDS sin ningún error." & vbCrLf & "Tiempo de ejecución: " & Round(elapsedTime, 2) & " segundos", vbInformation
+        End If
+        Call CerrarMacroEDS
+    End If
+    Conductores.Protect Password:=contraseñaPaginas
+    Application.Calculation = xlCalculationAutomatic
+    Application.DisplayAlerts = True
+End Sub
+
+Private Sub CalcularEDS(ByVal valorFlecha As Double, ByVal valorTemp As Double, ByVal valorConductor As String, ByVal valorVano As Double)
+    'Ejecutar el solver para conseguir valor del EDS
+    On Error GoTo ErrorHandler
+    'Poner valor de temperatura en celda
+    Conductores.Select
+    'Establecer tabla para reolver EDS
+    Conductores.Range("EDSSolver") = 0
+    Conductores.Range("Temperatura") = valorTemp
+    Conductores.Range("ConductorEDS") = valorConductor
+    Conductores.Range("VanoEDS") = valorVano
+    resultado = 0
+    'Actualizar barra de progreso con titulo correcto
+    ufProgress.LabelCaption.Caption = "Procesando vano nº " & x & " de " & cantidApoyo & vbCrLf & _
+            "Calculando EDS.." & vbCrLf & _
+            "Por favor, no abra o seleccione otro documento de excel."
+    Call ActualizarBarraEDS
+    'Parametros para modelo de Solver
+    SolverReset
+    SolverOk SetCell:="Flecha", MaxMinVal:=3, ValueOf:=valorFlecha, ByChange:="EDSSolver", Engine _
+        :=1, EngineDesc:="GRG Nonlinear"
+    'Ejecutar Solver y esperar a que llegue a una solución
+    SolverSolve UserFinish:=True
+    'Mirar si ha llegado a una solucion o ha ocurrido un error
+    Select Case SolverSolve(True)
+        Case 0, 1, 2, 14, 17
+            'Guardar resultado como double
+            Conductores.Select
+            resultado = Range("EDSSolver").Value
+            ufProgress.LabelCaption.Caption = "Procesando vano nº " & x & " de " & cantidApoyo & vbCrLf & _
+                "EDS calculado, pegando valores en tabla.." & vbCrLf & _
+                "Por favor, no abra o seleccione otro documento de excel."
+            Call ActualizarBarraEDS
+            Exit Sub
+        Case 3
+            ' Solver stopped due to reaching the maximum iteration limit
+            MsgBox "Solver stopped due to reaching the maximum iteration limit."
+            Call CerrarMacroEDS
+        Case 4
+            ' Objective cell values do not converge
+            MsgBox "Objective cell values do not converge."
+            Call CerrarMacroEDS
+        Case 5
+            ' Solver could not find a feasible solution
+            MsgBox "Solver could not find a feasible solution."
+            Call CerrarMacroEDS
+        Case 6
+            ' Solver stopped at user's request
+            MsgBox "Solver stopped at user's request."
+            Call CerrarMacroEDS
+        Case 7
+            ' Linearity conditions required by LP Solver are not satisfied
+            MsgBox "Linearity conditions required by LP Solver are not satisfied."
+            Call CerrarMacroEDS
+        Case 8
+            ' Problem is too large for Solver to handle
+            MsgBox "Problem is too large for Solver to handle."
+            Call CerrarMacroEDS
+        Case 9
+            ' Solver encountered an error value in a target or constraint cell
+            MsgBox "Solver encountered an error value in a target or constraint cell."
+            Call CerrarMacroEDS
+        Case 10
+            ' Solver stopped due to reaching the maximum time limit
+            MsgBox "Solver stopped due to reaching the maximum time limit."
+            Call CerrarMacroEDS
+        Case 11
+            ' Not enough memory available to solve the problem
+            MsgBox "Not enough memory available to solve the problem."
+            Call CerrarMacroEDS
+        Case 13
+            ' Error in model. Please verify all cells and constraints are valid.
+            MsgBox "Error in model. Please verify all cells and constraints are valid."
+            Call CerrarMacroEDS
+        Case 15
+            ' Stop chosen when the maximum number of feasible [integer] solutions was reached
+            MsgBox "Stop chosen when the maximum number of feasible [integer] solutions was reached."
+            Call CerrarMacroEDS
+        Case 16
+            ' Stop chosen when the maximum number of feasible [integer] subproblems was reached
+            MsgBox "Stop chosen when the maximum number of feasible [integer] subproblems was reached."
+            Call CerrarMacroEDS
+        Case 18
+            ' All variables must have both upper and lower bounds
+            MsgBox "All variables must have both upper and lower bounds."
+            Call CerrarMacroEDS
+        Case 19
+            ' Variable bounds conflict in binary or alldifferent constraint
+            MsgBox "Variable bounds conflict in binary or alldifferent constraint."
+            Call CerrarMacroEDS
+        Case 20
+            ' Lower and upper bounds on variables allow no feasible solution
+            MsgBox "Lower and upper bounds on variables allow no feasible solution."
+            Call CerrarMacroEDS
+        Case Else
+            ' Unexpected return value from SolverSolve
+            MsgBox "Unexpected return value from SolverSolve."
+            Call CerrarMacroEDS
+    End Select
+
+ErrorHandler:
+    MsgBox "Ha ocurrido un error al ejecutar Solver: " & Err.Description
+    Call CerrarMacroEDS
+End Sub
+
+Private Sub ActualizarBarraEDS()
+    'Fracción por cada llamada
+    frac = progreso + frac
+    'Actualizar barra de progreso
+    With ufProgress
+        .LabelProgress.Width = frac * (.FrameProgress.Width)
+        .Repaint
+    End With
+    DoEvents
+End Sub
+
+Sub CerrarMacroEDS()
+    'Finalizar programa despues del error
+    Conductores.Protect Password:=contraseñaPaginas
+    Datos.Select
+    celdaSeleccionada.Select
+    'Cerrar barra de progreso al finalizar
+    Unload ufProgress
+    'Activar actualización de pantalla
+    Application.ScreenUpdating = True
+    'Activar calculacion automatica
+    Application.Calculation = xlCalculationAutomatic
+    Application.DisplayAlerts = True
+    End
+End Sub
+
+Sub InicioTimerEDS()
+    Set timerEDS = New Timer
+    timerEDS.StartTimer
+End Sub
+
+Sub FinalTimerEDS()
+    timerEDS.StopTimer
+    elapsedTime = timerEDS.GetElapsedTime
+End Sub

@@ -1,0 +1,93 @@
+Option Explicit
+
+Dim numApoyo As String
+Dim n As Long
+Dim Apoyo As Worksheet
+Dim Datos As Worksheet
+
+Function ExistePagina(nombrePag As String, Optional wb As Workbook) As Boolean
+    Dim test As Worksheet
+    If wb Is Nothing Then
+        Set wb = ThisWorkbook 'Usar el libro actual, si no se ha especificado otro
+    End If
+    On Error GoTo ErrorHandler
+    Set test = wb.Sheets(nombrePag)
+    ExistePagina = True
+    Exit Function
+ErrorHandler:
+    'Ha ocurrido un error al abrir la pagina, no existe
+    ExistePagina = False
+End Function
+
+Sub BorrarHojas(Optional aviso As String)
+    Call contra
+
+    Dim OutPut As Integer
+
+    Set Datos = ThisWorkbook.Sheets("Datos")
+    n = 2
+    'Resetear botones
+    Call MsgBoxCustom_Reset(0)
+    Call Columnas
+    If aviso = "" Then
+        'Mensaje de confirmacion
+        OutPut = MsgBox("Se borrarán las hojas de los apoyos, continuar?", vbYesNo + vbExclamation)
+    Else
+        OutPut = 6
+    End If
+    If OutPut = 6 Then
+        'Desactivar actulaizaciones de pantalla
+        Application.ScreenUpdating = False
+        'Desactivar calculacion automatica hasta despues de pegar todos los valores
+        Application.Calculation = xlCalculationManual
+        Application.DisplayAlerts = False
+        'Limpiar hojas de apoyos
+        Do While Datos.Cells(n, 1) <> ""
+            numApoyo = Datos.Cells(n, colNum).Text
+            'Si no es un espacio en blanco, borrar
+            If Datos.Cells(n, colNum).Text <> "" And ExistePagina(numApoyo) Then
+                Set Apoyo = ThisWorkbook.Sheets(numApoyo)
+                Apoyo.Select
+                ActiveWindow.SelectedSheets.Delete
+                'Quitar vinculos de titulos
+                Datos.Select
+                Datos.Cells(n, colNum).Select
+                Selection.Hyperlinks(1).Delete
+                With Selection
+                    .HorizontalAlignment = xlCenter
+                    .VerticalAlignment = xlCenter
+                    .WrapText = False
+                    .Orientation = 0
+                    .AddIndent = False
+                    .IndentLevel = 0
+                    .ShrinkToFit = False
+                    .ReadingOrder = xlContext
+                    With .Font
+                        .Name = "Calibri"
+                        .Size = 12
+                    End With
+                    With .Borders
+                        .LineStyle = xlContinuous
+                        .ColorIndex = 0
+                        .TintAndShade = 0
+                        .Weight = xlThin
+                    End With
+                End With
+                Datos.Cells(n, colCr) = ""
+            End If
+            n = n + 1
+        Loop
+        Application.DisplayAlerts = True
+        Datos.Select
+        'Quitar combinado de celdas
+        Range("V2:V1048576").MergeCells = False
+        Range("V2:V1048576").ClearContents
+        'Activar actualización de pantalla
+        Application.ScreenUpdating = True
+        'Activar calculacion automatica
+        Application.Calculation = xlCalculationAutomatic
+    Else
+        'Se ha decidido no continuar con la operación
+        Exit Sub
+    End If
+End Sub

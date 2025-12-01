@@ -1,0 +1,146 @@
+Option Explicit
+
+Dim progreso As Double
+Dim frac As Double
+Dim cantidApoyo As Long
+Dim startTime As Double
+Dim endTime As Double
+Dim elapsedTime As Double
+Dim timerDistancias As Timer
+
+Sub Distancias()
+    Call contra
+
+    Dim sh As Worksheet
+    Dim j As Long
+    Dim x As Long
+    Dim segPerOp As Double
+    Dim segPerOpL As Double
+    Dim segPerOpC As Double
+    Dim ans As Integer
+    Dim texto As String
+
+    Set sh = ThisWorkbook.Sheets("Datos")
+    segPerOpL = 1.6
+    segPerOpC = 0.2
+    cantidApoyo = sh.Range("CuantosVanos").Value
+    If sh.Range("PaginasCalc") > 0 Then
+        'Avisar de que hay paginas calculadas
+        MsgBoxCustom_Set vbYes, "Borrar"
+        MsgBoxCustom_Set vbNo, "Continuar"
+        MsgBoxCustom_Set vbCancel, "Cancelar"
+        texto = "Se han detectado paginas de apoyos calculados, calcular distnacias con estas paginas" & _
+        "" & " calculadas hara que el calculo de distancias tarde " & segPerOpL * cantidApoyo & " segundos, en vez de " & segPerOpC * cantidApoyo & " segundos, borrar?"
+        MsgBoxCustom ans, texto, (vbYesNoCancel + vbQuestion)
+        If ans = 6 Then
+            'Se ha decidido borrar las paginas
+            Call BorrarHojas("N")
+            segPerOp = segPerOpC
+            'Desactivar actulaizaciones de pantalla
+            Application.ScreenUpdating = False
+            Application.Calculation = xlCalculationAutomatic
+        ElseIf ans = 7 Then
+            'Se ha decidido seguir con el programa sin borrar apoyos
+            segPerOp = segPerOpL
+        Else
+            'Se ha decidido cancelar, salir de la macro
+            Call CerrarMacroDistancias
+        End If
+    Else
+        'Si no hay paginas de apoyo calculadas
+        segPerOp = segPerOpC
+    End If
+    Call InicioTimerDistancias
+    'Desactivar actulaizaciones de pantalla
+    Application.ScreenUpdating = False
+    'Activar calculo automatico porsiacaso
+    Application.Calculation = xlCalculationAutomatic
+    'Resetear botones
+    Call MsgBoxCustom_Reset(0)
+    Call Columnas
+    'Fracciones para barra de progreso
+    progreso = (1 / (cantidApoyo)) / 4
+    frac = 0
+    x = 1
+    'Inicializar barra de progreso
+    ufProgress.LabelProgress.Width = 0
+    ufProgress.LabelCaption.Caption = ""
+    ufProgress.TiempoEstimado.Caption = "Tiempo estimado para completar la operación: " & cantidApoyo * segPerOp & " segundos."
+    ufProgress.Show
+    'Borrar tabla
+    Sheets("Distancias").Select
+    Range("A3:J1048576").Select
+    Selection.ClearContents
+    'Tensión línea
+    Sheets("Distancias").Range("P3") = Sheets("REF 1").Range("J1")
+    Sheets("Conductores").Unprotect Password:=contraseñaPaginas
+    'Resetear formulas
+    Sheets("Conductores").Select
+    Range("F17").FormulaR1C1 = "=Distancias!R3C15"
+    Range("F18").FormulaR1C1 = "=Distancias!R13C13"
+    Range("F19").FormulaR1C1 = "=Distancias!R12C13"
+    For j = 2 To 178
+        'Mientras haya un valor de EDS, pegar valores en tabla
+        If sh.Cells(j, 9) > 0 Then
+            ufProgress.LabelCaption.Caption = "Calculando vano nº " & x & " de " & cantidApoyo & vbCrLf & _
+                "Por favor, no abra o seleccione otro documento de excel."
+            Call ActualizarBarraDist
+            Sheets("Conductores").Range("F20") = sh.Cells(j, 1)
+            With Sheets("Distancias")
+                .Select
+                .Range("O3") = sh.Cells(j, colTipoCond)
+                .Range("M8") = sh.Cells(j, colAmarre)
+                .Range("M12") = sh.Cells(j, colVano)
+                .Range("M13") = sh.Cells(j, colEDS)
+                Call ActualizarBarraDist
+                .Range("M14") = sh.Cells(j, colNomVano)
+                .Cells(j + 1, 1) = Sheets("Distancias").Range("M14")
+                .Cells(j + 1, 2) = Sheets("Distancias").Range("M12")
+                .Cells(j + 1, 3) = Sheets("Distancias").Range("O3")
+                .Cells(j + 1, 4) = Sheets("Distancias").Range("M13")
+                Call ActualizarBarraDist
+                .Cells(j + 1, 6) = Sheets("Distancias").Range("M8")
+                .Cells(j + 1, 7) = Sheets("Distancias").Range("M7")
+            End With
+            Call ActualizarBarraDist
+            x = x + 1
+        End If
+    Next
+    'Mensaje de confirmación
+    Call FinalTimerDistancias
+    If sh.Range("Debug") Then
+        MsgBox "Calculadas distancias minimas de " & x - 1 & " vanos sin ningún error." & vbCrLf & "Tiempo de ejecución: " & Round(elapsedTime, 2) & " segundos", vbInformation
+    End If
+    'Cerrar macro
+    Call CerrarMacroDistancias
+End Sub
+
+Private Sub ActualizarBarraDist()
+    'Fracción por cada llamada
+    frac = progreso + frac
+    'Actualizar barra de progreso
+    With ufProgress
+        .LabelProgress.Width = frac * (.FrameProgress.Width)
+        .Repaint
+    End With
+    DoEvents
+End Sub
+
+Sub CerrarMacroDistancias()
+    Sheets("Conductores").Protect Password:=contraseñaPaginas
+    Sheets("Datos").Select
+    'Cerrar barra de progreso al finalizar
+    Unload ufProgress
+    Application.ScreenUpdating = True
+    End
+End Sub
+
+Sub InicioTimerDistancias()
+    Set timerDistancias = New Timer
+    timerDistancias.StartTimer
+End Sub
+
+Sub FinalTimerDistancias()
+    timerDistancias.StopTimer
+    elapsedTime = timerDistancias.GetElapsedTime
+End Sub

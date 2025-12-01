@@ -1,0 +1,387 @@
+Option Explicit
+
+Dim wb As Workbook
+Dim Datos As Worksheet
+Dim Formato As Worksheet
+Dim ApoyoSh As Worksheet
+Dim Tabla As Worksheet
+Dim wordApp As Object
+Dim wordDoc As Object
+Dim elapsedTime As Double
+Dim timerCorrec As Timer
+Dim progreso As Double
+Dim frac As Double
+Dim primL As Long
+Dim ultL As Long
+Dim cell As Range
+Dim terminado As Boolean
+Dim filaApoyo As Long
+Dim OutPut As Integer
+Dim filePath As String
+Dim cancelar As Boolean
+
+Function BuscarFilaApoyo(ByVal numeroApoyo As String, ByVal col As String)
+    Dim columnaAbuscar As Range
+    Dim columnaResult As Long
+    'Columna a buscar el string
+    Set columnaAbuscar = Range(col & ":" & col)
+    'Buscar el string en el rango
+    Dim cell As Range
+    For Each cell In columnaAbuscar
+        If cell.Value = numeroApoyo Then
+            columnaResult = cell.Row
+            Exit For
+        End If
+    Next cell
+    If columnaResult > 0 Then
+        BuscarFilaApoyo = columnaResult
+    Else
+        MsgBox "No se ha encontrado el apoyo"
+        Call CerrarMacroCorreccion
+    End If
+End Function
+
+Function ContarBlancos(rngS As String, cantContar As Long) As Long
+    Dim count As Integer
+    Dim cell As Range
+    Dim x As Long
+    Dim rng As Range
+    'Loopear cada celda buscando celdas blancas
+    Set rng = Datos.Range(rngS)
+    count = 0
+    x = 0
+    For Each cell In rng
+        If cell.Text = "" Then
+            'Si esta vacia, sumar 1
+            count = count + 1
+        Else
+            'Si tiene valor sumar x
+            x = x + 1
+        End If
+        If x = cantContar Then
+            'Parar cuando se hayan contado
+            Exit For
+        End If
+    Next cell
+    ContarBlancos = count
+End Function
+
+Function Clipboard(Optional StoreText As String) As String
+    Dim x As Variant
+    'Guardar como variante para soporte de VBA 64-bit
+    x = StoreText
+    'Crear objeto de HTMLFile
+    With CreateObject("htmlfile")
+        With .parentWindow.clipboardData
+            Select Case True
+                Case Len(StoreText)
+                'Guardar en portapapeles
+                    .setData "text", x
+                Case Else
+                'Leer de portapapeles
+                    Clipboard = .GetData("text")
+            End Select
+        End With
+    End With
+End Function
+
+Sub CorregirApoyo()
+    On Error GoTo ErrorHandler
+
+    Call contra
+
+
+    Dim Apoyo As String
+    Dim numApoyo As Long
+    Dim filaTabla As Long
+
+    Set wb = ThisWorkbook
+    Set Datos = ThisWorkbook.Sheets("Datos")
+    Set Formato = ThisWorkbook.Sheets("FormatoTablas")
+    Set Tabla = ThisWorkbook.Sheets("Tabla")
+    frac = 0
+    progreso = 0
+    Call Columnas
+    Datos.Select
+    Apoyo = Datos.Range("CrearApoyo").Text
+    'Conseguir fila del apoyo
+    filaApoyo = BuscarFilaApoyo(Apoyo, "B")
+    'Eliminar todos los apyos calculados y recalcular el tramo del solicitante
+    Call BorrarHojas("N")
+    'Desactivar actulaizaciones de pantalla
+    Application.ScreenUpdating = False
+    'Desactivar calculacion automatica hasta despues de pegar todos los valores
+    Application.Calculation = xlCalculationManual
+    'Borrar portapapeles
+    Application.CutCopyMode = False
+    Call InicioTimerCorrec
+    'Calcular todo el rango de apoyos
+    Dim ws As Worksheet
+    Dim dataRange As Range
+    Dim firstRow As Long
+    Dim lastRow As Long
+    Dim isEmptyCell As Boolean
+    Dim n As Long
+    'Worksheet y el rango de datos
+    Set ws = ThisWorkbook.Worksheets("Datos")
+    Set dataRange = ws.Range("B2:B178")
+    'Inicializar variables
+    firstRow = dataRange.Row
+    isEmptyCell = False
+    n = 1
+    Call ActualizarBarra
+    'Loopear en el rango
+    For Each cell In dataRange
+        'Mirar si la celda esta vacia
+        If IsEmpty(cell) Then
+            If Not isEmptyCell Then
+                'Celda vacia despues de dato
+                lastRow = cell.Offset(-1).Row
+                'Procesar el rango de datos
+                Call ProcesarRango(ws.Range(ws.Cells(firstRow, "A"), ws.Cells(lastRow, "A")))
+                n = n + 1
+                If terminado = True Then
+                    Exit For
+                End If
+            End If
+            isEmptyCell = True
+        Else
+            If isEmptyCell Then
+                'Primera celda vacia despues de celda con dato
+                firstRow = cell.Row
+                isEmptyCell = False
+            End If
+        End If
+    Next cell
+    Datos.Range("CantApoyo") = ultL - primL + 1
+    'Con la fila conseguir el numero de apoyo
+    numApoyo = filaApoyo - ContarBlancos("B2:B" & filaApoyo, Datos.Range("CantApoyo"))
+    'Poner parametros correctos en celdas de generación de apoyo
+    Datos.Range("PrimerApoyo").Value = primL - 1 - ContarBlancos("B2:B" & primL, primL - 1)
+    'Calcular el apoyo
+    Call GenerarApoyos("C")
+    'Barra de progreso
+    ufProgress.LabelProgress.Width = 0
+    ufProgress.LabelCaption.Caption = "Creando nuevo documento.." & vbCrLf & _
+        "Por favor, no abra o seleccione otro documento de Excel o Word."
+    ufProgress.TiempoEstimado.Caption = "Tiempo estimado para completar la operación: " & 15 & " segundos."
+    ufProgress.Show
+    Set wordApp = CreateObject("Word.Application")
+    wordApp.Application.Visible = True
+    Tabla.Select
+    filaTabla = BuscarFilaApoyo(Apoyo, "A")
+    'Mirar si las tablas dan bien en esfuerzos
+    If Tabla.Cells(filaTabla, 13) = "INCORRECTO" Then
+        'EL apoyo no cumple
+        OutPut = MsgBox("El apoyo a calcular no cumple con las necesidades de esfuerzo, continuar?", vbYesNo + vbExclamation)
+
+        If OutPut = 6 Then
+            'Seguir con el programa
+        Else
+            'Parar el programa
+            Call CerrarMacroCorreccion
+        End If
+    End If
+    Set ApoyoSh = ThisWorkbook.Sheets(Apoyo)
+    progreso = 1 / 5
+    Call ActualizarBarra
+    'Crear nuevo documento
+    Set wordDoc = wordApp.Documents.Add
+    'Ruta y nombre del documento
+    filePath = ThisWorkbook.Path & "\Correccion.docx"
+    'Guardar y activar el documento
+    Call MirarSiAbierto
+    wordDoc.Activate
+    Call ActualizarBarra
+    ufProgress.LabelCaption.Caption = "Dando formato.." & vbCrLf & _
+        "Por favor, no abra o seleccione otro documento de Excel o Word."
+    DoEvents
+    'Formato de estilo de texto normal
+    With wordDoc.Styles("Normal").ParagraphFormat
+        .SpaceBeforeAuto = False
+        .SpaceAfter = 0
+        .SpaceAfterAuto = False
+    End With
+    With wordDoc.Styles("Normal")
+        .NoSpaceBetweenParagraphsOfSameStyle = False
+        .AutomaticallyUpdate = False
+        .BaseStyle = ""
+        .NextParagraphStyle = "Normal"
+        .Font.Name = "Times New Roman"
+        .Font.Size = 12
+    End With
+    With wordApp.Selection
+        .PageSetup.Orientation = wdOrientLandscape
+        .Font.Name = "Times New Roman"
+        .Font.Size = 12
+        .Font.Bold = True
+    End With
+    Formato.Unprotect Password:=contraseñaPaginas
+    ufProgress.LabelCaption.Caption = "Procesando apoyo" & vbCrLf & _
+        "Por favor, no abra o seleccione otro documento de Excel o Word."
+    DoEvents
+    Call ActualizarBarra
+    'Poner datos en tabla con formato
+    ApoyoSh.Select
+    Call Formateo
+    'Nombre y funcion de apoyo
+    Formato.Range("NombreApoyo") = Apoyo
+    Formato.Range("Funcion") = Datos.Cells(filaApoyo, colFuncion)
+    'Escribir titulo de tablas
+    With wordApp.Selection
+        .TypeText Text:="Cálculo de los esfuerzos resultantes en el"
+        If Datos.Cells(filaApoyo, colNuevo) = True Then
+            .TypeText Text:=" nuevo apoyo nº "
+        Else
+            .TypeText Text:=" apoyo existente nº "
+        End If
+        .TypeText Text:=Apoyo
+        .TypeParagraph
+        .TypeParagraph
+    End With
+    Call ActualizarBarra
+    'Borrar portapapeles
+    Application.CutCopyMode = False
+    'Pegar tabla con formato
+    Formato.Select
+    Range("A1:G27").Select
+    Application.Calculation = xlCalculationAutomatic
+    Application.Wait Now + #12:00:01 AM#
+    Application.Calculation = xlCalculationManual
+    Selection.Copy
+    wordDoc.Activate
+    'Rutina por si ocurre un error al pegar la tabla
+    Dim retryCount As Integer
+    retryCount = 3
+    On Error Resume Next
+    Do
+        wordDoc.Application.Selection.PasteExcelTable _
+        LinkedToExcel:=False, _
+        WordFormatting:=False, _
+        RTF:=False
+        If Err.Number <> 0 Then
+            'Ha ocurrido un error
+            If retryCount > 0 Then
+                ufProgress.LabelCaption.Caption = "Ha ocurrido un error pegando la tabla, reintentando.." & vbCrLf & _
+                    "Por favor, no abra o seleccione otro documento de Excel o Word."
+                retryCount = retryCount - 1
+                Err.Clear
+                'Volver a intentar en 2 segundos
+                Application.Wait Now + #12:00:02 AM#
+            Else
+                'Se ha reintentado 3 veces y sigue fallando
+                MsgBox "Codigo ha fallado 3 veces seguidas, cerrando macro.."
+                Call CerrarMacroCorreccion
+            End If
+        Else
+            'Se ha ejecutado correctamente, salir del loop
+            Exit Do
+        End If
+    Loop
+    ufProgress.LabelCaption.Caption = "Finalizando.." & vbCrLf & _
+        "Por favor, no abra o seleccione otro documento de Excel o Word."
+    Call ActualizarBarra
+    'Finalizar ejecución
+    Call FinalTimerCorrec
+    If Datos.Range("Debug") Then
+        MsgBox "Creada la tabla sin ningún error. Guardado el documento en: " & ThisWorkbook.Path & "\Correccion.docx" & vbCrLf & "Tiempo de ejecución: " & Round(elapsedTime, 2) & " segundos", vbInformation
+    End If
+    Clipboard (ThisWorkbook.Path & "\Correccion.docx")
+    'Cerrar macro
+    Call CerrarMacroCorreccion
+
+ErrorHandler:
+    'Si ocurre algun error ejecutar
+    MsgBox "Ha ocurrido un error en el programa: " & Err.Description, vbExclamation
+    'Cerrar macro
+    Call CerrarMacroCorreccion
+End Sub
+
+Sub InicioTimerCorrec()
+    Set timerCorrec = New Timer
+    timerCorrec.StartTimer
+End Sub
+
+Sub FinalTimerCorrec()
+    timerCorrec.StopTimer
+    elapsedTime = timerCorrec.GetElapsedTime
+End Sub
+
+Sub CerrarMacroCorreccion()
+    Formato.Protect Password:=contraseñaPaginas
+    Datos.Select
+    'Limpiar objetos y cerrar word guardando cambios
+    If Not wordDoc Is Nothing Then
+        If Not cancelar Then
+            wordApp.ActiveDocument.Save
+        End If
+        wordApp.ActiveDocument.Close
+        wordApp.Quit
+    End If
+    Set wordApp = Nothing
+    'Cerrar barra de progreso al finalizar
+    Unload ufProgress
+    'Activar actulaizaciones de pantalla
+    Application.ScreenUpdating = True
+    'Activar calculacion automatica
+    Application.Calculation = xlCalculationAutomatic
+    End
+End Sub
+
+Private Sub ActualizarBarra()
+    'Fracción por cada llamada
+    frac = progreso + frac
+    'Actualizar barra de progreso
+    With ufProgress
+        .LabelProgress.Width = frac * (.FrameProgress.Width)
+        .Repaint
+    End With
+    DoEvents
+End Sub
+
+Private Sub Formateo()
+    'Borrar portapapeles
+    Application.CutCopyMode = False
+    Application.Calculation = xlCalculationAutomatic
+    'Seleccionar datos de pagina de apoyo
+    Range("A60:E63").Select
+    Selection.Copy
+    'Pegar en pagina de formato
+    Sheets("FormatoTablas").Select
+    Range("A30").Select
+    Selection.PasteSpecial Paste:=xlPasteValues, Operation:=xlNone, SkipBlanks _
+        :=False, Transpose:=False
+    Application.Calculation = xlCalculationManual
+    'Borrar portapapeles
+    Application.CutCopyMode = False
+End Sub
+
+Private Sub ProcesarRango(rng As Range)
+    'Guardar datos de primer y ultimo apoyo
+    primL = rng.Row
+    ultL = rng.Rows(rng.Rows.count).Row
+    'Si el apoyo seleccionado esta dentro del rango de apoyos, terminar busqueda
+    If filaApoyo >= primL And filaApoyo <= ultL Then
+        terminado = True
+    End If
+End Sub
+
+Private Sub MirarSiAbierto()
+    'Si da error al guardarlo en la ruta, pedir a usuario cerrar el documento
+    On Error GoTo ErrorHandler
+    wordDoc.SaveAs2 filePath
+    cancelar = False
+    Exit Sub
+
+ErrorHandler:
+    'Ha ocurrido un error, el archivo esta abierto
+    OutPut = MsgBox("El documento " & filePath & " está abierto por otro usuario o es inaccesible. Pulse el botón de reintentar cuando se haya cerrado.", vbRetryCancel + vbExclamation)
+    If OutPut = 4 Then
+        'Reintentar
+        Call MirarSiAbierto
+    Else
+        'Cancelar
+        cancelar = True
+        Call CerrarMacroCorreccion
+    End If
+End Sub

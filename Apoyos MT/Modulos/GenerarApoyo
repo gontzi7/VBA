@@ -1,0 +1,555 @@
+Option Explicit
+
+Dim progreso As Double
+Dim frac As Double
+Dim sh As Worksheet
+Dim elapsedTime As Double
+Dim timerApoyos As Timer
+Dim ans As Integer
+Dim wb As Workbook
+Dim ws As Worksheet
+Dim targetSheet As Worksheet
+
+Function ExistePagina(nombrePag As String, Optional wb As Workbook) As Boolean
+    Dim test As Worksheet
+    If wb Is Nothing Then
+        Set wb = ThisWorkbook 'Usar el libro actual, si no se ha especificado otro
+    End If
+    On Error GoTo ErrorHandler
+    Set test = wb.Sheets(nombrePag)
+    ExistePagina = True
+    Exit Function
+ErrorHandler:
+    'Ha ocurrido un error al abrir la pagina, no existe
+    ExistePagina = False
+End Function
+
+Function ContarBlancos(rngS As String, cantContar As Long) As Long
+    Dim count As Integer
+    Dim cell As Range
+    Dim x As Long
+    Dim rng As Range
+    'Loopear cada celda buscando celdas blancas
+    Set rng = sh.Range(rngS)
+    count = 0
+    x = 0
+    For Each cell In rng
+        If cell.Text = "" Then
+            'Si esta vacia, sumar 1
+            count = count + 1
+        Else
+            'Si tiene valor sumar x
+            x = x + 1
+        End If
+        If x = cantContar Then
+            'Parar cuando se hayan contado
+            Exit For
+        End If
+    Next cell
+    ContarBlancos = count
+End Function
+
+Function ContainsNonNumericCharacters(ByVal inputString As String) As Boolean
+    Dim i As Long
+    For i = 1 To Len(inputString)
+        If Not IsNumeric(Mid(inputString, i, 1)) Then
+            ContainsNonNumericCharacters = True
+            Exit Function
+        End If
+    Next i
+    ContainsNonNumericCharacters = False
+End Function
+
+Sub GenerarApoyos(Optional cerrar As String)
+    Call contra
+
+    Dim i As Integer
+    Dim k As Long
+    Dim j As Long
+    Dim n As Long
+    Dim inicial As Long
+    Dim final As Long
+    Dim cantidApoyo As Long
+    Dim med As Boolean
+    Dim fin As Boolean
+    Dim ini As Boolean
+    Dim filasLlenas As Long
+    Dim cantAcalc As Long
+    Dim primApoyo As Long
+    Dim blanco As Long
+    Dim segPerOp As Double
+    Dim Tabla As Long
+    Dim separadores As Double
+    Dim rango As Range
+    Dim OutPut As Integer
+    Dim nuevo As Boolean
+    Dim aCorregir(178) As String
+    Dim mensaje As String
+    'Seleccionar página
+    Set sh = ThisWorkbook.Sheets("Datos")
+    'Inicializar parámetros
+    i = 1
+    k = 2
+    n = 1
+    frac = 0
+    progreso = 0
+    blanco = 0
+    segPerOp = 0.2
+    separadores = 0
+    Call Columnas
+    'Numero primer apoyo
+    If sh.Range("PrimerApoyo").Value = 0 Then
+        primApoyo = 1
+        sh.Range("PrimerApoyo").Value = 1
+    Else
+        primApoyo = sh.Range("PrimerApoyo").Value
+        Set rango = sh.Range("A2:A" & primApoyo + 1)
+        'Si se ha establecido un primer apoyo, mirar si hay algun separador antes que el
+        separadores = WorksheetFunction.CountIf(rango, "Zona")
+        primApoyo = primApoyo + separadores
+    End If
+    Tabla = 4
+    cantidApoyo = sh.Range("CuantosApoyos").Value
+    'Iniciar timer
+    Call InicioTimerApoyos
+    'Mirar si hay datos suficientes para empezar a calcular
+    If sh.Range("TensionL").Value = "" Then
+        MsgBox "No hay datos suficientes para comenzar los calculos, introduzca tension de linea", vbCritical
+        sh.Range("TensionL").Select
+        'Acabar programa
+        Call CerrarMacroApoyos
+    End If
+    'Mirar si hay errores por parte de tipo de conductor
+    If sh.Range("Error") = False Then
+        MsgBox "Hay un error con el tipo de conductor, es posible que no este cargado en la tabla de conductores.", vbCritical
+        Sheets("Conductores").Select
+        Range("A25").Select
+        MsgBox "Seleccionar conductor/es de la lista desplegable", vbInformation
+        'Acabar Programa
+        End
+    End If
+    'Mirar si primer apoyo esta fuera del rango de apoyos rellenados
+    If primApoyo > cantidApoyo Then
+        MsgBox "El primer apoyo no puede estar fuera de la lista de apoyos proporcionada, hay " & cantidApoyo & " apoyos introducidos.", vbExclamation
+        sh.Range("PrimerApoyo").Select
+        'Acabar programa
+        Call CerrarMacroApoyos
+    End If
+    'Mirar si falta algún EDS por calcular
+    If WorksheetFunction.CountA(Range("I:I")) < sh.Range("CuantosVanos") Then
+        'No estan todos los EDS calculados, dar tres opciones.
+        MsgBoxCustom_Set vbYes, "Calcular EDS"
+        MsgBoxCustom_Set vbNo, "Seguir sin EDS"
+        MsgBoxCustom_Set vbCancel, "Cancelar"
+        MsgBoxCustom ans, "Se ha detectado que no se han calculado EDS para todos los apoyos, calcular? (Se recomienda calcular los EDS antes que los apoyos)", (vbYesNoCancel + vbQuestion)
+        If ans = 6 Then
+            'Se ha decidido calcular las EDS
+            Call Calculos("N")
+        ElseIf ans = 7 Then
+            'Se ha decidido seguir con el programa sin EDS
+        Else
+            'Se ha decidido cancelar, salir de la macro
+            Call CerrarMacroApoyos
+        End If
+    End If
+    'Mirar si se ha pedido calcular mas de los que hay
+    If sh.Range("CantApoyo").Value + sh.Range("PrimerApoyo") - 1 > sh.Range("CuantosApoyos").Value Then
+        MsgBox "Se ha pedido calcular demasiados apoyos." & _
+         " Se calcularán " & sh.Range("CuantosApoyos") - sh.Range("PrimerApoyo") + 1 & " apoyos.", vbInformation
+        sh.Range("CantApoyo") = sh.Range("CuantosApoyos") - sh.Range("PrimerApoyo") + 1
+    End If
+    If sh.Range("DeteccionNuevo").Value = True Then
+        'Mirar nombres de apoyos por si hay alguno que podría ser nuevo y no esta puesto
+        Do While sh.Cells(k, 1) <> ""
+            nuevo = sh.Cells(k, colNuevo)
+            'El nombre contiene una letra y no esta seleccionado como nuevo
+            If ContainsNonNumericCharacters(sh.Cells(k, colNum).Text) And Not nuevo Then
+                aCorregir(n) = sh.Cells(k, colNum).Text
+                n = n + 1
+            End If
+            k = k + 1
+        Loop
+        'Si hay mas de un apoyo en estado incorrecto, gestionar, dejando al usuario elegir si hacerlo o no
+        If n > 1 Then
+            OutPut = MsgBox("Se ha detectado uno o mas apoyos que podrían ser nuevos y no están definidos correctamente, corregir automaticamente?", vbYesNo + vbInformation)
+            If OutPut = 6 Then
+                'Crear mensaje de apoyos a cambiar
+                mensaje = "Los apoyos a corregir son: "
+                For n = LBound(aCorregir) To UBound(aCorregir)
+                    If aCorregir(n) <> "" Then
+                        mensaje = mensaje & aCorregir(n) & ", "
+                    End If
+                Next n
+                'Esneñar mensaje y ver si el usuario quiere cambiar o no, si no quiere cambiar el programa se cerrará
+                OutPut = MsgBox(mensaje, vbOKCancel + vbInformation)
+                If OutPut = 1 Then
+                    k = 2
+                    n = 1
+                    Do While sh.Cells(k, 1) <> ""
+                        nuevo = sh.Cells(k, colNuevo)
+                        'El nombre contiene una letra y no esta seleccionado como nuevo, poner como nuevo
+                        If ContainsNonNumericCharacters(sh.Cells(k, colNum).Text) And Not nuevo Then
+                            sh.Cells(k, colNuevo).Value = True
+                            n = n + 1
+                        End If
+                        k = k + 1
+                    Loop
+                Else
+                    Call CerrarMacroApoyos
+                End If
+            End If
+        End If
+        k = 2
+        n = 1
+    End If
+    'Desactivar actulaizaciones de pantalla
+    Application.ScreenUpdating = False
+    Application.Calculation = xlCalculationManual
+    'Poner tensión de línea en REF 1
+    Sheets("REF 1").Unprotect Password:=contraseñaPaginas
+    Sheets("REF 1").Range("J1") = sh.Range("TensionL")
+    Sheets("REF 1").Protect Password:=contraseñaPaginas
+    'Porcentaje de barra para cada apoyo
+    sh.Select
+    filasLlenas = sh.Range(Cells(2, 1), Cells(2, 1).End(xlDown)).count
+    If sh.Range("CantApoyo").Value = 0 Then
+        'Cuantos apoyos hay en total
+        sh.Range("CantApoyo") = sh.Range("CuantosApoyos") - sh.Range("PrimerApoyo") + 1
+        cantidApoyo = sh.Range("CuantosApoyos") - sh.Range("PrimerApoyo") + 1
+    Else
+        'Si se ha especificado una canitdad de apoyos, guardar
+        cantidApoyo = sh.Range("CantApoyo").Value
+    End If
+    'Mirar si hay algun espacio vacio y sumarlo a cantAcalc
+    cantAcalc = ContarBlancos("B" & primApoyo + 1 & ":B178", cantidApoyo) + cantidApoyo
+    'Fila correcta para comenzar con primer apoyo
+    Do While primApoyo > 0
+        'Contar hacia abajo cada celda que tenga texto en "Apoyo"
+        If sh.Cells(k, colNum).Value = "" Then
+            blanco = blanco + 1
+        End If
+        primApoyo = primApoyo - 1
+        k = k + 1
+    Loop
+    k = 2
+    primApoyo = sh.Range("PrimerApoyo").Value + blanco
+    progreso = (1 / cantidApoyo) / 5
+    If cerrar = "" Or cerrar = "C" Then
+        'Borrar tabla
+        Call BorrarTabla
+    End If
+    sh.Select
+    'Loopear por cada apoyo hasta encontrar separador o fin especificado
+    For j = primApoyo + 1 To primApoyo + cantAcalc
+        'Ver si la fila contiene separador
+        If sh.Cells(j - 1, 1) <> "Zona" And k > 2 Then
+            i = 2
+        End If
+        'Establecer variables
+        If i = 1 Or sh.Cells(j - 1, colNum).Value = 0 Then
+            'Primer apoyo de secuencia
+            ini = True
+            fin = False
+            med = False
+            inicial = j
+        ElseIf sh.Cells(j + 1, colNum).Value = 0 And i <> 1 And sh.Cells(j, colNum).Value > 0 Or k - 1 = cantAcalc Then
+            'Ultimo apoyo de secuencia
+            fin = True
+            ini = False
+            med = False
+            final = j
+        ElseIf sh.Cells(j, colNum).Value > 0 And i <> 1 And Not fin Then
+            'Apoyo en medio de secuencia
+            med = True
+            ini = False
+            fin = False
+        End If
+        'Si el nombre del vano no esta en blanco crear pagina y rellenar datos
+        If sh.Cells(j, colNum).Value <> "" And Not ExistePagina(sh.Cells(j, colNum).Value) Then
+            'Inicializar barra de progreso
+            ufProgress.LabelProgress.Width = 0
+            ufProgress.LabelCaption.Caption = "Procesando apoyo nº " & n & " de " & cantidApoyo & vbCrLf & _
+                "Por favor, no abra o seleccione otro documento de excel."
+            ufProgress.TiempoEstimado.Caption = "Tiempo estimado para completar la operación: " & cantidApoyo * segPerOp & " segundos."
+            ufProgress.Show
+            'Crear una copia de REF 1 despues de ultima página (si es prmera vez despues de REF 1)
+            With Sheets("REF 1")
+                .Select
+                .Copy After:=Sheets(k)
+            End With
+            'Primera actualizacion
+            Call ActualizarBarra
+            'Desproteger la nueva hoja
+            Sheets("REF 1 (2)").Unprotect Password:=contraseñaPaginas
+            'Rellenar con datos correctos
+            With Sheets("REF 1 (2)")
+                .Range("I4") = sh.Cells(j, colAmarre).Value
+                .Range("M1") = sh.Cells(j, 1).Value
+                If sh.Cells(j, colSR).Value = "" Then
+                    sh.Cells(j, colSR).Value = "No"
+                End If
+                .Range("M2") = sh.Cells(j, colSR).Value
+                .Range("F4") = sh.Cells(j, colAngAnt)
+                .Range("F6") = sh.Cells(j, colAngPost)
+                Call ActualizarBarra
+                .Range("A37") = sh.Cells(j, colAisl).Value
+                .Range("F37") = sh.Cells(j, colCruc).Value
+                .Range("F38") = sh.Cells(j, colLongCruc).Value
+                If ini = True Then
+                    .Range("A4") = sh.Cells(j, colNomVano).Value
+                    .Range("B4") = sh.Cells(j, colTipoCond).Value
+                    .Range("C4") = sh.Cells(j, colNumCond).Value
+                    .Range("D4") = sh.Cells(j, colEDS).Value
+                    .Range("G4") = sh.Cells(j, colVano).Value
+                    .Range("H4") = sh.Cells(j, colH).Value
+                    .Range("I6") = ""
+                    .Range("V19") = sh.Cells(j, colAmarre).Value
+                    .Range("V20") = sh.Cells(j + 1, colAmarre).Value
+                    .Range("U19") = ((sh.Cells(j, colLongCruc).Value) + (sh.Cells(j + 1, colLongCruc).Value)) / 2
+                Else
+                    .Range("A4") = sh.Cells(j - 1, colNomVano).Value
+                    .Range("B4") = sh.Cells(j - 1, colTipoCond).Value
+                    .Range("C4") = sh.Cells(j - 1, colNumCond).Value
+                    .Range("D4") = sh.Cells(j - 1, colEDS).Value
+                    .Range("G4") = sh.Cells(j - 1, colVano).Value
+                    .Range("H4") = sh.Cells(j - 1, colH).Value
+                    .Range("I5") = sh.Cells(j, colAmarre).Value
+                    .Range("I6") = sh.Cells(j, colAmarre).Value
+                    .Range("I7") = sh.Cells(j, colAmarre).Value
+                    .Range("V19") = sh.Cells(j - 1, colAmarre).Value
+                    .Range("V20") = sh.Cells(j, colAmarre).Value
+                End If
+                Call ActualizarBarra
+                If fin = True Then
+                    .Range("U19") = ((sh.Cells(j - 1, colLongCruc).Value) + (sh.Cells(j, colLongCruc).Value)) / 2
+                End If
+                If med = True Then
+                    .Range("A6") = sh.Cells(j, colNomVano).Value
+                    .Range("B6") = sh.Cells(j, colTipoCond).Value
+                    .Range("C6") = sh.Cells(j, colNumCond).Value
+                    .Range("D6") = sh.Cells(j, colEDS).Value
+                    .Range("G6") = sh.Cells(j, colVano).Value
+                    .Range("H6") = sh.Cells(j, colH).Value * (-1)
+                    .Range("U19") = ((sh.Cells(j, colLongCruc).Value) + (sh.Cells(j - 1, colLongCruc).Value)) / 2
+                    .Range("U35") = ((sh.Cells(j, colLongCruc).Value) + (sh.Cells(j + 1, colLongCruc).Value)) / 2
+                    .Range("V35") = sh.Cells(j, colAmarre).Value
+                    .Range("V36") = sh.Cells(j + 1, colAmarre).Value
+                Else
+                    .Range("A6") = ""
+                    .Range("B6") = ""
+                    .Range("C6") = ""
+                    .Range("D6") = ""
+                    .Range("G6") = ""
+                    .Range("H6") = ""
+                End If
+                Call ActualizarBarra
+            End With
+            'Calcular pagina
+            ActiveSheet.Calculate
+            ' Application.Calculation = xlCalculationAutomatic
+            ' 'Desactivar calculacion automatica
+            ' Application.Calculation = xlCalculationManual
+            'Rellenar datos de apoyo en pagina "Tabla"
+            With Sheets("Tabla")
+                .Select
+                'Numero de apoyo
+                .Cells(Tabla, 1) = sh.Cells(j, colNum).Value
+                'Tipo de apoyo
+                .Cells(Tabla, 2) = sh.Cells(j, colTipoAp).Value
+                'Carga vertical
+                .Cells(Tabla, 4) = Sheets("REF 1 (2)").Range("AQ265").Value
+                'Esfuerzo 1ª
+                .Cells(Tabla, 6) = Sheets("REF 1 (2)").Range("E50").Value
+                'Esfuerzo 2ª
+                .Cells(Tabla, 8) = Sheets("REF 1 (2)").Range("K52").Value
+                'Esfuerzo 3ª
+                .Cells(Tabla, 10) = Sheets("REF 1 (2)").Range("E54").Value
+                'Momento torsor
+                .Cells(Tabla, 12) = Sheets("REF 1 (2)").Range("K57").Value
+                'Armado
+                .Cells(Tabla, 14) = sh.Cells(j, colBoveda).Value
+                'Nuevo o no
+                .Cells(Tabla, 17) = sh.Cells(j, colNuevo)
+                Call ActualizarBarra
+            End With
+            'Cambiar nombre a la pagina a nombre de apoyo
+            Sheets("REF 1 (2)").Name = sh.Cells(j, 2).Value
+            'Poner ruta a pagina de apoyo en el nombre
+            sh.Select
+            sh.Cells(j, colNum).Select
+            ActiveSheet.Hyperlinks.Add Anchor:=Selection, Address:="", SubAddress:= _
+                "'" & sh.Cells(j, colNum).Text & "'!A1", TextToDisplay:=sh.Cells(j, colNum).Text
+            With Selection.Font
+                .ColorIndex = xlAutomatic
+                .TintAndShade = 0
+                .Name = "Calibri"
+                .Size = 12
+                .Strikethrough = False
+                .Superscript = False
+                .Subscript = False
+                .OutlineFont = False
+                .Shadow = False
+                .Underline = xlUnderlineStyleNone
+                .ColorIndex = xlAutomatic
+                .TintAndShade = 0
+                .ThemeFont = xlThemeFontMinor
+            End With
+            sh.Cells(j, colCr) = "S"
+            n = n + 1
+        End If
+        Tabla = Tabla + 1
+        k = k + 1
+        'Juntar celdas de mismo tramo
+        If fin = True Then
+            Sheets("Datos").Select
+            Range(Cells(inicial, colNomTramo), Cells(final, colNomTramo)).Select
+            Selection.Merge
+            With Selection
+                .HorizontalAlignment = xlCenter
+                .VerticalAlignment = xlCenter
+                .WrapText = True
+                .Orientation = 0
+                .AddIndent = False
+                .IndentLevel = 0
+                .ShrinkToFit = False
+                .ReadingOrder = xlContext
+                .MergeCells = True
+            End With
+        End If
+    Next
+    'Cerrar barra de progreso al finalizar
+    Unload ufProgress
+    'Ordenar paginas bien
+    Call Ordenar("Distancias")
+    Call Ordenar("Tabla")
+    Call OrdenarUltimos
+    'Mover REF 1 al final de todos los apoyos
+    Dim p As Long
+    p = ThisWorkbook.Sheets("|").Index
+    ' Mover a despues de referencia
+    ThisWorkbook.Sheets("REF 1").Move Before:=ThisWorkbook.Sheets(p)
+    'Borrar botones de siguiente y anterior de primer y ultimo apoyo
+    Dim primerPag As Worksheet
+    Dim ultPag As Worksheet
+    Dim buttonCell As Range
+    Sheets("Distancias").Select
+    Set ws = ActiveSheet
+    Set primerPag = ws.Next
+    Sheets("REF 1").Select
+    Set ws = ActiveSheet
+    Set ultPag = ws.Previous
+    'Borrar el boton de anterior
+    primerPag.Select
+    Set buttonCell = ActiveSheet.Range("O1")
+    'Si existe un boton en la celda borrar
+    Call BorrarBoton(buttonCell)
+    'Borrar el boton de siguiente
+    ultPag.Select
+    Set buttonCell = ActiveSheet.Range("P1")
+    'Si existe un boton en la celda borrar
+    Call BorrarBoton(buttonCell)
+    Call FinalTimerApoyos
+    'Si se ha llamado desde creador de documentos, no cerrar ni mostrar mensaje de confirmación
+    If cerrar = "" Then
+        'Mensaje de confirmación
+        If sh.Range("Debug") Then
+            MsgBox "Generados " & n - 1 & " apoyos sin ningún error." & vbCrLf & "Tiempo de ejecución: " & Round(elapsedTime, 2) & " segundos", vbInformation
+        End If
+        'Cerrar macro
+        Call CerrarMacroApoyos
+    End If
+    Sheets("REF 1").Protect Password:=contraseñaPaginas
+    'Activar calculacion automatica
+    Application.Calculation = xlCalculationAutomatic
+    Application.DisplayAlerts = True
+End Sub
+
+Private Sub ActualizarBarra()
+    'Fracción por cada llamada
+    frac = progreso + frac
+    'Actualizar barra de progreso
+    With ufProgress
+        .LabelProgress.Width = frac * (.FrameProgress.Width)
+        .Repaint
+    End With
+    DoEvents
+End Sub
+
+Sub Ordenar(nombreHoja As String)
+    Dim wb As Workbook
+    Dim targetSheet As Worksheet
+    Dim searchSheet As Worksheet
+    Dim paginaRef As String
+    Dim moveBeforeSheetIndex As Integer
+    'Establecer documento excel
+    Set wb = ThisWorkbook
+    'Hoja de referencia al que se moveran
+    paginaRef = "Datos"
+    'Mirar si existe la pagina
+    On Error Resume Next
+    Set targetSheet = wb.Sheets(nombreHoja)
+    On Error GoTo 0
+    If Not targetSheet Is Nothing Then
+        'Mirar si existe la hoja de referencia
+        On Error Resume Next
+        Set searchSheet = wb.Sheets(paginaRef)
+        On Error GoTo 0
+        If Not searchSheet Is Nothing Then
+            'Conseguir numero de index de la referencia
+            moveBeforeSheetIndex = searchSheet.Index
+            'Mover a despues de referencia
+            targetSheet.Move After:=wb.Sheets(moveBeforeSheetIndex)
+        End If
+    End If
+End Sub
+
+Sub OrdenarUltimos()
+    Set wb = ThisWorkbook
+    Set ws = wb.Sheets("|")
+    ws.Move After:=wb.Sheets(wb.Sheets.count)
+    Set ws = wb.Sheets("Conductores")
+    ws.Move After:=wb.Sheets(wb.Sheets.count)
+    Set ws = wb.Sheets("Apoyos")
+    ws.Move After:=wb.Sheets(wb.Sheets.count)
+    Set ws = wb.Sheets("FormatoTablas")
+    ws.Move After:=wb.Sheets(wb.Sheets.count)
+End Sub
+
+Sub BorrarBoton(cell As Range)
+    Dim shp As Shape
+    For Each shp In cell.Parent.Shapes
+        If Not Intersect(shp.TopLeftCell, cell) Is Nothing Then
+            shp.Delete
+            Exit Sub
+        End If
+    Next shp
+End Sub
+
+Sub CerrarMacroApoyos()
+    Sheets("Datos").Select
+    Sheets("REF 1").Protect Password:=contraseñaPaginas
+    If ExistePagina("REF 1 (2)") Then
+        Application.DisplayAlerts = False
+        ThisWorkbook.Sheets("REF 1 (2)").Select
+        ActiveWindow.SelectedSheets.Delete
+        Application.DisplayAlerts = True
+    End If
+    'Cerrar barra de progreso al finalizar
+    Unload ufProgress
+    'Activar actualización de pantalla
+    Application.ScreenUpdating = True
+    'Activar calculacion automatica
+    Application.Calculation = xlCalculationAutomatic
+    Application.DisplayAlerts = True
+    End
+End Sub
+
+Sub InicioTimerApoyos()
+    Set timerApoyos = New Timer
+    timerApoyos.StartTimer
+End Sub
+
+Sub FinalTimerApoyos()
+    timerApoyos.StopTimer
+    elapsedTime = timerApoyos.GetElapsedTime
+End Sub

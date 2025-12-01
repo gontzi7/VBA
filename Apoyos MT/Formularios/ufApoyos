@@ -1,0 +1,662 @@
+Option Explicit
+
+Dim Apoyos As Worksheet
+Dim rng As Range
+Dim rngC As Range
+Dim rngAnt As Range
+Dim cell As Range
+Dim cuantosApoyosMemoria As Long
+Dim i As Long
+Dim max As Boolean
+Dim encontradoC As Boolean
+Dim encontradoAnt As Boolean
+Dim cantApoyos As Long
+Dim filaApoyo As Long
+Dim filaApoyoG As Long
+Dim tipoApoyo As String
+Dim HipVerC1 As String
+Dim HipHorC1 As String
+Dim HipVerC2 As String
+Dim HipHorC2 As String
+Dim HipVerC3 As String
+Dim HipHorC3 As String
+Dim HipC4 As String
+Dim HipVerCB1 As String
+Dim HipHorCB1 As String
+Dim HipVerCB2 As String
+Dim HipHorCB2 As String
+Dim HipVerCB3 As String
+Dim HipHorCB3 As String
+Dim HipCB4 As String
+Dim HipVerAnt1 As String
+Dim HipHorAnt1 As String
+Dim HipVerAnt2 As String
+Dim HipHorAnt2 As String
+Dim HipVerAnt3 As String
+Dim HipHorAnt3 As String
+Dim DerSupAnt1 As String
+Dim DerInfAnt1 As String
+Dim DerSupAnt2 As String
+Dim DerInfAnt2 As String
+Dim DerSupAnt3 As String
+Dim DerInfAnt3 As String
+Dim HipAnt4 As String
+Dim nombAltAnt As String
+Dim tipoApoyoN As String
+Dim HipVerC1N As String
+Dim HipHorC1N As String
+Dim HipVerC2N As String
+Dim HipHorC2N As String
+Dim HipVerC3N As String
+Dim HipHorC3N As String
+Dim HipC4N As String
+Dim HipVerCB1N As String
+Dim HipHorCB1N As String
+Dim HipVerCB2N As String
+Dim HipHorCB2N As String
+Dim HipVerCB3N As String
+Dim HipHorCB3N As String
+Dim HipCB4N As String
+Dim HipVerAnt1N As String
+Dim HipHorAnt1N As String
+Dim HipVerAnt2N As String
+Dim HipHorAnt2N As String
+Dim HipVerAnt3N As String
+Dim HipHorAnt3N As String
+Dim DerSupAnt1N As String
+Dim DerInfAnt1N As String
+Dim DerSupAnt2N As String
+Dim DerInfAnt2N As String
+Dim DerSupAnt3N As String
+Dim DerInfAnt3N As String
+Dim HipAnt4N As String
+Dim nombAltAntN As String
+
+Private Function CuantosCaracteresEnString(ByVal texto As String, ByVal caracter As String) As Integer
+    Dim i As Integer
+    Dim count As Integer
+    count = 0
+    For i = 1 To Len(texto)
+        If Mid(texto, i, 1) = caracter Then
+            count = count + 1
+        End If
+    Next i
+    CuantosCaracteresEnString = count
+End Function
+
+Private Sub BotonActualizarApoyo_Click()
+    'Mirar que esten todas las casillas con información
+    If MultiPage1.Value = 0 Then
+        'Es un apoyo C,CH o HV
+        i = 2
+        'Nuevos parametros del apoyo
+        HipVerC1N = Caja1HipVerC.Value
+        HipHorC1N = Caja1HipHorC.Value
+        HipVerC2N = Caja2HipVerC.Value
+        HipHorC2N = Caja2HipHorC.Value
+        HipVerC3N = Caja3HipVerC.Value
+        HipHorC3N = Caja3HipHorC.Value
+        HipC4N = Caja4HipC.Value
+        HipVerCB1N = Caja1HipVerCB.Value
+        HipHorCB1N = Caja1HiphorCB.Value
+        HipVerCB2N = Caja2HipVerCB.Value
+        HipHorCB2N = Caja2HipHorCB.Value
+        HipVerCB3N = Caja3HipVerCB.Value
+        HipHorCB3N = Caja3HipHorCB.Value
+        HipCB4N = Caja4HipCB.Value
+    ElseIf MultiPage1.Value = 1 Then
+        'Es un apoyo antiguo
+        i = 53
+        'Nuevos parametros del apoyo
+        HipVerAnt1N = Caja1HipVerAnt.Value
+        HipHorAnt1N = Caja1HipHorAnt.Value
+        HipVerAnt2N = Caja2HipVerAnt.Value
+        HipHorAnt2N = Caja2HipHorAnt.Value
+        HipVerAnt3N = Caja3HipVerAnt.Value
+        HipHorAnt3N = Caja3HipHorAnt.Value
+        DerSupAnt1N = Caja1DerSupAnt.Value
+        DerInfAnt1N = Caja1DerInfAnt.Value
+        DerSupAnt2N = Caja2DerSupAnt.Value
+        DerInfAnt2N = Caja2DerInfAnt.Value
+        DerSupAnt3N = Caja3DerSupAnt.Value
+        DerInfAnt3N = Caja3DerInfAnt.Value
+        HipAnt4N = Caja4HipAnt.Value
+        nombAltAntN = CajaNomAltAnt.Text
+    End If
+    'Guardar nuevos parametros de las casillas
+    tipoApoyoN = CajaNombreApoyo.Text
+    'Buscar primer hueco libre para guardar nuevo apoyo, en caso de que sea nuevo.
+    If Not encontradoC And Not encontradoAnt Then
+        Call Memoria(i)
+        If max Then
+            Exit Sub
+        End If
+    End If
+    'Si alguno ha sido modificado, pedir contraseña
+    If HipVerAnt1N <> HipVerAnt1 Or HipHorAnt1N <> HipHorAnt1 Or HipVerAnt2N <> HipVerAnt2 Or HipHorAnt2N <> HipHorAnt2 Or HipVerAnt3N <> HipVerAnt3 Or HipHorAnt3N <> HipHorAnt3 Or DerSupAnt1N <> DerSupAnt1 Or DerInfAnt1N <> DerInfAnt1 Or DerSupAnt2N <> DerSupAnt2 Or DerInfAnt2N <> DerInfAnt2 Or DerSupAnt3N <> DerSupAnt3 Or DerInfAnt3N <> DerInfAnt3 Or HipAnt4N <> HipAnt4 Or nombAltAnt <> nombAltAntN Or tipoApoyoN <> tipoApoyo Or HipVerC1N <> HipVerC1 Or HipHorC1N <> HipHorC1 Or HipVerC2N <> HipVerC2 Or HipHorC2N <> HipHorC2 Or HipVerC3N <> HipVerC3 Or HipHorC3N <> HipHorC3 Or HipC4N <> HipC4 Or HipVerCB1N <> HipVerCB1 Or HipHorCB1N <> HipHorCB1 Or HipVerCB2N <> HipVerCB2 Or HipHorCB2N <> HipHorCB2 Or HipVerCB3N <> HipVerCB3 Or HipHorCB3N <> HipHorCB3 Or HipCB4N <> HipCB4 Then
+        If Not volverAmostrar Then
+            'Pedir contraseña
+            ufContraseña.Show
+            If Not CorrectoContraseña Then
+                'No es correcta
+                Call BotonSalirApoyo_Click
+                Exit Sub
+            End If
+        End If
+        Apoyos.Unprotect Password:=contraseñaPaginas
+        With Apoyos
+            If MultiPage1.Value = 0 Then
+                'Es un apoyo C,CH o HV
+                .Cells(filaApoyo, 1).Value = tipoApoyoN
+                .Cells(filaApoyo, 3).Value = HipVerC1N
+                .Cells(filaApoyo, 4).Value = HipHorC1N
+                .Cells(filaApoyo, 5).Value = HipVerC2N
+                .Cells(filaApoyo, 6).Value = HipHorC2N
+                .Cells(filaApoyo, 7).Value = HipVerC3N
+                .Cells(filaApoyo, 8).Value = HipHorC3N
+                .Cells(filaApoyo, 9).Value = HipC4N
+                .Cells(filaApoyo, 11).Value = HipVerCB1N
+                .Cells(filaApoyo, 12).Value = HipHorCB1N
+                .Cells(filaApoyo, 13).Value = HipVerCB2N
+                .Cells(filaApoyo, 14).Value = HipHorCB2N
+                .Cells(filaApoyo, 15).Value = HipVerCB3N
+                .Cells(filaApoyo, 16).Value = HipHorCB3N
+                .Cells(filaApoyo, 17).Value = HipCB4N
+            ElseIf MultiPage1.Value = 1 Then
+                'Es un apoyo serie antigua
+                .Cells(filaApoyo, 1).Value = tipoApoyoN
+                .Cells(filaApoyo, 2).Value = nombAltAntN
+                .Cells(filaApoyo, 3).Value = HipVerAnt1N
+                .Cells(filaApoyo, 4).Value = HipHorAnt1N
+                .Cells(filaApoyo, 5).Value = HipVerAnt2N
+                .Cells(filaApoyo, 6).Value = HipHorAnt2N
+                .Cells(filaApoyo, 7).Value = HipVerAnt3N
+                .Cells(filaApoyo, 8).Value = HipHorAnt3N
+                .Cells(filaApoyo, 9).Value = HipAnt4N
+                .Cells(filaApoyo, 10).Value = DerSupAnt1N
+                .Cells(filaApoyo, 11).Value = DerInfAnt1N
+                .Cells(filaApoyo, 13).Value = DerSupAnt2N
+                .Cells(filaApoyo, 14).Value = DerInfAnt2N
+                .Cells(filaApoyo, 16).Value = DerSupAnt3N
+                .Cells(filaApoyo, 17).Value = DerInfAnt3N
+            End If
+            .Cells(filaApoyo, 19).Value = tipoApoyoN
+        End With
+        'Una vez guardados los datos, borrar de caja las propiedades
+        CajaNombreApoyo.Value = ""
+        Call BorrarDatos
+        'Proteger pagina
+        Apoyos.Protect Password:=contraseñaPaginas
+        'Actualizar cantidad en memoria
+        cuantosApoyosMemoria = WorksheetFunction.CountA(rng) - 2
+        MemoriaOcupApoyo.Caption = cuantosApoyosMemoria & "/167"
+        Call ActualizarDesplegable
+    Else
+        CajaNombreApoyo.Value = ""
+        Call BorrarDatos
+    End If
+End Sub
+
+Private Sub BotonBorrarApoyo_Click()
+    For Each cell In rng
+        If cell.Value = tipoApoyo Then
+            filaApoyoG = cell.Row
+            Exit For
+        End If
+    Next cell
+    'Mensaje de confirmación
+    Dim OutPut As Integer
+    OutPut = MsgBox("Se eliminará el apoyo " & Apoyos.Cells(filaApoyoG, 19).Value & ", continuar?", vbYesNo + vbQuestion)
+    If OutPut = 6 Then
+        If Not volverAmostrar Then
+            'Pedir contraseña
+            ufContraseña.Show
+            If Not CorrectoContraseña Then
+                'No es correcta
+                Call BotonSalirApoyo_Click
+                Exit Sub
+            End If
+        End If
+        'Borrar conductor
+        Apoyos.Unprotect Password:=contraseñaPaginas
+        With Apoyos
+            .Cells(filaApoyo, 1).Value = ""
+            .Cells(filaApoyo, 3).Value = ""
+            .Cells(filaApoyo, 4).Value = ""
+            .Cells(filaApoyo, 5).Value = ""
+            .Cells(filaApoyo, 6).Value = ""
+            .Cells(filaApoyo, 7).Value = ""
+            .Cells(filaApoyo, 8).Value = ""
+            .Cells(filaApoyo, 9).Value = ""
+            .Cells(filaApoyo, 11).Value = ""
+            .Cells(filaApoyo, 13).Value = ""
+            .Cells(filaApoyo, 14).Value = ""
+            .Cells(filaApoyo, 16).Value = ""
+            .Cells(filaApoyo, 17).Value = ""
+            If encontradoC Then
+                .Cells(filaApoyo, 12).Value = ""
+                .Cells(filaApoyo, 15).Value = ""
+            ElseIf encontradoAnt Then
+                .Cells(filaApoyo, 2).Value = ""
+                .Cells(filaApoyo, 10).Value = ""
+            End If
+            'Borrar nombre de lista general de apoyos
+            .Cells(filaApoyo, 19).Value = ""
+        End With
+        Apoyos.Protect Password:=contraseñaPaginas
+        Call BorrarDatos
+    Else
+        'No borrar
+        Exit Sub
+    End If
+    'Actualizar cantidad en memoria
+    cuantosApoyosMemoria = WorksheetFunction.CountA(rng) - 2
+    MemoriaOcupApoyo.Caption = cuantosApoyosMemoria & "/167"
+    Call ActualizarDesplegable
+End Sub
+
+Private Sub BotonBuscarApoyo_Click()
+    'Borrar datos previos, si existen
+    Call BorrarDatos
+    encontradoC = False
+    encontradoAnt = False
+    'Conseguir lo introducido por el usuario y buscar en rango si existe
+    tipoApoyo = CajaNombreApoyo.Text
+    'Buscar el tipo de conductor en el rango y devolver caracteristicas si existen
+    Set rngC = Apoyos.Range("A2:A50")
+    For Each cell In rngC
+        If cell.Value = tipoApoyo Then
+            'Propiedades del apoyo
+            HipVerC1 = cell.Offset(0, 2).Value
+            HipHorC1 = cell.Offset(0, 3).Value
+            HipVerC2 = cell.Offset(0, 4).Value
+            HipHorC2 = cell.Offset(0, 5).Value
+            HipVerC3 = cell.Offset(0, 6).Value
+            HipHorC3 = cell.Offset(0, 7).Value
+            HipC4 = cell.Offset(0, 8).Value
+            'Propiedades de boveda del apoyo
+            HipVerCB1 = cell.Offset(0, 10).Value
+            HipHorCB1 = cell.Offset(0, 11).Value
+            HipVerCB2 = cell.Offset(0, 12).Value
+            HipHorCB2 = cell.Offset(0, 13).Value
+            HipVerCB3 = cell.Offset(0, 14).Value
+            HipHorCB3 = cell.Offset(0, 15).Value
+            HipCB4 = cell.Offset(0, 16).Value
+            'Marcadores
+            filaApoyo = cell.Row
+            encontradoC = True
+            Exit For
+        End If
+    Next cell
+    If Not encontradoC Then
+        Set rngAnt = Apoyos.Range("A53:A171")
+        For Each cell In rngAnt
+            If cell.Value = tipoApoyo Then
+                'Propiedades del apoyo antiguo
+                HipVerAnt1 = cell.Offset(0, 2).Value
+                HipHorAnt1 = cell.Offset(0, 3).Value
+                HipVerAnt2 = cell.Offset(0, 4).Value
+                HipHorAnt2 = cell.Offset(0, 5).Value
+                HipVerAnt3 = cell.Offset(0, 6).Value
+                HipHorAnt3 = cell.Offset(0, 7).Value
+                HipAnt4 = cell.Offset(0, 8).Value
+                DerSupAnt1 = cell.Offset(0, 9).Value
+                DerInfAnt1 = cell.Offset(0, 10).Value
+                DerSupAnt2 = cell.Offset(0, 12).Value
+                DerInfAnt2 = cell.Offset(0, 13).Value
+                DerSupAnt3 = cell.Offset(0, 15).Value
+                DerInfAnt3 = cell.Offset(0, 16).Value
+                nombAltAnt = cell.Offset(0, 1).Value
+                'Marcadores
+                filaApoyo = cell.Row
+                encontradoAnt = True
+                Exit For
+            End If
+        Next cell
+    End If
+    If encontradoC Then
+        'Se ha encontrado el apoyo no antiguo, mostrar propiedades en las casillaas
+        BotonBorrarApoyo.Visible = True
+        With Frame2Apoyo
+            .Caption = "Caracteristicas del apoyo existente"
+            .BorderColor = RGB(99, 97, 90)
+        End With
+        Caja1HipVerC.Value = HipVerC1
+        Caja1HipHorC.Value = HipHorC1
+        Caja2HipVerC.Value = HipVerC2
+        Caja2HipHorC.Value = HipHorC2
+        Caja3HipVerC.Value = HipVerC3
+        Caja3HipHorC.Value = HipHorC3
+        Caja4HipC.Value = HipC4
+        Caja1HipVerCB.Value = HipVerCB1
+        Caja1HiphorCB.Value = HipHorCB1
+        Caja2HipVerCB.Value = HipVerCB2
+        Caja2HipHorCB.Value = HipHorCB2
+        Caja3HipVerCB.Value = HipVerCB3
+        Caja3HipHorCB.Value = HipHorCB3
+        Caja4HipCB.Value = HipCB4
+        MultiPage1.Page1.Enabled = True
+        MultiPage1.Page2.Enabled = False
+        MultiPage1.Value = 0
+    ElseIf encontradoAnt Then
+        'Se ha encontrado el apoyo antiguo, mostrar propiedades en las casillaas
+        BotonBorrarApoyo.Visible = True
+        With Frame2Apoyo
+            .Caption = "Caracteristicas del apoyo existente"
+            .BorderColor = RGB(99, 97, 90)
+        End With
+        Caja1HipVerAnt.Value = HipVerAnt1
+        Caja1HipHorAnt.Value = HipHorAnt1
+        Caja2HipVerAnt.Value = HipVerAnt2
+        Caja2HipHorAnt.Value = HipHorAnt2
+        Caja3HipVerAnt.Value = HipVerAnt3
+        Caja3HipHorAnt.Value = HipHorAnt3
+        Caja1DerSupAnt.Value = DerSupAnt1
+        Caja1DerInfAnt.Value = DerInfAnt1
+        Caja2DerSupAnt.Value = DerSupAnt2
+        Caja2DerInfAnt.Value = DerInfAnt2
+        Caja3DerSupAnt.Value = DerSupAnt3
+        Caja3DerInfAnt.Value = DerInfAnt3
+        Caja4HipAnt.Value = HipAnt4
+        CajaNomAltAnt.Text = nombAltAnt
+        MultiPage1.Page2.Enabled = True
+        MultiPage1.Page1.Enabled = False
+        MultiPage1.Value = 1
+    ElseIf Not encontradoC And Not encontradoAnt Then
+        Call Memoria(2)
+        If max Then
+            Exit Sub
+        End If
+        'Es nuevo apoyo
+        BotonBorrarApoyo.Visible = False
+        With Frame2Apoyo
+            .Caption = "Caracteristicas del nuevo apoyo"
+            .BorderColor = RGB(207, 52, 54)
+        End With
+        Call BorrarDatos("N")
+        MultiPage1.Value = 0
+        MultiPage1.Page1.Enabled = True
+        MultiPage1.Page2.Enabled = True
+    End If
+    BotonActualizarApoyo.Enabled = True
+End Sub
+
+Private Sub BotonSalirApoyo_Click()
+    'Cerrar cuadro de modificación de conductores
+    Apoyos.Protect Password:=contraseñaPaginas
+    Unload ufApoyos
+End Sub
+
+Private Sub UserForm_Initialize()
+#If IsMac = False Then
+    'hide the title bar if you're working on a windows machine. Otherwise, just display it as you normally would
+    Me.Height = Me.Height - 10
+    HideTitleBar.HideTitleBar Me
+#End If
+    'Alinear en el centro de la pantalla activa
+    With ufApoyos
+        .StartUpPosition = 0
+        .Left = Application.Left + (0.5 * Application.Width) - (0.5 * .Width)
+        .Top = Application.Top + (0.5 * Application.Height) - (0.5 * .Height)
+    End With
+    Call contra
+    'Borrar datos de caja de texto
+    Set Apoyos = ThisWorkbook.Sheets("Apoyos")
+    Set rng = Apoyos.Range("S2:S171")
+    Call ActualizarDesplegable
+    CajaNombreApoyo.Value = ""
+    cuantosApoyosMemoria = WorksheetFunction.CountA(rng) - 2
+    MemoriaOcupApoyo.Caption = cuantosApoyosMemoria & "/167"
+    Call BorrarDatos
+    'Modo del uf
+    If Apoyos.Range("OscuroApoyo") = True Then
+        ModoOscuro.Value = True
+    Else
+        ModoOscuro.Value = False
+    End If
+    Call ModoOscuro_Click
+    'Seleccionar caja para nombre del apoyo
+    CajaNombreApoyo.SetFocus
+End Sub
+
+Private Sub BorrarDatos(Optional boton As String)
+    'Borrar datos apoyos tipo C, CH, HV
+    Caja1HipVerC.Value = ""
+    Caja1HipHorC.Value = ""
+    Caja2HipVerC.Value = ""
+    Caja2HipHorC.Value = ""
+    Caja3HipVerC.Value = ""
+    Caja3HipHorC.Value = ""
+    Caja4HipC.Value = ""
+    Caja1HipVerCB.Value = ""
+    Caja1HiphorCB.Value = ""
+    Caja2HipVerCB.Value = ""
+    Caja2HipHorCB.Value = ""
+    Caja3HipVerCB.Value = ""
+    Caja3HipHorCB.Value = ""
+    Caja4HipCB.Value = ""
+    'Borrar datos apoyos tipo antigua
+    Caja1HipVerAnt.Value = ""
+    Caja1HipHorAnt.Value = ""
+    Caja2HipVerAnt.Value = ""
+    Caja2HipHorAnt.Value = ""
+    Caja3HipVerAnt.Value = ""
+    Caja3HipHorAnt.Value = ""
+    Caja1DerSupAnt.Value = ""
+    Caja1DerInfAnt.Value = ""
+    Caja2DerSupAnt.Value = ""
+    Caja2DerInfAnt.Value = ""
+    Caja3DerSupAnt.Value = ""
+    Caja3DerInfAnt.Value = ""
+    Caja4HipAnt.Value = ""
+    CajaNomAltAnt.Text = ""
+    If boton = "" Then
+        'Formato botones
+        BotonBorrarApoyo.Visible = False
+        BotonActualizarApoyo.Enabled = False
+        'Formato paginas
+        MultiPage1.Page1.Enabled = False
+        MultiPage1.Page2.Enabled = False
+    End If
+End Sub
+
+Private Sub ActualizarDesplegable()
+    'Eliminar lo que habia antes
+    CajaNombreApoyo.Clear
+    For Each cell In rng
+        CajaNombreApoyo.AddItem cell.Value
+    Next cell
+End Sub
+
+Private Sub Memoria(ByVal x As Long)
+    Do While Apoyos.Cells(x, 19) <> ""
+        x = x + 1
+    Loop
+    If x > 171 Then
+        'No hay espacio para guardar nuevos conductores
+        MsgBox "No hay espacio libre en la memoria para guardar el nuevo apoyo " & tipoApoyo & _
+        vbCrLf & "Modifique apoyo existente con datos del nuevo apoyo a guardar.", vbCritical
+        max = True
+        'Volver a punto para buscar coductor
+        Call BorrarDatos
+        'Seleccionar texto de nombre conductor para cambio
+        CajaNombreApoyo.SetFocus
+    Else
+        'Guardar nuevo conductor en espacio libre
+        filaApoyo = x
+    End If
+End Sub
+
+Private Sub TextBox_KeyPress(ByVal tb As MSForms.TextBox, ByVal KeyAscii As MSForms.ReturnInteger)
+    Dim userInput As String
+    Dim validChars As String
+    Dim char As String
+    'Carácteres válidos
+    validChars = "0123456789"
+    userInput = tb.Text
+    char = Chr(KeyAscii)
+    'Mirar si se escribe una "n" o "N"
+    If InStr("n" & Chr(8), char) > 0 Or InStr("N" & Chr(8), char) > 0 Then
+        'Borrar los datos del cuaro de texto y escribir "N/A" en el cuadro
+        KeyAscii = 0
+        tb.Text = "N/A"
+        Exit Sub
+    End If
+    'Mirar si el caracter introducido no esta en la lista de aceptables
+    If InStr(validChars & Chr(8), char) = 0 Then
+        'No es valido, borrar con NULL
+        KeyAscii = 0
+    Else
+        'Es numero correcto, mirar si hay "N/A" escrito para borrar
+        If CuantosCaracteresEnString(userInput, "N") > 0 Then
+            tb.Text = ""
+        End If
+    End If
+End Sub
+
+Private Sub Caja1HipVerC_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+    Call TextBox_KeyPress(Me.Caja1HipVerC, KeyAscii)
+End Sub
+
+Private Sub Caja1HipHorC_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+    Call TextBox_KeyPress(Me.Caja1HipHorC, KeyAscii)
+End Sub
+
+Private Sub Caja2HipVerC_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+    Call TextBox_KeyPress(Me.Caja2HipVerC, KeyAscii)
+End Sub
+
+Private Sub Caja2HipHorC_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+    Call TextBox_KeyPress(Me.Caja2HipHorC, KeyAscii)
+End Sub
+
+Private Sub Caja3HipVerC_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+    Call TextBox_KeyPress(Me.Caja3HipVerC, KeyAscii)
+End Sub
+
+Private Sub Caja3HipHorC_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+    Call TextBox_KeyPress(Me.Caja3HipHorC, KeyAscii)
+End Sub
+
+Private Sub Caja4HipC_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+    Call TextBox_KeyPress(Me.Caja4HipC, KeyAscii)
+End Sub
+
+Private Sub Caja1HipVerCB_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+    Call TextBox_KeyPress(Me.Caja1HipVerCB, KeyAscii)
+End Sub
+
+Private Sub Caja1HiphorCB_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+    Call TextBox_KeyPress(Me.Caja1HiphorCB, KeyAscii)
+End Sub
+
+Private Sub Caja2HipVerCB_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+    Call TextBox_KeyPress(Me.Caja2HipVerCB, KeyAscii)
+End Sub
+
+Private Sub Caja2HipHorCB_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+    Call TextBox_KeyPress(Me.Caja2HipHorCB, KeyAscii)
+End Sub
+
+Private Sub Caja3HipVerCB_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+    Call TextBox_KeyPress(Me.Caja3HipVerCB, KeyAscii)
+End Sub
+
+Private Sub Caja3HipHorCB_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+    Call TextBox_KeyPress(Me.Caja3HipHorCB, KeyAscii)
+End Sub
+
+Private Sub Caja4HipCB_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+    Call TextBox_KeyPress(Me.Caja4HipCB, KeyAscii)
+End Sub
+
+Private Sub Caja1HipVerAnt_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+    Call TextBox_KeyPress(Me.Caja1HipVerAnt, KeyAscii)
+End Sub
+
+Private Sub Caja1HipHorAnt_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+    Call TextBox_KeyPress(Me.Caja1HipHorAnt, KeyAscii)
+End Sub
+
+Private Sub Caja2HipVerAnt_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+    Call TextBox_KeyPress(Me.Caja2HipVerAnt, KeyAscii)
+End Sub
+
+Private Sub Caja2HipHorAnt_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+    Call TextBox_KeyPress(Me.Caja2HipHorAnt, KeyAscii)
+End Sub
+
+Private Sub Caja3HipVerAnt_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+    Call TextBox_KeyPress(Me.Caja3HipVerAnt, KeyAscii)
+End Sub
+
+Private Sub Caja3HipHorAnt_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+    Call TextBox_KeyPress(Me.Caja3HipHorAnt, KeyAscii)
+End Sub
+
+Private Sub Caja1DerSupAnt_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+    Call TextBox_KeyPress(Me.Caja1DerSupAnt, KeyAscii)
+End Sub
+
+Private Sub Caja1DerInfAnt_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+    Call TextBox_KeyPress(Me.Caja1DerInfAnt, KeyAscii)
+End Sub
+
+Private Sub Caja2DerSupAnt_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+    Call TextBox_KeyPress(Me.Caja2DerSupAnt, KeyAscii)
+End Sub
+
+Private Sub Caja2DerInfAnt_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+    Call TextBox_KeyPress(Me.Caja2DerInfAnt, KeyAscii)
+End Sub
+
+Private Sub Caja3DerSupAnt_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+    Call TextBox_KeyPress(Me.Caja3DerSupAnt, KeyAscii)
+End Sub
+
+Private Sub Caja3DerInfAnt_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+    Call TextBox_KeyPress(Me.Caja3DerInfAnt, KeyAscii)
+End Sub
+
+Private Sub Caja4HipAnt_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+    Call TextBox_KeyPress(Me.Caja4HipAnt, KeyAscii)
+End Sub
+
+Private Sub CajaNomAltAnt_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+    Call TextBox_KeyPress(Me.CajaNomAltAnt, KeyAscii)
+End Sub
+
+Private Sub CajaNombreApoyo_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+    Dim userInput As String
+    Dim invalidChars As String
+    Dim char As String
+    'Carácteres válidos
+    invalidChars = " !?¿´ç+`Ç^*¨{}[]"
+    userInput = CajaNombreApoyo.Text
+    char = Chr(KeyAscii)
+    'Mirar si el caracter introducido esta en la lista de no aceptables
+    If InStr(invalidChars & Chr(8), char) > 0 Then
+        'No es valido, borrar con NULL
+        KeyAscii = 0
+    End If
+End Sub
+
+Private Sub ModoOscuro_Click()
+    If ModoOscuro.Value = True Then
+        'Esta activado
+        Apoyos.Unprotect Password:=contraseñaPaginas
+        Apoyos.Range("OscuroApoyo").Value = True
+        Apoyos.Protect Password:=contraseñaPaginas
+        'Cambiar colores de objetos
+        ufApoyos.BackColor = RGB(64, 66, 88)
+        Label17.ForeColor = RGB(241, 246, 249)
+    Else
+        'Desactivado
+        Apoyos.Unprotect Password:=contraseñaPaginas
+        Apoyos.Range("OscuroApoyo").Value = False
+        Apoyos.Protect Password:=contraseñaPaginas
+        'Cambiar colores de objetos
+        ufApoyos.BackColor = RGB(240, 240, 240)
+        Label17.ForeColor = vbButtonText
+    End If
+End Sub

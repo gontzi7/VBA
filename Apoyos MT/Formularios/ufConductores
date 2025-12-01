@@ -1,0 +1,358 @@
+Option Explicit
+
+Dim Conductores As Worksheet
+Dim tipoConductor As String
+Dim NtipoConductor As String
+Dim cantConductores As Long
+Dim rng As Range
+Dim cell As Range
+Dim columnaConductor As Long
+Dim moduloElastico As Integer
+Dim seccion As Double
+Dim peso As Double
+Dim diametro As Double
+Dim rotura As Double
+Dim dilatacion As Double
+Dim NmoduloElastico As Integer
+Dim Nseccion As Double
+Dim Npeso As Double
+Dim Ndiametro As Double
+Dim Nrotura As Double
+Dim Ndilatacion As Double
+Dim encontrado As Boolean
+Dim i As Long
+Dim cuantosConductoresMemoria As Long
+
+Private Function CuantosCaracteresEnString(ByVal texto As String, ByVal caracter As String) As Integer
+    Dim i As Integer
+    Dim count As Integer
+    count = 0
+    For i = 1 To Len(texto)
+        If Mid(texto, i, 1) = caracter Then
+            count = count + 1
+        End If
+    Next i
+    CuantosCaracteresEnString = count
+End Function
+
+Private Sub BotonActualizarConductor_Click()
+    'Mirar que esten todas las casillas con información
+    If CajaNombreConductor.Text = "" Or CajaMEConductor.Value = "" Or CajaSeccionConductor.Value = "" Or CajaPesoConductor.Value = "" Or CajaDiametroConductor.Value = "" Or CajaRoturaConductor.Value = "" Or CajaDilatacionConductor.Value = "" Then
+        MsgBox "Se han detectado propiedades sin rellenar, por favor rellene las casillas vacias.", vbExclamation
+        Exit Sub
+    End If
+    'Guardar nuevos parametros de las casillas
+    NtipoConductor = CajaNombreConductor.Text
+    NmoduloElastico = CajaMEConductor.Value
+    Nseccion = CajaSeccionConductor.Value
+    Npeso = CajaPesoConductor.Value
+    Ndiametro = CajaDiametroConductor.Value
+    Nrotura = CajaRoturaConductor.Value
+    Ndilatacion = CajaDilatacionConductor.Value
+    'Si alguno ha sido modificado, pedir contraseña
+    If NtipoConductor <> tipoConductor Or NmoduloElastico <> moduloElastico Or Nseccion <> seccion Or Npeso <> peso Or Ndiametro <> diametro Or Nrotura <> rotura Or Ndilatacion <> dilatacion Then
+        If Not volverAmostrar Then
+            'Pedir contraseña
+            ufContraseña.Show
+            If Not CorrectoContraseña Then
+                'No es correcta
+                Call BotonSalirConductor_Click
+                Exit Sub
+            End If
+        End If
+        'Desproteger pagina
+        Conductores.Unprotect Password:=contraseñaPaginas
+        'Guardar nuevos datos en memoria
+        With Conductores
+            If Not encontrado Then
+                'Buscar primer hueco libre
+                i = 3
+                Do While Conductores.Cells(1, i) <> ""
+                    i = i + 1
+                Loop
+                If i > 123 Then
+                    'Volver a punto para buscar coductor
+                    Call BorrarDatos
+                    'Seleccionar texto de nombre conductor para cambio
+                    CajaNombreConductor.SetFocus
+                    Exit Sub
+                Else
+                    'Guardar nuevo conductor en espacio libre
+                    columnaConductor = i
+                End If
+            End If
+            'Propiedades insertadas en user form
+            .Cells(1, columnaConductor).Value = NtipoConductor
+            .Cells(2, columnaConductor).Value = NmoduloElastico
+            .Cells(3, columnaConductor).Value = Nseccion
+            .Cells(4, columnaConductor).Value = Npeso
+            .Cells(5, columnaConductor).Value = Ndiametro
+            .Cells(6, columnaConductor).Value = Nrotura
+            .Cells(7, columnaConductor).Value = Ndilatacion
+            'Una vez guardados los datos, borrar de caja las propiedades
+            CajaNombreConductor.Value = ""
+            Call BorrarDatos
+        End With
+        'Proteger pagina
+        Conductores.Protect Password:=contraseñaPaginas
+        'Actualizar cantidad en memoria
+        cuantosConductoresMemoria = WorksheetFunction.CountA(rng)
+        MemoriaOcup.Caption = cuantosConductoresMemoria & "/121"
+        Call ActualizarDesplegable
+    Else
+        CajaNombreConductor.Value = ""
+        Call BorrarDatos
+    End If
+End Sub
+
+Private Sub BotonBorrarConductor_Click()
+    'Si es el conductor "Vacio", pedir contraseña maestra
+    If Conductores.Cells(1, columnaConductor).Value = "Vacio" Then
+        MsgBox "El conductor a borrar es el conductor base, introduzca "
+    End If
+    'Mensaje de confirmación
+    Dim OutPut As Integer
+    OutPut = MsgBox("Se eliminará el conductor tipo " & Conductores.Cells(1, columnaConductor).Value & ", continuar?", vbYesNo + vbQuestion)
+    If OutPut = 6 Then
+        If Not volverAmostrar Then
+            'Pedir contraseña
+            ufContraseña.Show
+            If Not CorrectoContraseña Then
+                'No es correcta
+                Call BotonSalirConductor_Click
+                Exit Sub
+            End If
+        End If
+        'Borrar conductor
+        Conductores.Unprotect Password:=contraseñaPaginas
+        With Conductores
+            .Cells(1, columnaConductor).Value = ""
+            .Cells(2, columnaConductor).Value = ""
+            .Cells(3, columnaConductor).Value = ""
+            .Cells(4, columnaConductor).Value = ""
+            .Cells(5, columnaConductor).Value = ""
+            .Cells(6, columnaConductor).Value = ""
+            .Cells(7, columnaConductor).Value = ""
+        End With
+        Conductores.Protect Password:=contraseñaPaginas
+        Call BorrarDatos
+    Else
+        'No borrar
+        Exit Sub
+    End If
+    'Actualizar cantidad en memoria
+    cuantosConductoresMemoria = WorksheetFunction.CountA(rng)
+    MemoriaOcup.Caption = cuantosConductoresMemoria & "/121"
+    Call ActualizarDesplegable
+End Sub
+
+Private Sub BotonBuscarConductor_Click()
+    If CajaNombreConductor.Text = "" Then
+        MsgBox "Por favor introduzca un nombre de conductor para buscar.", vbExclamation
+        Call BorrarDatos
+        Exit Sub
+    End If
+    encontrado = False
+    'Conseguir lo introducido por el usuario y buscar en rango si existe
+    tipoConductor = CajaNombreConductor.Text
+    Conductores.Select
+    'Cantidad de conductores en memoria
+    cantConductores = WorksheetFunction.CountA(Range("C1:DV1"))
+    'Buscar el tipo de conductor en el rango y devolver caracteristicas si existen
+    Set rng = Conductores.Range("C1:DV1")
+    For Each cell In rng
+        If StrComp(cell.Value, tipoConductor, vbTextCompare) = 0 Then
+            'Enseñar propiedades del conductor
+            moduloElastico = cell.Offset(1, 0).Value
+            seccion = cell.Offset(2, 0).Value
+            peso = cell.Offset(3, 0).Value
+            diametro = cell.Offset(4, 0).Value
+            rotura = cell.Offset(5, 0).Value
+            dilatacion = cell.Offset(6, 0).Value
+            'Poner nombre actual en caja de busqueda
+            CajaNombreConductor.Text = cell.Text
+            'Marcadores
+            columnaConductor = cell.Column
+            encontrado = True
+            Exit For
+        End If
+    Next cell
+    If encontrado Then
+        'Se ha encontrado el conductor, mostrar propiedades en las casillaas
+        BotonBorrarConductor.Visible = True
+        With Frame2Conductor
+            .Caption = "Caracteristicas del conductor existente"
+            .BorderColor = RGB(48, 48, 48)
+        End With
+        CajaMEConductor.Value = moduloElastico
+        CajaSeccionConductor.Value = seccion
+        CajaPesoConductor.Value = peso
+        CajaDiametroConductor.Value = diametro
+        CajaRoturaConductor.Value = rotura
+        CajaDilatacionConductor.Value = dilatacion
+    Else
+        'Buscar primer hueco libre
+        i = 3
+        Do While Conductores.Cells(1, i) <> ""
+            i = i + 1
+        Loop
+        If i > 123 Then
+            'No hay espacio para guardar nuevos conductores
+            MsgBox "No hay espacio libre en la memoria para guardar el nuevo conductor tipo " & tipoConductor & _
+            vbCrLf & "Modifique conductor existente con datos del nuevo conductor a guardar.", vbCritical
+            'Volver a punto para buscar coductor
+            Call BorrarDatos
+            'Seleccionar texto de nombre conductor para cambio
+            CajaNombreConductor.SetFocus
+            Exit Sub
+        Else
+            'Guardar nuevo conductor en espacio libre
+            columnaConductor = i
+        End If
+        BotonBorrarConductor.Visible = False
+        With Frame2Conductor
+            .Caption = "Caracteristicas del nuevo conductor"
+            .BorderColor = RGB(207, 52, 54)
+        End With
+        CajaMEConductor.Value = ""
+        CajaSeccionConductor.Value = ""
+        CajaPesoConductor.Value = ""
+        CajaDiametroConductor.Value = ""
+        CajaRoturaConductor.Value = ""
+        CajaDilatacionConductor.Value = ""
+    End If
+    BotonActualizarConductor.Enabled = True
+    CajaDiametroConductor.Enabled = True
+    CajaDilatacionConductor.Enabled = True
+    CajaMEConductor.Enabled = True
+    CajaPesoConductor.Enabled = True
+    CajaRoturaConductor.Enabled = True
+    CajaSeccionConductor.Enabled = True
+End Sub
+
+Private Sub BotonSalirConductor_Click()
+    'Cerrar cuadro de modificación de conductores
+    Conductores.Protect Password:=contraseñaPaginas
+    Unload ufConductores
+End Sub
+
+Private Sub UserForm_Initialize()
+#If IsMac = False Then
+    'hide the title bar if you're working on a windows machine. Otherwise, just display it as you normally would
+    Me.Height = Me.Height - 10
+    HideTitleBar.HideTitleBar Me
+#End If
+    'Alinear en el centro de la pantalla activa
+    With ufConductores
+        .StartUpPosition = 0
+        .Left = Application.Left + (0.5 * Application.Width) - (0.5 * .Width)
+        .Top = Application.Top + (0.5 * Application.Height) - (0.5 * .Height)
+    End With
+    Call ActualizarDesplegable
+    Call contra
+    'Borrar datos de caja de texto
+    CajaNombreConductor.Value = ""
+    cuantosConductoresMemoria = WorksheetFunction.CountA(rng)
+    MemoriaOcup.Caption = cuantosConductoresMemoria & "/121"
+    Call BorrarDatos
+    CajaNombreConductor.SetFocus
+End Sub
+
+Private Sub BorrarDatos()
+    'Borrar datos
+    CajaDiametroConductor.Value = ""
+    CajaDilatacionConductor.Value = ""
+    CajaMEConductor.Value = ""
+    CajaPesoConductor.Value = ""
+    CajaRoturaConductor.Value = ""
+    CajaSeccionConductor.Value = ""
+    'Formato botones
+    BotonBorrarConductor.Visible = False
+    BotonActualizarConductor.Enabled = False
+    'Desactivar cajas de parametros
+    CajaDiametroConductor.Enabled = False
+    CajaDilatacionConductor.Enabled = False
+    CajaMEConductor.Enabled = False
+    CajaPesoConductor.Enabled = False
+    CajaRoturaConductor.Enabled = False
+    CajaSeccionConductor.Enabled = False
+    'Formato de marco
+    With Frame2Conductor
+        .Caption = "Caracteristicas del conductor"
+        .BorderColor = RGB(179, 179, 179)
+    End With
+End Sub
+
+Private Sub ActualizarDesplegable()
+    'Eliminar lo que habia antes
+    CajaNombreConductor.Clear
+    Set Conductores = ThisWorkbook.Sheets("Conductores")
+    Set rng = Conductores.Range("C1:DV1")
+    For Each cell In rng
+        CajaNombreConductor.AddItem cell.Value
+    Next cell
+End Sub
+
+Private Sub TextBox_KeyPress(ByVal tb As MSForms.TextBox, ByVal KeyAscii As MSForms.ReturnInteger)
+    Dim userInput As String
+    Dim validChars As String
+    Dim char As String
+    'Carácteres válidos
+    validChars = "0123456789,."
+    userInput = tb.Text
+    char = Chr(KeyAscii)
+    'Si el texto introducido contiene un punto, cambiarlo por una coma
+    If InStr("." & Chr(8), char) > 0 Then
+        'Reemplazar puntos por comas
+        KeyAscii = 44
+    End If
+    'Mirar si el caracter introducido no esta en la lista de aceptables
+    If InStr(validChars & Chr(8), char) = 0 Then
+        'No es valido, borrar con NULL
+        KeyAscii = 0
+    End If
+    'Si hay mas de una coma, y eliminar la segunda y/o siguientes
+    If CuantosCaracteresEnString(userInput, ",") > 0 And KeyAscii = 44 Or KeyAscii = 46 Then
+        'Borrar
+        KeyAscii = 0
+    End If
+End Sub
+
+Private Sub CajaMEConductor_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+    Call TextBox_KeyPress(Me.CajaMEConductor, KeyAscii)
+End Sub
+
+Private Sub CajaSeccionConductor_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+    Call TextBox_KeyPress(Me.CajaSeccionConductor, KeyAscii)
+End Sub
+
+Private Sub CajaPesoConductor_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+    Call TextBox_KeyPress(Me.CajaPesoConductor, KeyAscii)
+End Sub
+
+Private Sub CajaDiametroConductor_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+    Call TextBox_KeyPress(Me.CajaDiametroConductor, KeyAscii)
+End Sub
+
+Private Sub CajaRoturaConductor_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+    Call TextBox_KeyPress(Me.CajaRoturaConductor, KeyAscii)
+End Sub
+
+Private Sub CajaDilatacionConductor_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+    Call TextBox_KeyPress(Me.CajaDilatacionConductor, KeyAscii)
+End Sub
+
+Private Sub CajaNombreConductor_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+    Dim userInput As String
+    Dim invalidChars As String
+    Dim char As String
+    'Carácteres válidos
+    invalidChars = " !?¿´ç`Ç^*¨{}[]'¡"
+    userInput = CajaNombreConductor.Text
+    char = Chr(KeyAscii)
+    'Mirar si el caracter introducido esta en la lista de no aceptables
+    If InStr(invalidChars & Chr(8), char) > 0 Then
+        'No es valido, borrar con NULL
+        KeyAscii = 0
+    End If
+End Sub
