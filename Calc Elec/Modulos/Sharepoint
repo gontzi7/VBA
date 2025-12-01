@@ -1,0 +1,121 @@
+Sub CheckFileExists()
+    Dim SharePointURL As String
+    Dim FileName As String
+    Dim FilePath As String
+    Dim FileExists As Boolean
+    SharePointURL = "https://abc.sharepoint.com/sites/Location/Tool/Calculator/"
+    FileName = "Calculator.xlsm" FilePath = SharePointURL & FileName
+    ' Check if file exists
+    FileExists = FileExistsInSharePoint(FilePath)
+    If FileExists Then
+        ' Open the workbook and read the value
+        Dim wb As Workbook
+        Application.ScreenUpdating = False
+        Set wb = Workbooks.Open(FilePath)
+        Dim versionValue As String
+        versionValue = wb.Sheets("Version").Range("B1").Value
+        MsgBox "Version Value: " & versionValue
+        wb.Close SaveChanges:=False
+    Else
+        MsgBox "File does not exist."
+    End If
+    Application.ScreenUpdating = True
+End Sub
+
+
+
+Sub CheckFileExists() 
+    Dim SharePointURL As String 
+    Dim FileName As String 
+    Dim FilePath As String 
+    Dim FileExists As Boolean 
+    SharePointURL = "https://abc.sharepoint.com/sites/Location/Tool/Calculator/" 
+    FileName = "Calculator.xlsm" FilePath = SharePointURL & FileName 
+    ' Check if file exists 
+    FileExists = FileExistsInSharePoint(FilePath) 
+    If FileExists Then ' Open the workbook and read the value 
+        Dim wb As Workbook 
+        Set wb = Workbooks.Open(FilePath) 
+        Dim versionValue As String 
+        versionValue = wb.Sheets("Version").Range("B1").Value 
+        MsgBox "Version Value: " & versionValue 
+        wb.Close SaveChanges:=False 
+    Else 
+        MsgBox "File does not exist." 
+    End If
+End Sub 
+
+Function FileExistsInSharePoint(FilePath As String) As Boolean 
+    Dim http As Object 
+    Set http = CreateObject("MSXML2.XMLHTTP") 
+    On Error Resume Next 
+    http.Open "HEAD", FilePath, False 
+    http.send 
+    If http.Status = 200 Then 
+        FileExistsInSharePoint = True 
+    Else 
+        FileExistsInSharePoint = False 
+    End If 
+    On Error GoTo 0 
+    Set http = Nothing 
+End Function
+
+
+
+
+Sub CreateFolderInSharePointAndUnmount()
+    Dim network As Object
+    Dim folderPath As String
+    Dim folderName As String
+    Dim driveLetter As String
+    Dim fs As Object
+
+    ' Create instance of WScript.Network object
+    Set network = CreateObject("WScript.Network")
+
+    ' Specify the SharePoint site URL
+    Dim sharepointURL As String
+    sharepointURL = "https://your_sharepoint_site_url_here/sites/your_site_name_here/library_name"
+
+    ' Specify the drive letter to map
+    driveLetter = "Z:" ' Change this to your preferred drive letter
+
+    ' Map the SharePoint document library to a network drive
+    On Error Resume Next
+    network.MapNetworkDrive driveLetter, sharepointURL
+    If Err.Number <> 0 Then
+        MsgBox "Failed to map network drive. Error: " & Err.Description, vbCritical
+        GoTo UnmapDrive
+    End If
+    On Error GoTo 0
+
+    ' Specify the folder path within the mapped drive
+    folderPath = driveLetter & "\Test"
+
+    ' Check if the folder already exists
+    If Dir(folderPath, vbDirectory) <> "" Then
+        MsgBox "Folder already exists.", vbExclamation
+        GoTo UnmapDrive
+    End If
+
+    ' Create the folder
+    Set fs = CreateObject("Scripting.FileSystemObject")
+    fs.CreateFolder folderPath
+
+    ' Check if folder creation was successful
+
+    If Dir(folderPath, vbDirectory) <> "" Then
+        MsgBox "Folder created successfully.", vbInformation
+    Else
+        MsgBox "Failed to create folder.", vbCritical
+        GoTo UnmapDrive
+    End If
+
+UnmapDrive:
+    ' Unmap the network drive
+    network.RemoveNetworkDrive driveLetter, True, True
+
+    ' Clean up objects
+    Set network = Nothing
+    Set fs = Nothing
+End Sub

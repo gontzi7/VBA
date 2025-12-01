@@ -1,0 +1,269 @@
+Option Explicit
+
+Dim ws As Worksheet, lins As Worksheet, est As Worksheet, busq As Worksheet
+Dim valores As Range, rangoLista As Range
+Dim rangoCirc As String, nomCuad As String
+Dim columnAlim As ListColumn, columnNom As ListColumn
+Dim tabla As ListObject, estCuad As ListObject
+Dim i As Double, j As Double
+Dim numFilas As Long, cont As Long
+Dim lineas As Collection
+Dim DebugMensajes As Boolean
+Dim lincuadr() As Variant, arrTemp() As Variant
+
+Dim frac As Double, progreso As Double
+
+Function ExistePagina(nombrePag As String, Optional wb As Workbook) As Boolean
+    Dim test As Worksheet
+    If wb Is Nothing Then
+        Set wb = ThisWorkbook 'Usar el libro actual, si no se ha especificado otro
+    End If
+    On Error GoTo ErrorHandler
+    Set test = wb.Sheets(nombrePag)
+    ExistePagina = True
+    Exit Function
+ErrorHandler:
+    'Ha ocurrido un error al abrir la pagina, no existe
+    ExistePagina = False
+End Function
+
+Sub CargarCircuitos()
+    On Error GoTo ErrorHandler
+
+    'Desactivar actulaizaciones de pantalla
+    Application.ScreenUpdating = False
+    'Desactivar calculacion manual
+    Application.Calculation = xlCalculationManual
+
+    Call ComprobarRepetidos(True)
+
+    Set ws = ThisWorkbook.Sheets("Configuracion_cuadros")
+    Set busq = ThisWorkbook.Sheets("Busquedas")
+    j = 0
+    'Tabla
+    Set tabla = ws.ListObjects("Nombre_cuadros")
+    'Columna para introducir lista de lineas de alimentación
+    Set columnAlim = tabla.ListColumns(3)
+    'Columna nombre páginas de cuadro
+    Set columnNom = tabla.ListColumns(2)
+    'Borrar lista actual
+    busq.Range("AG:AG").ClearContents
+    'Poner primer elemento
+    busq.Cells(1, 33).Value = "EXTERNO ------>"
+    'Copiar y pegar nombres de líneas definidas en cuadros
+    For i = 1 To tabla.ListRows.Count
+        'Nombre de página a estudiar
+        nomCuad = ws.Cells(i + 3, 5)
+        If ExistePagina(nomCuad) Then
+            Set est = ThisWorkbook.Sheets(nomCuad)
+            'Abrir página y contar y pegar nombres de líneas en ella a página "Busquedas"
+            est.Select
+            est.ListObjects(nomCuad).ListColumns(3).DataBodyRange.Copy
+            busq.Cells(j + 2, 33).PasteSpecial Paste:=xlPasteValues
+            j = j + est.ListObjects(nomCuad).ListRows.Count
+        End If
+    Next
+    'Corrección errores si no existe o no se ha copiado ninguna línea
+    If j = 0 Then j = 2
+    rangoCirc = "=Busquedas!$AG$1:$AG$" & j + 1
+    'Introducir rango de nombres en la columna de lineas de alimentación
+    With columnAlim.DataBodyRange
+        .Validation.Delete ' Clear any existing validation
+        .Validation.Add Type:=xlValidateList, AlertStyle:=xlValidAlertStop, _
+                        Operator:=xlBetween, Formula1:=rangoCirc
+        .Validation.IgnoreBlank = True
+        .Validation.InCellDropdown = True
+    End With
+    MsgBox "Se ha actualizado el listado de líneas existentes.", vbInformation, "Terminado de cargar"
+    ws.Select
+    'Activar actualización de pantalla
+    Application.ScreenUpdating = True
+    'Activar calculacion automatica
+    Application.Calculation = xlCalculationAutomatic
+    Application.DisplayAlerts = True
+    Exit Sub
+ErrorHandler:
+    'Si ocurre algun error ejecutar
+    MsgBox "Ha ocurrido un error al cargar listado de líneas: " & Err.Description, vbExclamation, "Error 301"
+    'Activar actualización de pantalla
+    Application.ScreenUpdating = True
+    'Activar calculacion automatica
+    Application.Calculation = xlCalculationAutomatic
+    Application.DisplayAlerts = True
+End Sub
+
+Sub CargarCircuitos2(Optional autom As String)
+    DebugMensajes = ThisWorkbook.Sheets("Busquedas").Range("Debug")
+    If Not DebugMensajes Then On Error GoTo ErrorHandler
+
+    Cerrar = False
+
+    'Desactivar actulaizaciones de pantalla
+    Application.ScreenUpdating = False
+    'Desactivar calculacion manual
+    Application.Calculation = xlCalculationManual
+
+    'Inicializar barra de progreso
+    frac = 0
+    ufProgress.LabelProgress.Width = 0
+    ufProgress.Caption = "Cargar circuitos"
+    ufProgress.LabelCaption.Caption = "Cargando variables para carga.." & vbCrLf & _
+        "Por favor, no abra o seleccione otro documento de Excel o Word."
+    ufProgress.TiempoEstimado.Caption = ""
+    ufProgress.Show
+    DoEvents
+
+    Dim wsSrc As Worksheet, wsVal As Worksheet
+    Dim dict As Object, panel As String, line As Variant
+    Dim lastRow As Long, i As Long, col As Long
+    Dim panelLines As Object
+
+    Set ws = ThisWorkbook.Sheets("Configuracion_cuadros")
+    Set lins = ThisWorkbook.Sheets("Lineas")
+    Set wsVal = ThisWorkbook.Sheets("Lineas")       ' Output sheet
+    wsVal.Cells.Clear                               ' Reset
+    'Tabla
+    Set tabla = ws.ListObjects("Nombre_cuadros")
+
+    'Cuantas veces se llama a actualizar barra
+    progreso = 1 / (tabla.ListRows.Count + 4)
+
+    Set dict = CreateObject("Scripting.Dictionary")
+
+    Call ActBarra
+    ufProgress.LabelCaption.Caption = "Estudiando cuadros y sus respectivas líneas.." & vbCrLf & _
+        "Por favor, no abra o seleccione otro documento de Excel o Word."
+    DoEvents
+    'Cargar todos los paneles y sus respectivas líneas en diccionario
+    For j = 1 To tabla.ListRows.Count
+        nomCuad = tabla.ListColumns(2).DataBodyRange.Cells(j).Value
+
+        If ExistePagina(nomCuad) Then
+            Set wsSrc = ThisWorkbook.Sheets(nomCuad)
+            Set estCuad = wsSrc.ListObjects(nomCuad)
+            lastRow = estCuad.ListRows.Count
+
+            panel = Trim(nomCuad)   'Nombre panel
+
+            'Poblar array de líneas de alimentación
+            Erase arrTemp
+            Set valores = estCuad.DataBodyRange
+            arrTemp = valores.Value
+
+            'Contador 
+            cont = 0
+            For i = 1 To lastRow
+                line = Trim(arrTemp(i, 3))
+                If Len(panel) > 0 And Len(line) > 0 And Trim(arrTemp(i, 2)) <> "RESERVA" Then
+                    If Not dict.Exists(panel) Then
+                        Set panelLines = CreateObject("Scripting.Dictionary")
+                        dict.Add panel, panelLines
+                    Else
+                        Set panelLines = dict(panel)
+                    End If
+                    If Not panelLines.Exists(line) Then panelLines.Add line, 1
+                    cont = cont + 1
+                End If
+            Next i
+            'Fila en blanco si es cuadro entero reserva
+            If cont = 0 Then
+                line = panel & " - VACÍO"
+                Set panelLines = CreateObject("Scripting.Dictionary")
+                dict.Add panel, panelLines
+                If Not panelLines.Exists(line) Then panelLines.Add line, 1
+            End If
+        End If
+    Next j
+
+    'Construir lista de validación por cada panel
+    col = 0
+    Dim p As Variant, q As Variant, r As Long
+    For Each p In dict.Keys
+        If Cerrar Then GoTo SalirCargCirc
+
+        col = col + 1
+    
+        ufProgress.LabelCaption.Caption = "Construyendo lista de validación nº " & col & " de " & tabla.ListRows.Count & " .." & vbCrLf & _
+            "Por favor, no abra o seleccione otro documento de Excel o Word."
+        DoEvents
+        wsVal.Cells(1, col).Value = "EXTERNO ------>"   'Opción de externo como primer valor
+        r = 2
+        For Each q In dict.Keys
+            If Cerrar Then GoTo SalirCargCirc
+            If q <> p Then  'Si el título de la línea (panel del que nace) no es el mismo que el panel que estamos estudiando, escribir
+                For Each line In dict(q).Keys
+                    If Cerrar Then GoTo SalirCargCirc
+                    wsVal.Cells(r, col).Value = line
+                    r = r + 1
+                Next line
+            End If
+        Next q
+
+        Call ActBarra
+    Next p
+
+    ufProgress.LabelCaption.Caption = "Estableciendo listas por cuadro.." & vbCrLf & _
+        "Por favor, no abra o seleccione otro documento de Excel o Word."
+    DoEvents
+    'Generar listas de validación por cuadro
+    For i = 1 To tabla.ListRows.Count
+        'Ultima fila por columna
+        lastRow = wsVal.Cells(1, i).End(xlDown).Row
+
+        Set valores = wsVal.Range(wsVal.Cells(1, i), wsVal.Cells(lastRow, i))
+        'Celda en la que insertar la lista de líneas
+        Set rangoLista = tabla.ListColumns(3).DataBodyRange.Cells(i)
+        'Borrar validación anterior
+        rangoLista.Validation.Delete
+        'Aplicar lista en celda
+        With rangoLista.Validation
+            .Add Type:=xlValidateList, AlertStyle:=xlValidAlertStop, _
+                 Operator:=xlBetween, Formula1:="=" & valores.Address(True, True, xlA1, True)
+            .IgnoreBlank = True
+            .InCellDropdown = True
+            .ShowError = True
+        End With
+    Next i
+    Call ActBarra
+    ufProgress.LabelCaption.Caption = "Finalizando macro.." & vbCrLf & _
+        "Por favor, no abra o seleccione otro documento de Excel o Word."
+    DoEvents
+
+    If autom = "A" Then
+
+    Else
+        'Activar actualización de pantalla
+        Application.ScreenUpdating = True
+        'Activar calculacion automatica
+        Application.Calculation = xlCalculationAutomatic
+        Application.DisplayAlerts = True
+        Call ActBarra
+        MsgBox "Se han cargado " & col & " cuadros con sus líneas sin errores.", vbInformation
+    End If
+
+    'Descargar barra
+    Unload ufProgress
+    Exit Sub
+ErrorHandler:
+    'Si ocurre algun error ejecutar
+    MsgBox "Ha ocurrido un error al cargar listado de líneas: " & Err.Description, vbExclamation, "Error 302"
+SalirCargCirc:
+    'Activar actualización de pantalla
+    Application.ScreenUpdating = True
+    'Activar calculacion automatica
+    Application.Calculation = xlCalculationAutomatic
+    Application.DisplayAlerts = True
+    'Descargar barra
+    Unload ufProgress
+End Sub
+
+Private Sub ActBarra()
+    'Fracción por cada llamada
+    frac = progreso + frac
+    'Actualizar barra de progreso
+    With ufProgress
+        .LabelProgress.Width = frac * (.FrameProgress.Width)
+        .Repaint
+    End With
+    DoEvents
+End Sub

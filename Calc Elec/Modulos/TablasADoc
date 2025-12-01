@@ -1,0 +1,711 @@
+Option Explicit
+
+Dim OutPut As Integer
+Dim texto As String
+Dim wordApp As Object, wordDoc As Object
+Dim wordTable As Object
+Dim cantidad As Double, faltan As Double, i As Double, j As Double, calculados As Double
+Dim principal As Worksheet, ws As Worksheet
+Dim primeraFila As Integer, primeraColumna As Integer, ultColumna As Integer
+Dim columnNom As ListColumn, nombres As ListColumn, tabla As ListObject
+Dim rutas() As String
+Dim fso As Object, f As Object
+Dim ruta As String, RutaUsuario As String
+Dim vbOut As Integer
+Dim DebugMensajes As Boolean
+
+Public resp As String, repetir As Boolean
+
+Function ExistePagina(nombrePag As String, Optional wb As Workbook) As Boolean
+    Dim test As Worksheet
+    If wb Is Nothing Then
+        Set wb = ThisWorkbook 'Usar el libro actual, si no se ha especificado otro
+    End If
+    On Error GoTo ErrorHandler
+    Set test = wb.Sheets(nombrePag)
+    ExistePagina = True
+    Exit Function
+ErrorHandler:
+    'Ha ocurrido un error al abrir la pagina, no existe
+    ExistePagina = False
+End Function
+
+Function RutaRelativa(s As String) As String
+    Dim pos As Long, pos2 As Long
+    pos = InStr(s, "\") ' Encontrar primera instancia de \
+    pos2 = InStr(pos + 1, s, "\") ' Encontrar segunda instancia de \
+    pos = InStr(pos2 + 1, s, "\") ' Encontrar tercera instancia de \
+    If pos > 0 Then
+        RutaRelativa = Left(s, pos - 1)
+    Else
+        RutaRelativa = "" ' Si no se encuentra \ devolver ""
+    End If
+End Function
+
+Sub MeterDict(ByVal rng As Range, ByVal dict As Object, ByVal nombre As String)
+    Dim cell As Range
+    Dim val As Variant
+
+    i = 0
+
+    'Introducir valores en diccionario
+    For Each cell In rng
+        val = Trim(cell.Value)
+        If Len(val) > 0 Then
+            If dict.Exists(val) Then
+                dict(val) = dict(val) + 1
+                ReDim Preserve rutas(0 To i + 1)
+                rutas(i) = nombre & "(" & cell.Address & ")"
+                i = i + 1
+            Else
+                dict.Add val, 1
+            End If
+        End If
+    Next cell
+End Sub
+
+Function ContarRepetidos(dict As Object) As Long
+    'Contar valores que se encuentras mas de una vez.
+    Dim key As Variant
+    Dim repeats As Long
+
+    repeats = 0
+    For Each key In dict.Keys
+        If dict(key) > 1 Then
+            repeats = repeats + 1
+        End If
+    Next key
+
+    ContarRepetidos = repeats
+End Function
+
+Sub PonerTodoEnDoc()
+    DebugMensajes = ThisWorkbook.Sheets("Busquedas").Range("Debug")
+    If Not DebugMensajes Then On Error GoTo ErrorHandler
+
+    'Desactivar actulaizaciones de pantalla
+    Application.ScreenUpdating = False
+    'Desactivar calculacion automatica hasta despues de pegar todos los valores
+    Application.Calculation = xlCalculationManual
+    'Borrar portapapeles
+    Application.CutCopyMode = False
+
+    Set principal = ThisWorkbook.Sheets("Configuracion_cuadros")
+    Set nombres = principal.ListObjects("Nombre_cuadros").ListColumns(2)
+
+    Call ComprobarRepetidos(True)
+
+    'Variables loop
+    faltan = 0
+    calculados = 0
+    cantidad = principal.Cells(principal.Rows.Count, "D").End(xlUp).Row - 3
+
+    If cantidad < 1 Then
+        MsgBox "No hay cuadros para poner en Word, primero dimensione los cuadros.", vbExclamation, "Sin cuadros para pasar a Word"
+        Exit Sub
+    End If
+
+    'Cargar todos los nombres
+    Dim listaNom As Object
+    Set listaNom = CreateObject("Scripting.Dictionary")
+
+    For j = 1 To cantidad
+        'Mirar si existe la página a calcular
+        If ExistePagina(nombres.DataBodyRange.Cells(j).Value) Then
+            Set columnNom = ThisWorkbook.Sheets(nombres.DataBodyRange.Cells(j).Value).ListObjects(nombres.DataBodyRange.Cells(j).Value).ListColumns(1)
+            Call MeterDict(columnNom.DataBodyRange, listaNom, nombres.DataBodyRange.Cells(j).Value)
+        End If
+    Next
+    'Contar repetidos dentro de cuadros
+    If ContarRepetidos(listaNom) > 0 Then
+        MsgBox UBound(rutas) & " " & ContarRepetidos(listaNom)
+        MsgBox "Hay una o más de una instancia de salidas repetidas: " & vbCrLf & Join(rutas, vbNewLine) & vbCrLf & "No se podrá proceder hasta corregirlo.", vbCritical, "Nombres de línea repetidos"
+        End
+    End If
+    
+    'Abrir documento
+    Call AbrirDoc
+
+    repetir = False
+    'Pegar tablas
+    For j = 1 To cantidad
+        'Mirar si existe la página a calcular
+        If Not ExistePagina(principal.Cells(j + 3, 5).Value) Then GoTo siguiente
+        'Nombre de página de cuadro
+        Set ws = ThisWorkbook.Sheets(principal.Cells(j + 3, 5).Value)
+        'Comprobar si se ha ejecutado el equilibrador
+        ws.Select
+        If Not ws.Range("O1") Then
+            'No se ha ejecutado el equilibrador de fases, preguntar si continuar o calcular
+            If Not repetir Then
+                ufRepetir.Cuadro.Caption = principal.Cells(j + 3, 5).Value   'Nombre de cuadro
+                ufRepetir.Show vbModal
+            End If
+            Select Case resp
+                Case "Calcular"
+                    Call EquilibradorFases(True)    'No mostrar mensaje
+                Case "No calcular"
+                    GoTo Continuar
+                Case "Salir"
+                    GoTo Ninguno
+            End Select
+        End If
+Continuar:
+        'Mover su tabla a word
+        primeraColumna = 3
+        primeraFila = 3
+        ultColumna = 12
+        Call MoverADoc(ws, primeraColumna, primeraFila, ultColumna)
+        calculados = calculados + 1
+siguiente:
+    Next
+    'Mensaje confirmación
+    If calculados = 0 Then
+        MsgBox "No se ha movido ningún cuadro ya que no existen en la página.", vbInformation, "Sin tablas a mover a Word"
+        GoTo Ninguno
+    Else
+        If calculados < cantidad Then   'No se han calculado todos, camino diferente
+        'Cerrar correctamente (último número 33 en la llamada)
+        primeraColumna = 0
+        primeraFila = 0
+        ultColumna = 0
+        Call MoverADoc(ws, primeraColumna, primeraFila, ultColumna, 33)
+        End If
+        MsgBox "Se ha(n) movido " & calculados & " tabla(s) a word.", vbInformation, "Macro ejecutado sin problemas"
+        principal.Select
+    End If
+    Exit Sub
+ErrorHandler:
+    'Si ocurre algun error ejecutar
+    MsgBox "Ha ocurrido un error al intentar generar los cuadros solicitados: " & Err.Description, vbExclamation, "Error 04"
+Ninguno:
+    'Cerrar documento si esta abierto
+    If Not wordDoc Is Nothing Then
+        wordApp.ActiveDocument.Close SaveChanges:=wdDoNotSaveChanges
+        wordApp.Quit
+    End If
+    Set wordDoc = Nothing
+    Set wordApp = Nothing
+    principal.Select
+    'Activar actualización de pantalla
+    Application.ScreenUpdating = True
+    'Activar calculacion automatica
+    Application.Calculation = xlCalculationAutomatic
+    Application.DisplayAlerts = True
+    Unload ufProgressObr
+    End
+End Sub
+
+Sub PonerUnoEnDoc()
+    DebugMensajes = ThisWorkbook.Sheets("Busquedas").Range("Debug")
+    If Not DebugMensajes Then On Error GoTo ErrorHandler
+
+    'Desactivar actulaizaciones de pantalla
+    Application.ScreenUpdating = False
+    'Desactivar calculacion automatica hasta despues de pegar todos los valores
+    Application.Calculation = xlCalculationManual
+    'Borrar portapapeles
+    Application.CutCopyMode = False
+
+    Set ws = ThisWorkbook.ActiveSheet
+
+    faltan = 0
+    cantidad = 1
+    'Equilibrador
+    If Not ws.Range("O1") Then
+        'No se ha ejecutado el equilibrador de fases, preguntar si continuar o calcular
+        OutPut = MsgBox("No se ha ejecutado el equilibrador de fases desde el último cambio. Ejecutar y mover a Word?", vbYesNoCancel + vbExclamation, "Fallo de secuencia")
+        If OutPut = 6 Then Call EquilibradorFases
+        If OutPut = 7 Then GoTo Mover
+        If OutPut = 2 Then Exit Sub
+    End If
+    'Faltan datos por escribir
+    If ws.Range("N1") Then
+        'Hay un circuito sin definición de tipo
+        OutPut = MsgBox("Se ha detectado uno o más de un circuito con falta de información (Nº Elem., Tipo, Potencia...). Continuar moviendo tabla a word?", vbYesNoCancel + vbExclamation, "Falta de datos")
+        If OutPut = 6 Then GoTo Mover
+        If OutPut = 7 Then Exit Sub
+        If OutPut = 2 Then Exit Sub
+    End If
+Mover:
+        'Abrir documento
+        Call AbrirDoc
+        'Mover tabla
+        primeraColumna = 3
+        primeraFila = 3
+        ultColumna = 12
+        Call MoverADoc(ws, primeraColumna, primeraFila, ultColumna)
+        'Mensaje confirmaicón
+        MsgBox "Se ha movido " & 1 & " tabla a word.", vbInformation, "Macro ejecutado sin problemas"
+Exit Sub
+ErrorHandler:
+    'Si ocurre algun error ejecutar
+    MsgBox "Ha ocurrido un error al intentar generar los cuadros solicitados: " & Err.Description, vbExclamation, "Error 05"
+    'Activar actualización de pantalla
+    Application.ScreenUpdating = True
+    'Activar calculacion automatica
+    Application.Calculation = xlCalculationAutomatic
+    Application.DisplayAlerts = True
+    Unload ufProgressObr
+    End
+End Sub
+
+Sub PonerResltEnDoc()
+    DebugMensajes = ThisWorkbook.Sheets("Busquedas").Range("Debug")
+    If Not DebugMensajes Then On Error GoTo ErrorHandler
+
+    'Desactivar actulaizaciones de pantalla
+    Application.ScreenUpdating = False
+    'Desactivar calculacion automatica hasta despues de pegar todos los valores
+    Application.Calculation = xlCalculationManual
+    'Borrar portapapeles
+    Application.CutCopyMode = False
+
+    Set ws = ThisWorkbook.ActiveSheet
+
+    Call ComprobarRepetidos(True)
+
+    faltan = 0
+    cantidad = 1
+    'Comprobar si está toda la información introducida (comparar colores de celda)
+    If ws.Range("Fallo") Then
+        'No se ha ejecutado el equilibrador de fases, preguntar si continuar o calcular
+        OutPut = MsgBox("Hay errores en alguna de las líneas (sección insuficiente, corriente protección mal definida..). Volver y corregir errores?", _
+            vbYesNoCancel + vbQuestion, "Fallo de secuencia")
+        If OutPut = 6 Then Exit Sub     'Si
+        If OutPut = 7 Then GoTo Mover   'No
+        If OutPut = 2 Then Exit Sub 'Cancelar
+    End If
+Mover:
+        'Abrir documento
+        Call AbrirDoc
+        'Mover tabla
+        primeraColumna = 2
+        primeraFila = 10
+        ultColumna = 13
+        Call MoverADoc(ws, primeraColumna, primeraFila, ultColumna, 99)
+        'Mensaje confirmaicón
+        MsgBox "Se ha movido " & 1 & " tabla a word.", vbInformation, "Macro ejecutado sin problemas"
+Exit Sub
+ErrorHandler:
+    'Ha ocurrido un error
+    MsgBox "Ha ocurrido un error al generar cuadro de resultados: " & Err.Description, vbExclamation, "Error 03"
+    'Activar actualización de pantalla
+    Application.ScreenUpdating = True
+    'Activar calculacion automatica
+    Application.Calculation = xlCalculationAutomatic
+    Application.DisplayAlerts = True
+    Unload ufProgressObr
+    End
+End Sub
+
+Private Sub AbrirDoc(Optional plantilla As String, Optional rutaMem As String)
+    DebugMensajes = ThisWorkbook.Sheets("Busquedas").Range("Debug")
+    If Not DebugMensajes Then On Error GoTo ErrorHandler
+
+    Dim rutaCopia As String
+
+    'Inicializar barras de progreso
+    frac = 0
+    frac2 = 0
+    ufProgressObr.TituloObra.Caption = ""
+    ufProgressObr.LabelProgress.Width = 0
+    ufProgressObr.LabelProgress2.Width = 0
+    ufProgressObr.Caption = "Mover tabla(s) a word."
+    ufProgressObr.Proceso.Caption = "Abriendo aplicación Word."
+    ufProgressObr.SubProceso.Caption = "Creando objeto de aplicación"
+    ufProgressObr.TiempoEstimado.Caption = ""
+    ufProgressObr.Denbora.Caption = ""
+    ufProgressObr.Show vbModeless
+    'Cuantas veces se llama a actualizar barra
+    progreso = 1 / (cantidad + 1)
+    progreso2 = 1 / 2
+    Set wordApp = CreateObject("Word.Application")
+
+    wordApp.Application.Visible = False
+    Call ActualizarBarra2
+    'Aviso según proceso
+    ufProgressObr.SubProceso.Caption = "Abriendo documento.."
+    'Desactivar actulaizaciones de pantalla
+    Application.ScreenUpdating = False
+    'Desactivar calculacion automatica hasta despues de pegar todos los valores
+    Application.Calculation = xlCalculationManual
+    'Borrar portapapeles
+    Application.CutCopyMode = False
+
+    If plantilla <> "" Then
+        'rutaCopia = RutaRelativa(plantilla) & 
+        'Crear copia de plantilla en ruta de libro
+        fso.FileCopy plantilla, rutaMem
+        'Abrir documento plantilla
+        Set wordDoc = wordApp.Documents.Open(rutaMem)
+    Else
+        'Abrir documento en blanco
+        Set wordDoc = wordApp.Documents.Add
+    End If
+
+    wordDoc.Activate
+    DoEvents
+    Call ActualizarBarra2
+    'Aviso según proceso
+    ufProgressObr.SubProceso.Caption = "Estableciendo formatos de texto.."
+    'Formato de estilo de texto normal
+    With wordDoc.Styles("Normal").ParagraphFormat
+        .SpaceBeforeAuto = False
+        .SpaceAfter = 0
+        .SpaceAfterAuto = False
+    End With
+    With wordDoc.Styles("Normal")
+        .NoSpaceBetweenParagraphsOfSameStyle = False
+        .AutomaticallyUpdate = False
+        .BaseStyle = ""
+        .NextParagraphStyle = "Normal"
+        .Font.Name = "Arial Narrow"
+        .Font.Size = 11
+    End With
+    ' With wordApp.Selection
+    '     .PageSetup.Orientation = wdOrientLandscape
+    '     .Font.Name = "Times New Roman"
+    '     .Font.Size = 12
+    '     .Font.Bold = True
+    ' End With
+    ufProgressObr.SubProceso.Caption = "Comenzando a pasar cuadros.."
+    Call ReiniciarBarra2
+    Exit Sub
+ErrorHandler:
+    'Si ocurre algun error ejecutar
+    MsgBox "Ha ocurrido un error al abrir el documento Word: " & Err.Description, vbExclamation, "Error 03"
+    'Cerrar documento si esta abierto
+    If Not wordDoc Is Nothing Then
+        wordApp.ActiveDocument.Close SaveChanges:=wdDoNotSaveChanges
+        wordApp.Quit
+    End If
+    Set wordDoc = Nothing
+    Set wordApp = Nothing
+    'Activar actualización de pantalla
+    Application.ScreenUpdating = True
+    'Activar calculacion automatica
+    Application.Calculation = xlCalculationAutomatic
+    Application.DisplayAlerts = True
+    Unload ufProgressObr
+    End
+End Sub
+
+Sub MoverADoc(ByVal nombre As Worksheet, ByVal columna As Integer, ByVal fila As Integer, ByVal limite As Integer, Optional numero As Long)
+    DebugMensajes = ThisWorkbook.Sheets("Busquedas").Range("Debug")
+    If Not DebugMensajes Then On Error GoTo ErrorHandler
+    'Si se abre por primera vez
+    If faltan = 0 Then
+        i = 1
+        faltan = cantidad
+        'Título documento
+        If numero <> 99 Then    'Si no es resultados
+            With wordApp.Selection
+                .Font.Name = "Arial Narrow"
+                .Font.Size = 12
+                .Font.Bold = True
+                .TypeText Text:="PREVISIÓN CARGAS"
+                .Font.Size = 11
+                .Font.Bold = False
+                .Font.Underline = wdUnderlineSingle
+                .TypeParagraph
+                .TypeParagraph
+            End With
+        End If
+    End If
+    'Si se han calculado menos de los de la tabla
+    If numero = 33 Then GoTo FinMacro
+    progreso2 = 1 / 3
+    ufProgressObr.TituloObra.Caption = "Cuadro " & nombre.Range("E2")
+    ufProgressObr.Proceso.Caption = "Moviendo tabla(s) al documento Word. Faltan: " & faltan - 1
+    ufProgressObr.SubProceso.Caption = "Escribiendo título de cuadro nº " & i & ".."
+    'Escribir titulo de cuadros
+    With wordApp.Selection
+        .Font.Name = "Arial Narrow"
+        'Titulo de tabla
+        If numero = 99 Then
+            .TypeText Text:="Resumen de resultados"
+        Else
+            .TypeText Text:="Cuadro " & nombre.Range("E2")
+        End If
+        .TypeParagraph
+        .TypeParagraph
+    End With
+    'Borrar portapapeles
+    Application.CutCopyMode = False
+    'Pegar tabla con formato
+    Dim ultimaFila As Long
+    ultimaFila = nombre.Cells(nombre.Rows.Count, 3).End(xlUp).Row
+    nombre.Range(nombre.Cells(fila, columna), nombre.Cells(ultimaFila, limite)).Copy
+    'wordDoc.Activate
+    Call ActualizarBarra2
+    'Aviso según proceso
+    ufProgressObr.SubProceso.Caption = "Pegando tabla de cuadro nº " & i & ".."
+    'Rutina por si ocurre un error al pegar la tabla
+    Dim retryCount As Integer
+    retryCount = 3
+    On Error Resume Next
+    Do
+        wordDoc.Application.Selection.PasteExcelTable _
+        LinkedToExcel:=False, _
+        WordFormatting:=False, _
+        RTF:=False
+        If Err.Number <> 0 Then
+            'Ha ocurrido un error
+            If retryCount > 0 Then
+                ufProgressObr.SubProceso.Caption = "Ha fallado el pegado de la tabla del cuadro nº " & i & " reintentando. Intento nº " & Abs(retryCount - 2) & " .."
+                retryCount = retryCount - 1
+                Err.Clear
+                'Volver a intentar en 2 segundos
+                Application.Wait Now + #12:00:02 AM#
+            Else
+                'Se ha reintentado 3 veces y sigue fallando
+                MsgBox "Pegar tabla ha fallado 3 veces seguidas, cerrando macro.."
+                GoTo FinMacro
+            End If
+        Else
+            'Se ha ejecutado correctamente, salir del loop
+            Exit Do
+        End If
+    Loop
+    Call ActualizarBarra2
+    'Aviso según proceso
+    ufProgressObr.SubProceso.Caption = "Poniendo formato a tabla de cuadro nº " & i & ".."
+    'Establecer formatos de tabla (ancho de celdas, centrado)
+    Set wordTable = wordDoc.Tables(i)
+    wordTable.Rows.Alignment = wdAlignRowCenter    '1 = wdAlignRowCenter
+    wordTable.AutoFitBehavior = wdAutoFitFixed ' 0 = wdAutoFitFixed - 2 = wdAutoFitWindow
+    With wordTable
+        .TopPadding = wordApp.CentimetersToPoints(0)
+        .BottomPadding = wordApp.CentimetersToPoints(0)
+        .LeftPadding = wordApp.CentimetersToPoints(0.1)
+        .RightPadding = wordApp.CentimetersToPoints(0.1)
+        .Spacing = 0
+        .AllowPageBreaks = True
+        .AllowAutoFit = False
+        'Anchura tabla total
+        .PreferredWidthType = wdPreferredWidthPoints
+        .PreferredWidth = wordApp.CentimetersToPoints(18)
+    End With
+    ' DoEvents
+    'Anchura columna nombres
+    With wordTable.Columns(1)
+        .PreferredWidthType = wdPreferredWidthPoints ' 1 = wdPreferredWidthPoints
+        .PreferredWidth = 100
+    End With
+    'Anchura de demás columnas en el caso de resultados
+    If numero = 99 Then
+        'Anchura por porcentaje de cada columna
+        Dim anchuras(12) As Variant
+        anchuras(0) = 29
+        anchuras(1) = 4
+        anchuras(2) = 6.1
+        anchuras(3) = 4.5
+        anchuras(4) = 7.6
+        anchuras(5) = 4
+        anchuras(6) = 19
+        anchuras(7) = 4.5
+        anchuras(8) = 4.5
+        anchuras(9) = 6.1
+        anchuras(10) = 5
+        anchuras(11) = 4.9
+        'wordTable.AutoFitBehavior = wdAutoFitWindow ' 0 = wdAutoFitFixed - 2 = wdAutoFitWindow
+        For j = 1 To 12
+            With wordTable.Columns(j)
+                .PreferredWidthType = wdPreferredWidthPercent  ' 1 = wdPreferredWidthPoints
+                .PreferredWidth = anchuras(j - 1)
+            End With
+        Next
+    End If
+    'Deseleccionar tabla e introducir nueva línea
+    wordApp.Selection.TypeParagraph
+    'DoEvents
+    'Primera fila de tabla como encabezado en cada página
+    wordDoc.Tables(i).Rows(1).HeadingFormat = True
+    Call ActualizarBarra2
+    'Aviso según proceso
+    ufProgressObr.SubProceso.Caption = "Finalizando la tabla de cuadro nº " & i & ".."
+    Call ReiniciarBarra2
+    faltan = faltan - 1
+    i = i + 1
+    If faltan = 0 Then GoTo FinMacro
+    Exit Sub
+FinMacro:
+    'Finalizar macro
+    progreso2 = 1 / 2
+    ufProgressObr.Proceso.Caption = "Finalizando macro."
+    ufProgressObr.SubProceso.Caption = "Estableciendo formato a todo el documento.."
+    'Quitar tachado (si aplica)
+    wordApp.Selection.WholeStory
+    wordApp.Selection.Font.StrikeThrough = False
+
+    ufProgressObr.SubProceso.Caption = "Limpiando objetos.."
+    wordApp.Visible = True
+    wordDoc.Activate
+    Set wordDoc = Nothing
+    Set wordApp = Nothing
+    Call ActualizarBarra2
+    Call ReiniciarBarra2
+    'Activar actualización de pantalla
+    Application.ScreenUpdating = True
+    'Activar calculacion automatica
+    Application.Calculation = xlCalculationAutomatic
+    Application.DisplayAlerts = True
+    Unload ufProgressObr
+    Exit Sub
+ErrorHandler:
+    'Si ocurre algun error ejecutar
+    MsgBox "Ha ocurrido un error al pegar la tabla a documento Word: " & Err.Description, vbExclamation, "Error 02"
+    'Cerrar documento si esta abierto
+    If Not wordDoc Is Nothing Then
+        wordApp.ActiveDocument.Close SaveChanges:=wdDoNotSaveChanges
+        wordApp.Quit
+    End If
+    Set wordDoc = Nothing
+    Set wordApp = Nothing
+    'Activar actualización de pantalla
+    Application.ScreenUpdating = True
+    'Activar calculacion automatica
+    Application.Calculation = xlCalculationAutomatic
+    Application.DisplayAlerts = True
+    Unload ufProgressObr
+End Sub
+
+Sub MemoriaEndesa()
+    Dim folderPath As String, rutaPNG As String
+    Dim fDialog As FileDialog
+
+    Dim fileList As Collection
+    Set fileList = New Collection
+    Dim tempArr() As String
+    Dim i As Long, n As Long
+
+    ' Ask user for PDF file
+
+    Set fDialog = Application.FileDialog(msoFileDialogFolderPicker)
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    
+    fDialog.Title = "Elegir carpeta de imagenes PDF"
+    If fDialog.Show <> -1 Then Exit Sub
+    rutaPNG = fDialog.SelectedItems(1)
+
+Reintentar:
+    fDialog.Title = "Elegir ruta donde se guarde la memoria"
+    If fDialog.Show <> -1 Then Exit Sub
+    folderPath = fDialog.SelectedItems(1)
+
+    If RutaRelativa(folderPath) <> "" Then
+        RutaUsuario = RutaRelativa(folderPath)
+    Else
+        'No se ha encontrado un \, se ha elegido una carpeta no válida
+        vbOut = MsgBox("La carpeta que se ha elegido no es válida.", vbRetryCancel + vbExclamation, "Carpeta no válida")
+
+        If vbOut = 4 Then GoTo Reintentar   'Reintentar
+        If vbOut = 2 Then End   'Cancelar
+    End If
+
+    cantidad = 4    'Uno por abrir word, 1 por previsión, 1 por resumen, 1 por imágenes
+    ' Crear copia de plantilla
+    ruta = RutaUsuario & "\BOSLAN INGENIERIA Y CONSULTORIA\Instalaciones - Imagenes\98-PROGRAMAS INST\Gontzal proba\Proyectos\CuadrosBT(Pr2)\MEMO INSTALACIONES ELEC.docx"
+    '"https://boslan.sharepoint.com/proyectos/instalaciones/Imagenes/98-PROGRAMAS INST/Gontzal proba/Proyectos/CuadrosBT(Pr2)/MEMO INSTALACIONES ELEC.docx"
+
+    ' Copiar plantilla de Word y abrir
+    MsgBox "Ruta: " & ruta & vbCrLf & "Ruta usuario: " & RutaUsuario & vbCrLf & "Folder path: " & folderPath
+    Call AbrirDoc(ruta, folderPath)
+
+    ufProgressObr.SubProceso.Caption = "Insertando previsión de cargas.."
+    ' Ir a marcador de previsión
+    wordDoc.Bookmarks("PREVISION").Range.Select
+    ' Insertar previsión de cargas
+    Call MoverADoc(ThisWorkbook.Sheets("Configuracion_cuadros"), 3, 3, 12)
+    Call ActualizarBarra2
+
+    ufProgressObr.SubProceso.Caption = "Insertando resumen de resultados.."
+    ' Ir a marcador de resultados
+    wordDoc.Bookmarks("RESTULTADOS").Range.Select
+    ' Insertar resumen de resultados
+    primeraColumna = 2
+    primeraFila = 10
+    ultColumna = 13
+    Call MoverADoc(ThisWorkbook.Sheets("TABLA DE RESULTADOS"), primeraColumna, primeraFila, ultColumna, 99)
+
+    Call ActualizarBarra2
+
+    ufProgressObr.Proceso.Caption = "Insertando imágenes de memoria."
+    ufProgressObr.SubProceso.Caption = "Ordenando páginas.."
+    progreso2 = 1 / (fso.GetFolder(rutaPNG).Files.count + 2)
+
+    ' Insertar imagenes
+    For Each f In fso.GetFolder(rutaPNG).Files
+        If LCase(fso.GetExtensionName(f.name)) = "png" Then
+            fileList.Add f.path
+        End If
+    Next
+    Call ActualizarBarra2
+
+    ' Convert to array
+    n = fileList.count
+    ReDim tempArr(1 To n)
+
+    ufProgressObr.SubProceso.Caption = "Generando array.."
+
+    For i = 1 To n
+        tempArr(i) = fileList(i)
+    Next
+
+    ' --- Sort array by page number ---
+    Call SortByPageNumber(tempArr)
+
+    ' Ir a marcador de estudio lumínico
+    wordDoc.Bookmarks("ESTUDIO").Range.Select
+
+    ' --- Insert sorted pages into Word ---
+    For i = 1 To UBound(tempArr)
+        ufProgressObr.SubProceso.Caption = "Insertando página " & i & " de " & UBound(tempArr) & ".."
+
+        wordDoc.Content.InsertAfter vbCrLf
+        wordApp.Selection.InlineShapes.AddPicture tempArr(i), False, True
+        wordApp.Selection.InsertBreak 7  ' Page break
+
+        Call ActualizarBarra2
+    Next
+End Sub
+
+Sub SortByPageNumber(arr() As String)
+    Dim i As Long, j As Long
+    Dim temp As String
+    Dim numI As Long, numJ As Long
+
+    For i = LBound(arr) To UBound(arr) - 1
+        For j = i + 1 To UBound(arr)
+            
+            numI = ExtractPageNumber(arr(i))
+            numJ = ExtractPageNumber(arr(j))
+            
+            If numI > numJ Then
+                temp = arr(i)
+                arr(i) = arr(j)
+                arr(j) = temp
+            End If
+        Next j
+    Next i
+End Sub
+
+Function ExtractPageNumber(path As String) As Long
+    Dim file As String
+    Dim regex As Object
+    Dim matches As Object
+
+    file = fso.GetFileName(path)
+
+    Set regex = CreateObject("VBScript.RegExp")
+    regex.Pattern = "(\d+)"
+    regex.Global = False
+
+    If regex.test(file) Then
+        Set matches = regex.Execute(file)
+        ExtractPageNumber = CLng(matches(0).Value)
+    Else
+        ExtractPageNumber = 0
+    End If
+End Function

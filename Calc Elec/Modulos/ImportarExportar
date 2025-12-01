@@ -1,0 +1,478 @@
+Option Explicit
+
+Dim exportPath As String
+Dim ws As Worksheet
+Dim rng As Range
+Dim rowArr As Variant
+Dim i As Long, j As Long, k As Long, cantCuad As Long, colorPag As Long
+Dim fNum As Integer, OutPut As Integer
+Dim filTabla As Long, primeraFila As Long, primeraColumna As Long, ultimaColumna As Long
+Dim tipoPagina As String, nombrePagina As String
+Dim infoAPegar As Collection
+Dim DebugMensajes As Boolean, prim As Boolean
+Dim colores As Object
+'Variables importación
+Dim nombreHoja As String, nombreTabla As String
+Dim filasTabla As Long, colCount As Long
+Dim columnasRellenar As Collection
+
+Dim importPath As Variant
+Dim textoLinea As String
+Dim rowValues() As String
+Dim rowNum As Long
+Dim colNum As Long
+    
+
+Sub Exportar()
+    On Error GoTo ErrorHandler
+
+    'Pedir usuario ruta de guardado de archivo
+    exportPath = Application.GetSaveAsFilename( _
+        InitialFileName:=Format(Now(), "yymmdd") & "_exportación.dat", _
+        FileFilter:="Archivos de datos (*.dat), *.dat, Todos los archivos (*.*), *.*", _
+        Title:="Guardar archivo de datos")
+    'Cancelado o cerrado
+    On Error GoTo Seleccionado1
+    If exportPath = False Then
+        MsgBox "Exportación cancelada.", vbExclamation
+        Exit Sub
+    End If
+Seleccionado1:
+    On Error GoTo ErrorHandler  'Reiniciar gestión de errores
+    fNum = FreeFile
+    Open exportPath For Output As #fNum
+
+    'Exportar páginas fijas
+    For Each ws In ThisWorkbook.Worksheets
+        Select Case ws.name
+            Case "Configuracion_cuadros"
+                tipoPagina = "Fijo"
+                nombrePagina = ws.name
+                colorPag = ws.Tab.color
+
+                Call MeterEnArchivo(tipoPagina, nombrePagina, colorPag)
+            Case "TABLA DE RESULTADOS"
+                tipoPagina = "Fijo"
+                nombrePagina = ws.name
+                colorPag = ws.Tab.color
+
+                Call MeterEnArchivo(tipoPagina, nombrePagina, colorPag)
+        End Select
+    Next ws
+
+    'Exportar páginas generadas
+    For Each ws In ThisWorkbook.Worksheets
+        Select Case ws.name
+            Case "|", "ALIM", "PLANTILLA_CUADROS", "Busquedas", "Lineas", "Configuracion_cuadros", "TABLA DE RESULTADOS", "Mediciones cable", "BANDEJAS", "BANDEJAS DAT"    'Páginas a ignorar
+            Case Else   'Páginas generadas
+                tipoPagina = "Generado"
+                nombrePagina = ws.name
+                colorPag = ws.Tab.color
+
+                Call MeterEnArchivo(tipoPagina, nombrePagina, colorPag)
+        End Select
+    Next ws
+
+    Close #fNum
+    MsgBox "Hoja exportada a archivo: " & exportPath & vbCrLf _
+        & "Listo para importarse en otra hoja.", vbInformation
+
+    Exit Sub
+ErrorHandler:
+    'Si ocurre algun error ejecutar
+    MsgBox "Ha ocurrido un error al exportar los datos: " & Err.Description, vbExclamation, "Error 901"
+    'Activar actualización de pantalla
+    Application.ScreenUpdating = True
+    'Activar calculacion automatica
+    Application.Calculation = xlCalculationAutomatic
+    Application.DisplayAlerts = True
+    Application.EnableEvents = True
+    Unload ufProgressObr
+    End
+End Sub
+
+Sub Importar()
+    DebugMensajes = ThisWorkbook.Sheets("Busquedas").Range("Debug")
+    If Not DebugMensajes Then On Error GoTo ErrorHandler
+
+    OutPut = MsgBox("Al importar datos de otra hoja, se eliminará todo el contenido de la actual hoja, continuar?", vbYesNoCancel + vbQuestion, "Importar archivos?")
+    Select Case OutPut
+        Case 6  'Si
+            'Pedir elegir archivo
+            importPath = Application.GetOpenFilename( _
+                FileFilter:="Archivos de datos (*.dat), *.dat, Todos los archivos (*.*), *.*", _
+                Title:="Seleccionar archivo de datos a importar")
+            'Cancelado o cerrado
+            DebugMensajes = ThisWorkbook.Sheets("Busquedas").Range("Debug")
+            If Not DebugMensajes Then On Error GoTo Seleccionado2
+            If importPath = False Then
+                MsgBox "Importación cancelada.", vbExclamation
+                Exit Sub
+            End If
+Seleccionado2:
+        Case 7  'No
+            Exit Sub
+        Case 2  'Cancelar
+            Exit Sub
+        Case Else   'Otra opción
+            Exit Sub
+    End Select
+
+    DebugMensajes = ThisWorkbook.Sheets("Busquedas").Range("Debug")
+    If Not DebugMensajes Then On Error GoTo ErrorHandler  'Reiniciar gestión de errores
+
+    'Activar actualización de pantalla
+    Application.ScreenUpdating = False
+    'Activar calculacion automatica
+    Application.Calculation = xlCalculationManual
+    Application.DisplayAlerts = False
+    Application.EnableEvents = False
+
+    Call IniciarBarra
+    ufProgressObr.Caption = "Importación de datos"
+    ufProgressObr.Proceso.Caption = "Abriendo archivo.."
+    ufProgressObr.SubProceso.Caption = "Abriendo archivo.."
+
+    'Abrir archivo
+    fNum = FreeFile
+    Open importPath For Input As #fNum
+
+    Line Input #fNum, textoLinea  'Valor de linea
+    rowValues = Split(textoLinea, "|")    'Array separado por "|"
+
+    cantCuad = CInt(rowValues(2)) + 2   '2 más por tablas de hojas fijas
+
+    progreso = 1 / (3 + 1 + (2 * cantCuad) + 4)     'Cuantas veces se llama a actualizar barra (3 minimo por reinicio, 1 mínimo por generar cuadros)
+    progreso2 = 1
+
+    Call ActualizarBarra2
+    Call ReiniciarBarra2
+
+    ufProgressObr.Proceso.Caption = "Reiniciando libro.."
+    'Reiniciar libro
+    Call Reiniciar("A")
+
+    Set colores = CreateObject("Scripting.Dictionary")
+    Set columnasRellenar = New Collection
+
+    prim = True
+    k = 1
+
+    Do Until EOF(fNum)
+        ufProgressObr.Proceso.Caption = "Importando información.."
+        ufProgressObr.SubProceso.Caption = "Leyendo información.."
+
+        If Not prim Then    'Hack para saltar primera vez
+            Line Input #fNum, textoLinea  'Siguiente linea
+            rowValues = Split(textoLinea, "|")    'Array separado por "|"
+            k = k + 1
+        Else
+            prim = False
+        End If
+
+        ufProgressObr.TituloObra.Caption = "Hoja: " & rowValues(1) & "  " & k & " de " & cantCuad
+
+        'Detectar tipo de hoja por marcador
+        Select Case rowValues(0)
+            Case "[FSheet]" 'Hoja fija
+                'Iniciar variables
+                If rowValues(1) = "Configuracion_cuadros" Then
+                    nombreHoja = rowValues(1)
+                    nombreTabla = "Nombre_cuadros"
+                    filasTabla = rowValues(2)
+
+                    Set columnasRellenar = New Collection   'Borrar colección
+
+                    'Que columnas se van a rellenar desde exportación
+                    columnasRellenar.Add 1 'Nombre cuadro
+                    columnasRellenar.Add 2 'Abreviatura
+                    columnasRellenar.Add 3 'Linea alimentación
+                    columnasRellenar.Add 4 'Item
+                    columnasRellenar.Add 5 'Nombre
+                    columnasRellenar.Add 6 'Nº
+                ElseIf rowValues(1) = "TABLA DE RESULTADOS" Then
+                    nombreHoja = rowValues(1)
+                    nombreTabla = "RESULTADOS"
+                    filasTabla = rowValues(2)
+
+                    Set columnasRellenar = New Collection   'Borrar colección
+
+                    'Que columnas se van a rellenar desde exportación
+                    columnasRellenar.Add 7  'Tipo instalación
+                    columnasRellenar.Add 16 'Secc elegida
+                    columnasRellenar.Add 17 'Aislamiento
+                    columnasRellenar.Add 18 'Agrupamiento
+                    columnasRellenar.Add 19 'Cable por fase
+                    columnasRellenar.Add 20 'Manguera
+                    columnasRellenar.Add 21 'Material
+                    columnasRellenar.Add 24 'PIA
+                    columnasRellenar.Add 26 'Longitud
+                    columnasRellenar.Add 28 'Tipo instalación
+                    columnasRellenar.Add 42 'Nombre cuadro
+                    columnasRellenar.Add 43 'Fila
+                    columnasRellenar.Add 44 'Línea alimentación
+                End If
+
+                'Pegar valores en tabla
+                Call PonerEnExcel(nombreHoja, nombreTabla, filasTabla, columnasRellenar)
+
+                If nombreTabla = "Nombre_cuadros" Then Call Cuadros("A") 'Generar cuadros
+                If nombreTabla = "RESULTADOS" Then Call GenerarTitulos("A") 'Generar títulos
+            Case "[GSheet]" 'Hoja generada
+                'Variables
+                nombreHoja = rowValues(1)
+                nombreTabla = rowValues(1)
+                filasTabla = rowValues(2)
+
+                colores.Add nombreHoja, rowValues(3)
+
+                Set columnasRellenar = New Collection   'Borrar colección
+
+                'Que columnas se van a rellenar desde exportación
+                columnasRellenar.Add 1  'Denominación circuito
+                columnasRellenar.Add 2  'Nombre circuito
+                columnasRellenar.Add 4  'Nº elemento
+                columnasRellenar.Add 5  'Tipo
+                columnasRellenar.Add 6  'Potencia
+                columnasRellenar.Add 10 'Factor simultaneidad
+                columnasRellenar.Add 11 'Factor utilidad
+                columnasRellenar.Add 13 'Monofasica o trifasica
+                columnasRellenar.Add 14 'Fase
+
+                'Pegar valores en tabla
+                Call PonerEnExcel(nombreHoja, nombreTabla, filasTabla, columnasRellenar)
+            Case "[Sheet]"  'No definido
+                MsgBox "Sin definir " & rowValues(0)
+            Case Else   'Otro
+                MsgBox "Sin definir " & rowValues(0)
+        End Select
+    Loop
+
+    Close #fNum 'Cerrar archivo
+
+    ufProgressObr.Proceso.Caption = "Cargar líneas de alimentación a desplegable.."
+    ufProgressObr.SubProceso.Caption = "Cargando.."
+    progreso2 = 1
+
+    Call RellenarLineasALIM("A")    'Tabla de alimentación
+
+    Call ActualizarBarra2
+    Call ReiniciarBarra2
+
+    ufProgressObr.Proceso.Caption = "Estableciendo colores de páginas.."
+    progreso2 = 1 / (colores.count)
+    i = 1
+
+    'Colores de pestañas
+    For Each ws In ThisWorkbook.Worksheets
+        If colores.Exists(ws.name) Then
+            ufProgressObr.SubProceso.Caption = "Hoja" & i & " de " & colores.count
+            ufProgressObr.TituloObra.Caption = "Hoja: " & ws.name
+            ws.Tab.color = colores(ws.name) 'ID color de página
+            i = i + 1
+            Call ActualizarBarra2
+        End If
+    Next ws
+    Call ReiniciarBarra2
+    ufProgressObr.TituloObra.Caption = ""
+
+    ufProgressObr.Proceso.Caption = "Recalculando hoja.."
+    ufProgressObr.SubProceso.Caption = ""
+    DoEvents
+    'Recalcular
+    Application.Calculation = xlCalculationAutomatic
+    Application.Calculation = xlCalculationManual
+
+    Call CargarCircuitos2("A")  'Poner lineas de alimentación
+
+    ThisWorkbook.Sheets("Configuracion_cuadros").Select
+
+    ufProgressObr.Proceso.Caption = "Finalizando macro.."
+    ufProgressObr.SubProceso.Caption = ""
+
+    'Pasar a resultados
+    MsgBox "Importación realizada sin errores desde: " & importPath, vbInformation, "Datos importados"
+
+    'Activar actualización de pantalla
+    Application.ScreenUpdating = True
+    'Activar calculacion automatica
+    Application.Calculation = xlCalculationAutomatic
+    Application.DisplayAlerts = True
+    Application.EnableEvents = True
+    'MsgBox veces & " " & 1 / progreso
+    Unload ufProgressObr
+    Exit Sub
+ErrorHandler:
+    'Si ocurre algun error ejecutar
+    MsgBox "Ha ocurrido un error al importar los datos: " & Err.Description, vbExclamation, "Error 902"
+    'Activar actualización de pantalla
+    Application.ScreenUpdating = True
+    'Activar calculacion automatica
+    Application.Calculation = xlCalculationAutomatic
+    Application.DisplayAlerts = True
+    Application.EnableEvents = True
+    Unload ufProgressObr
+    End
+End Sub
+
+Private Sub MeterEnArchivo(ByVal tipP As String, ByVal nomP As String, ByVal color As Long)
+
+    filTabla = ws.ListObjects(1).ListRows.count
+    
+    Set rng = ws.ListObjects(1).DataBodyRange 'rango de valores
+
+    ' MsgBox rng.Address
+    rowArr = rng.value
+
+    'Título de página
+    Select Case tipP
+        Case "Fijo"
+            Print #fNum, "[FSheet]|" & nomP & "|" & filTabla & "|" & color
+        Case "Generado"
+            Print #fNum, "[GSheet]|" & nomP & "|" & filTabla & "|" & color
+        Case Else
+            Print #fNum, "[Sheet]|" & nomP & "|" & filTabla & "|" & color
+    End Select
+
+    'Valores
+    For i = 1 To UBound(rowArr, 1)
+        For j = 1 To UBound(rowArr, 2)
+            If IsNumeric(rowArr(i, j)) And rowArr(i, j) <> " " And rowArr(i, j) <> "" Then
+                rowArr(i, j) = Replace(rowArr(i, j), ",", ".")  'Comas a puntos para correcta valoración de decimales
+                Print #fNum, rowArr(i, j) & "|";
+            Else
+                Print #fNum, rowArr(i, j) & "|";
+            End If
+        Next j
+        Print #fNum,   'Nueva fila
+    Next i
+
+    Print #fNum, "-----"
+End Sub
+
+Private Sub PonerEnExcel(ByVal nomH As String, ByVal nomT As String, ByVal filas As Long, ByVal col As Collection)
+    DebugMensajes = ThisWorkbook.Sheets("Busquedas").Range("Debug")
+    If Not DebugMensajes Then On Error GoTo ErrorHandler
+
+    Dim arrCopy() As Variant, valrs() As Variant
+    Dim topLeft As String, topLeft1 As String, tabla As Object
+    Dim prim As Boolean, is2D As Boolean
+    Dim longArr As Long
+
+    prim = True
+
+    progreso2 = 1 / (3 + col.count)
+
+    Dim arrVal As Collection
+    Set arrVal = New Collection
+
+    Do  'Loopea hasta que se encuentre separador de hojas
+        Line Input #fNum, textoLinea  'Siguiente linea
+
+        If textoLinea = "-----" Then Exit Do    'Salir del loop
+
+        'Primera vez, contar cuántas columnas
+        If prim Then
+            prim = False
+            colCount = CuantosCaracteres(textoLinea, "|")
+        End If
+
+        rowValues = Split(textoLinea, "|")    'Array separado por "|"
+        arrVal.Add rowValues    'Meter en coleccion
+    Loop Until textoLinea = "-----"
+
+    Call ActualizarBarra2
+
+    ufProgressObr.Proceso.Caption = "Importando información.."
+    ufProgressObr.SubProceso.Caption = "Preparando tabla para pegar valores.."
+
+    'Comprobar si se ha corregido nombre de tabla
+    ' On Error GoTo ignor
+    ' If cambios.Exists(nomH) Then
+    '     nomH = cambios.Item(nomH)
+    ' End If
+
+    ' If cambios.Exists(nomT) Then
+    '     nomT = cambios.Item(nomT)
+    ' End If
+    ' ignor:
+    ' On Error GoTo 0
+
+    'Variables por tabla
+    Set ws = ThisWorkbook.Sheets(nomH)
+    Set tabla = ws.ListObjects(nomT)
+    topLeft1 = tabla.DataBodyRange.Cells(1, 1).Offset(-1, 0).Address(0, 0) 'Con fila de títulos
+
+    Call ActualizarBarra2
+    ufProgressObr.SubProceso.Caption = "Transformando colección a array de 2D.."
+
+    'Convertir colección de arrays a array de 2 dimensiones
+    ReDim valrs(1 To arrVal.count, 1 To colCount)
+    For i = 1 To arrVal.count
+        For j = 1 To colCount
+            valrs(i, j) = arrVal(i)(j - 1)
+        Next j
+    Next i
+
+    Call ActualizarBarra2
+
+    'Tamaño tabla
+    tabla.Resize ws.Range(topLeft1).Resize(UBound(valrs, 1) + 2, UBound(valrs, 2))
+
+    'Loopear por array de columnas, pegar las que apliquen
+    For i = 1 To col.count
+        Dim rngF As Range
+
+        ufProgressObr.SubProceso.Caption = "Pegando columna nº " & i & " (" & col(i) & ") de " & col.count & ".."
+
+        arrCopy = Application.WorksheetFunction.Index(valrs, 0, col(i))   'Extraer columna de array
+
+        topLeft = tabla.DataBodyRange.Cells(1, col(i)).Address(0, 0)    'Celda superior izquierda de columna a pegar
+
+        Set rngF = ws.Range(topLeft).Resize(UBound(arrCopy, 1), 1)   'Rango a pegar
+
+        rngF.value = arrCopy
+
+        Call ActualizarBarra2
+    Next i
+
+    If Not DebugMensajes Then On Error GoTo ErrorHandler    'Reiniciar gestión de errores
+
+    ufProgressObr.SubProceso.Caption = "Reiniciando colección.."
+
+    'Borrar colección de columnas
+    Set columnasRellenar = Nothing
+
+    Call ReiniciarBarra2
+    Exit Sub
+ErrorHandler:
+    'Si ocurre algun error ejecutar
+    MsgBox "Ha ocurrido un error al poner en excel los valores de la hoja " & nomH & " : " & Err.Description, vbExclamation, "Error 903"
+    'Activar actualización de pantalla
+    Application.ScreenUpdating = True
+    'Activar calculacion automatica
+    Application.Calculation = xlCalculationAutomatic
+    Application.DisplayAlerts = True
+    Application.EnableEvents = True
+    Unload ufProgressObr
+    End
+End Sub
+
+Function CuantosCaracteres(ByVal txt As String, ByVal ch As String) As Long
+    Dim i As Long, count As Long
+    
+    ' Ensure we are only checking the first character of "ch"
+    If Len(ch) <> 1 Then
+        CuantosCaracteres = -1 ' Return -1 if input is not a single character
+        Exit Function
+    End If
+    
+    count = 0
+    For i = 1 To Len(txt)
+        If Mid(txt, i, 1) = ch Then
+            count = count + 1
+        End If
+    Next i
+    
+    CuantosCaracteres = count
+End Function

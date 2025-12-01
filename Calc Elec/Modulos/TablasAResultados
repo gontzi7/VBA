@@ -1,0 +1,1306 @@
+Option Explicit
+
+Dim ws As Worksheet, gen As Worksheet
+Dim nomCuad As String, msg As String
+Dim columnNomReslt As ListColumn, columnFilReslt As ListColumn, columnAlmReslt As ListColumn
+Dim tabla As ListObject, tablaReslt As ListObject, tablaALIM As ListObject
+Dim i As Double, j As Double, cont As Double, ant As Double, k As Double, a As Double, b As Double, sinGenerar As Double, faltan As Double
+Dim colsCount As Long, colCount As Long
+Dim OutPut As Integer
+Dim ignorar As Boolean, DebugMensajes As Boolean, encontrado As Boolean, faltaAlim As Boolean, CAD As Boolean, framework35 As Boolean, primeraFila As Boolean
+'Arrays y ayudantes de arrays
+Dim tablaPrincipal() As Variant, tablaResultados() As Variant, valoresDefecto() As Variant, finalArr() As Variant, rowArr() As Variant, templateRow As Variant, valores As Range
+Dim arrayTabla2 As Collection, arrayTabla1 As Object, nuevos As Object
+
+'===============================================================================================================================================
+'Sub principales accionamiento botón
+'===============================================================================================================================================
+Sub PonerTodoEnResultado()
+    '---------------------------------------------------------------------------------
+    ' PonerTodoEnResultado
+    ' Mueve todos los cuadros definidos en la tabla principal a la tabla de resultados
+    ' formateandola si exien datos previos
+    '---------------------------------------------------------------------------------
+
+    DebugMensajes = ThisWorkbook.Sheets("Busquedas").Range("Debug")
+    If Not DebugMensajes Then On Error GoTo ErrorHandler
+    Cerrar = False
+
+    'Desactivar actulaizaciones de pantalla
+    Application.ScreenUpdating = False
+    'Desactivar calculacion manual
+    Application.Calculation = xlCalculationManual
+    'Borrar portapapeles
+    Application.CutCopyMode = False
+    Application.EnableEvents = False
+
+    Call VariablesTablas        'Cargar tablas
+
+    'Iniciar barra de progreso
+    Call IniciarBarra
+    ufProgressObr.Caption = "Pasar cuadros a resultados."
+    ufProgressObr.Proceso.Caption = "Realizando preparativos"
+    ufProgressObr.SubProceso.Caption = "Iniciando barra.."
+
+    progreso = 1 / (2 + 1 + UBound(tablaPrincipal, 1) + 1 + 1)   'Variable barra de progreso principal
+
+    Call ComprobarRepetidos(True)
+
+    Call FormatearReslt         'Formatear tabla de resultados dejando una única fila
+
+    Call RellenarLineasALIM     'Rellenar tabla de lineas de alimentación externas
+
+    Call CargarFormulas         'Guardar primera fila de formulas en memoria
+
+    'Comprobar instalación de .NET framework V3.5
+    framework35 = False
+    Call InstaladoV35
+
+    b = 2   'Indicador número fila de línea de alimentación externa
+    ant = 2 'Primera fila a introducir cuadro
+    a = 0   'Contador de cuadros movidos
+    sinGenerar = 0  'Contador de cuadros que no estan generados
+    primeraFila = True
+
+    'Copiar y pegar tablaPrincipal de líneas definidas en cuadros
+    For i = 1 To UBound(tablaPrincipal, 1)
+        'Nombre de página a estudiar
+        nomCuad = tablaPrincipal(i, 2)
+        If ExistePagina(nomCuad) Then
+            ignorar = False
+            a = a + 1
+            ufProgressObr.TituloObra.Caption = i & " de " & UBound(tablaPrincipal, 1)
+            Call MeterCuadroCod(nomCuad)
+        Else
+            sinGenerar = sinGenerar + 1
+        End If
+    Next i
+
+    ufProgressObr.TituloObra.Caption = ""
+    ufProgressObr.Proceso.Caption = "Dando formato a array de datos."
+    ufProgressObr.SubProceso.Caption = "Construyendo array de 2 dimensiones.."
+    If framework35 Then progreso2 = 1 / arrayTabla1.Count
+    If Not framework35 Then progreso2 = 1 / (arrayTabla2.Count + nuevos.Count)
+    DoEvents
+
+    If framework35 Then
+        'Convertir ArrayList en array de 2 dimensiones
+        ReDim finalArr(1 To arrayTabla1.Count, 1 To colCount)
+        For i = 1 To arrayTabla1.Count
+            For j = 1 To colCount
+                finalArr(i, j) = arrayTabla1(i - 1)(j)
+            Next j
+            Call ActualizarBarra2
+        Next i
+    Else
+        faltan = nuevos.Count
+        'Convertir colección de arrays a array de 2 dimensiones
+        ReDim finalArr(1 To arrayTabla2.Count + nuevos.Count, 1 To colCount)
+        For i = arrayTabla2.Count + nuevos.Count To 1 Step -1   'De maximo a minimo para mantener relación
+            If nuevos.Exists(i) Then
+                For j = 1 To colCount
+                    finalArr(i, j) = nuevos(i)(j)
+                Next j
+                nuevos.Remove i   'Eliminar ocurrencia
+                faltan = faltan - 1
+                GoTo Siguiente
+            End If
+            For j = 1 To colCount
+                finalArr(i, j) = arrayTabla2(i - faltan)(j)
+            Next j
+            Siguiente:
+            Call ActualizarBarra2
+        Next i
+    End If
+    Call ReiniciarBarra2
+
+    Call PonerDatosExel(finalArr)
+
+    ufProgressObr.Proceso.Caption = "Finalizando macro"
+    ufProgressObr.SubProceso.Caption = "Generando títulos en tabla de resultados.."
+    DoEvents
+    Call GenerarTitulos
+
+    Call ReiniciarBarra2
+    If sinGenerar > 1 Then
+        msg = "Se han pasado con éxito " & a & " cuadros a resultado." & vbCrLf & "No se han podido pasar " & sinGenerar & " cuadros, ya que no están generados ni definidos."
+    Else
+        msg = "Se han pasado con éxito " & a & " cuadros a resultado."
+    End If
+    MsgBox msg, vbInformation, "Proceso completado sin errores"
+    'Activar actualización de pantalla
+    Application.ScreenUpdating = True
+    'Activar calculacion automatica
+    Application.Calculation = xlCalculationAutomatic
+    Application.DisplayAlerts = True
+    Application.EnableEvents = True
+    Unload ufProgressObr
+    Exit Sub
+ErrorHandler:
+    'Si ocurre algun error ejecutar
+    MsgBox "Ha ocurrido un error al mover tablas a resumen de resultados: " & Err.Description, vbExclamation, "Error 401"
+    'Activar actualización de pantalla
+    Application.ScreenUpdating = True
+    'Activar calculacion automatica
+    Application.Calculation = xlCalculationAutomatic
+    Application.DisplayAlerts = True
+    Application.EnableEvents = True
+    Unload ufProgressObr
+End Sub
+
+Sub PonerUnoEnResultado()
+    '---------------------------------------------------------------------------------
+    ' PonerUnoEnResultado
+    ' Mueve el cuadro activo a la tabla de resultados, con posibilidad de actualizar
+    ' el cuadro si ya existe o formatear la tabla de resultados si ya tiene datos
+    '---------------------------------------------------------------------------------
+
+    DebugMensajes = ThisWorkbook.Sheets("Busquedas").Range("Debug")
+    If Not DebugMensajes Then On Error GoTo ErrorHandler
+    Cerrar = False
+
+    'Desactivar actulaizaciones de pantalla
+    Application.ScreenUpdating = False
+    'Desactivar calculacion manual
+    Application.Calculation = xlCalculationManual
+    'Borrar portapapeles
+    Application.CutCopyMode = False
+    Application.EnableEvents = False
+
+    Call VariablesTablas        'Cargar tablas
+
+    Call RellenarLineasALIM     'Rellenar tabla de lineas de alimentación externas
+
+    ignorar = False
+    'Si hay información introducida en resultados ya, preguntar si borrar o no
+    If UBound(tablaResultados, 1) > 1 Then
+        'Si se encuentra mismo item de cuadro (abreviatura), actualizar automáticamente
+        If BuscarEnTabla(ActiveSheet.Name, tablaResultados, 42) Then
+            OutPut = MsgBox("Se ha encontrado el cuadro solicitado en resultados, si presiona 'Sí', actualizará el cudro sin borrar datos." & vbCrLf & _
+                "Si pulsa 'No' se borrará la tabla entera para que únicamente quede el cuadro solicitado." & vbCrLf & "Actualizar in situ?", vbQuestion + vbYesNoCancel, _
+                "Detectados datos existentes en tabla de resultados")
+            Select Case OutPut
+                Case 6  'Si
+                    b = FilaAlimExt()   'Indicador número fila de línea de alimentación externa
+                    ant = UBound(tablaResultados, 1) + 1 'Primera fila a introducir cuadro
+                    Call CuadAct(ActiveSheet.Name)  'Actualizar
+                    MsgBox "Se ha actualizado correctamente el cuadro " & ActiveSheet.Name, vbInformation, "Proceso completado sin errores"
+                    Exit Sub    'Salir de sub
+                Case 7  'No
+                    Call FormatearReslt("I") 'Borrar tabla de resultados
+                    b = 2   'Indicador número fila de línea de alimentación externa
+                    ant = 2 'Primera fila a introducir cuadro
+                Case 2  'Cancelar
+                    GoTo Salir2
+                Case Else   'Otra cosa que pueda pasar
+                    GoTo Salir2
+            End Select
+        Else
+            OutPut = MsgBox("Se ha detectado que hay datos en la tabla de resultados, si presiona 'Sí', se introducirá el cuadro al final de la tabla." & vbCrLf & _
+                "Si pulsa 'No' se borrará la tabla entera para que únicamente quede el cuadro solicitado." & vbCrLf & "Proceder a pasar a resultados?", vbQuestion + vbYesNoCancel, _
+                "Detectados datos existentes en tabla de resultados")
+            Select Case OutPut
+                Case 6  'Si
+                    b = FilaAlimExt()   'Indicador número fila de línea de alimentación externa
+                    ant = UBound(tablaResultados, 1) + 1 'Primera fila a introducir cuadro
+                Case 7  'No
+                    Call FormatearReslt("I") 'Borrar tabla de resultados
+                    b = 2   'Indicador número fila de línea de alimentación externa
+                    ant = 2 'Primera fila a introducir cuadro
+                Case 2  'Cancelar
+                    GoTo Salir2
+                Case Else   'Otra cosa que pueda pasar
+                    GoTo Salir2
+            End Select
+        End If
+    Else
+        Call FormatearReslt   'Borrar tabla de resultados
+        b = 2   'Indicador número fila de línea de alimentación externa
+        ant = 2 'Primera fila a introducir cuadro
+    End If
+    'Buscar i de cudaro solicitado
+    i = BuscarI(ActiveSheet.Name)
+    'Meter cuadro
+    Call MeterCuadro(ActiveSheet.Name)
+    ufProgressObr.SubProceso.Caption = "Recalculando formatos de títulos.."
+    'Recalcular formatos de títulos
+    Call QuitarFormato
+    Call GenerarTitulos
+    MsgBox "Se ha pasado el cuadro con éxito a resultado.", vbInformation, "Proceso completado sin errores"
+Salir2:
+    'Activar actualización de pantalla
+    Application.ScreenUpdating = True
+    'Activar calculacion automatica
+    Application.Calculation = xlCalculationAutomatic
+    Application.DisplayAlerts = True
+    Application.EnableEvents = True
+    Unload ufProgressObr
+    Exit Sub
+ErrorHandler:
+    'Si ocurre algun error ejecutar
+    MsgBox "Ha ocurrido un error al mover una tabla a resumen de resultados: " & Err.Description, vbExclamation, "Error 405"
+    'Activar actualización de pantalla
+    Application.ScreenUpdating = True
+    'Activar calculacion automatica
+    Application.Calculation = xlCalculationAutomatic
+    Application.DisplayAlerts = True
+    Application.EnableEvents = True
+    Unload ufProgressObr
+End Sub
+
+Sub ActualizarTodo()
+    '---------------------------------------------------------------------------------
+    ' ActualizarTodo
+    ' Actualiza todos los cuadros definidos en la tabla principal en la tabla de resultados
+    ' sin borrar datos previos, con posibilidad de generar cuadros nuevos si no existen
+    '---------------------------------------------------------------------------------
+
+    Dim contAct As Double, contGen As Double
+
+    DebugMensajes = ThisWorkbook.Sheets("Busquedas").Range("Debug")
+    If Not DebugMensajes Then On Error GoTo ErrorHandler
+    Cerrar = False
+
+    'Desactivar actulaizaciones de pantalla
+    Application.ScreenUpdating = False
+    'Desactivar calculacion manual
+    Application.Calculation = xlCalculationManual
+    'Borrar portapapeles
+    Application.CutCopyMode = False
+    Application.EnableEvents = False
+
+    Call VariablesTablas        'Cargar tablas
+
+    Call ComprobarRepetidos(True)
+
+    'Iniciar barra de progreso
+    Call IniciarBarra
+    ufProgressObr.Caption = "Actualizar cuadros de resultados."
+    ufProgressObr.Proceso.Caption = "Realizando preparativos"
+    ufProgressObr.SubProceso.Caption = "Iniciando barra.."
+
+    progreso = 1 / (2 + 2 + tabla.ListRows.Count)   'Variable barra de progreso principal
+
+    Call QuitarInexistentes
+
+    'Preguntar si actualizar CAD también
+    OutPut = MsgBox("Actualizar CAD también?", vbYesNoCancel + vbQuestion, "Actualizar CAD")
+    Select Case OutPut
+        Case 6  'Si
+            CAD = True
+        Case 7  'No
+            CAD = False
+        Case 2  'Cancelar
+            GoTo Salir3
+    End Select
+
+    Call RellenarLineasALIM     'Rellenar tabla de lineas de alimentación externas
+
+    b = FilaAlimExt()   'Indicador número fila de línea de alimentación externa
+    ant = UBound(tablaResultados, 1) + 1 'Primera fila a introducir cuadro
+
+    For i = 1 To UBound(tablaPrincipal, 1)    'Loopear por cada elemento en la tabla de cuadros y actualizar cada uno
+        'Reestablecer nombre de cuadro
+        ThisWorkbook.Sheets(tablaPrincipal(i, 2)).Range("E2") = tablaPrincipal(i, 1)
+
+        ufProgressObr.TituloObra.Caption = i & " de " & UBound(tablaPrincipal, 1)
+        If BuscarEnTabla(tablaPrincipal(i, 2), tablaResultados, 42) Then
+            If DebugMensajes Then MsgBox tablaPrincipal(i, 2) & " Encontrado"
+            ignorar = False
+            Call CuadAct(tablaPrincipal(i, 2))    'Se ha encontrado, actualizar
+            contAct = contAct + 1
+        Else
+            If DebugMensajes Then MsgBox tablaPrincipal(i, 2) & " No encontrado"
+            ignorar = False
+            Call MeterCuadro(tablaPrincipal(i, 2)) 'No se ha encontrado, poner nuevo
+            contGen = contGen + 1
+            Call VariablesTablas(True)        'Cargar tablas
+        End If
+    Next i
+    ufProgressObr.Proceso.Caption = "Finalizando macro"
+    ufProgressObr.TituloObra.Caption = ""
+    ufProgressObr.SubProceso.Caption = "Recalculando formatos de títulos.."
+    DoEvents
+    'Recalcular
+    Application.Calculation = xlCalculationAutomatic
+    Application.CalculateFullRebuild
+    DoEvents
+    Application.Calculation = xlCalculationManual
+    DoEvents
+    'Recalcular formatos de títulos
+    Call QuitarFormato
+    Call GenerarTitulos
+
+    ufProgressObr.Proceso.Caption = "Finalizando macro"
+    ufProgressObr.SubProceso.Caption = "Generando títulos.."
+    'Generar título
+    Call GenerarTitulos
+
+    Call ReiniciarBarra2
+
+    If CAD Then
+        Unload ufProgressObr    'Descargar barra para cargar de nuevo
+        Call ActCAD(, True)
+
+        MsgBox "Se ha(n) actualizado correctamente " & contAct & " cuadro(s), se ha(n) generado " & contGen & " cuadro(s) y se ha actualizado la tabla de CAD sin errores.", _
+            vbInformation, "Proceso completado sin errores"
+    Else
+        MsgBox "Se ha(n) actualizado correctamente " & contAct & " cuadro(s), y se ha(n) generado " & contGen & " cuadro(s) sin errores.", vbInformation, "Proceso completado sin errores"
+    End If
+    ufProgressObr.SubProceso.Caption = "Recalculando hoja completa.."
+    DoEvents
+Salir3:
+    'Activar actualización de pantalla
+    Application.ScreenUpdating = True
+    'Activar calculacion automatica
+    Application.Calculation = xlCalculationAutomatic
+    Application.DisplayAlerts = True
+    Application.EnableEvents = True
+    Unload ufProgressObr
+    Exit Sub
+ErrorHandler:
+    'Si ocurre algun error ejecutar
+    MsgBox "Ha ocurrido un error al actualizar tablas en resumen de resultados: " & Err.Description, vbExclamation, "Error 403"
+    'Activar actualización de pantalla
+    Application.ScreenUpdating = True
+    'Activar calculacion automatica
+    Application.Calculation = xlCalculationAutomatic
+    Application.DisplayAlerts = True
+    Application.EnableEvents = True
+    Unload ufProgressObr
+End Sub
+
+Sub ActualizarUno()
+    '---------------------------------------------------------------------------------
+    ' ActualizarUno
+    ' Actualiza el cuadro activo en la tabla de resultados, sin borrar datos previos,
+    ' con posibilidad de generar el cuadro si no existe. (No se usa)
+    '---------------------------------------------------------------------------------
+
+    DebugMensajes = ThisWorkbook.Sheets("Busquedas").Range("Debug")
+    If Not DebugMensajes Then On Error GoTo ErrorHandler
+    Cerrar = False
+
+    'Desactivar actulaizaciones de pantalla
+    Application.ScreenUpdating = False
+    'Desactivar calculacion manual
+    Application.Calculation = xlCalculationManual
+    'Borrar portapapeles
+    Application.CutCopyMode = False
+    Application.EnableEvents = False
+
+    Call VariablesTablas        'Cargar tablas
+
+    Call RellenarLineasALIM     'Rellenar tabla de lineas de alimentación externas
+
+    If BuscarEnTabla(ThisWorkbook.ActiveSheet.Name, tablaResultados, 42) Then
+        Call CuadAct(ThisWorkbook.ActiveSheet.Name)    'Se ha encontrado, actualizar
+    Else
+        Call MeterCuadro(ThisWorkbook.ActiveSheet.Name) 'No se ha encontrado, poner nuevo
+    End If
+
+    ufProgressObr.SubProceso.Caption = "Recalculando formatos de títulos.."
+    'Recalcular formatos de títulos
+    Call QuitarFormato
+    Call GenerarTitulos
+
+    'Activar actualización de pantalla
+    Application.ScreenUpdating = True
+    'Activar calculacion automatica
+    Application.Calculation = xlCalculationAutomatic
+    Application.DisplayAlerts = True
+    Application.EnableEvents = True
+    Unload ufProgressObr
+    Exit Sub
+ErrorHandler:
+    'Si ocurre algun error ejecutar
+    MsgBox "Ha ocurrido un error al actualizar tablas en resumen de resultados: " & Err.Description, vbExclamation, "Error 404"
+    'Activar actualización de pantalla
+    Application.ScreenUpdating = True
+    'Activar calculacion automatica
+    Application.Calculation = xlCalculationAutomatic
+    Application.DisplayAlerts = True
+    Application.EnableEvents = True
+    Unload ufProgressObr
+End Sub
+
+'===============================================================================================================================================
+'Generación por arrays
+'===============================================================================================================================================
+Sub MeterCuadroCod(ByVal nomCuadro As Variant, Optional mantener As Boolean)
+    '---------------------------------------------------------------------------------
+    ' MeterCuadroCod
+    ' Genera el cuadro solicitado en la tabla de resultados, usando arrays para
+    ' mejorar la velocidad de proceso
+    '---------------------------------------------------------------------------------
+
+    DebugMensajes = ThisWorkbook.Sheets("Busquedas").Range("Debug")
+    If Not DebugMensajes Then On Error GoTo ErrorHandler
+
+    ufProgressObr.Proceso.Caption = "Trabajando en cuadro " & nomCuadro & "."
+    ufProgressObr.SubProceso.Caption = "Buscando fila de cuadro.."
+    'Buscar i de cudaro solicitado
+    i = BuscarI(nomCuadro)
+
+    If Cerrar Then GoTo SalirMCC
+
+    ufProgressObr.SubProceso.Caption = "Midiendo tamaño de cuadro.."
+    Set gen = ThisWorkbook.Sheets(nomCuadro)
+    'Abrir página y contar líneas con datos introducidos
+    cont = gen.ListObjects(nomCuadro).ListRows.Count
+
+    progreso2 = 1 / (cont + 2)   'Variable para barra de progreso, 1 más para construcción de array 2D
+
+    ufProgressObr.SubProceso.Caption = "Iniciando variables.."
+
+    Dim r As Long, c As Long
+    Dim primero As Boolean, prim1 As Boolean
+
+    'Variables
+    primero = True
+    prim1 = True
+    colCount = UBound(tablaResultados, 2) 'Número de columnas en total
+    k = 4
+
+    Call ActualizarBarra2
+
+    'Primera fila reservada
+    If primeraFila Then
+        ReDim rowArr(1 To colCount)
+        Call ValoresEstaticos("")   'Valores estáticos vacios
+        Call ValoresFormulas    'Formulas de celdas
+        rowArr(42) = "ALIM" 'Cuadro
+        If framework35 Then arrayTabla1.Add rowArr
+        If Not framework35 Then arrayTabla2.Add rowArr
+        primeraFila = False
+    End If
+    'Generar fila por cada entrada en cuadro
+    For j = 1 To cont + 1   '1 más por fila de título
+        If Cerrar Then GoTo SalirMCC
+        ReDim rowArr(1 To colCount)
+        If primero Then
+            Call ValoresEstaticos("")   'Valores estáticos vacios
+            Call ValoresFormulas    'Formulas de celdas
+            rowArr(42) = nomCuadro 'Cuadro
+            primero = False
+        Else
+            ufProgressObr.SubProceso.Caption = "Introduciendo valores de circuito nº " & k - 3 & " de " & cont & ".."
+
+            Call ValoresEstaticos("nuevo")   'Valores estáticos defecto
+            Call ValoresFormulas    'Formulas de celdas
+            rowArr(42) = nomCuadro 'Cuadro
+            rowArr(43) = k 'Fila
+            'L.Alim
+            If tablaPrincipal(i, 3) = "EXTERNO ------>" Then
+                rowArr(44) = tablaPrincipal(i, 4)
+            Else
+                rowArr(44) = ItemDesdeNombre(tablaPrincipal(i, 3))
+            End If
+
+            k = k + 1
+            Call ActualizarBarra2
+        End If
+        If framework35 Then arrayTabla1.Add rowArr
+        If Not framework35 Then arrayTabla2.Add rowArr
+
+    Next j
+    'Mirar si aplica línea de alimentación externa
+    If tablaPrincipal(i, 3) = "EXTERNO ------>" And Not BuscarEnTabla(tablaPrincipal(i, 4), tablaResultados, 1) Then
+        If Cerrar Then GoTo SalirMCC
+        ufProgressObr.SubProceso.Caption = "Introduciendo línea de alimentación externa.."
+
+        Call ValoresEstaticos("nuevo")   'Valores estáticos defecto
+        Call ValoresFormulas    'Formulas de celdas
+        'Parámetros de cálculo
+        rowArr(42) = "ALIM" 'Cuadro
+        rowArr(43) = b + 2 'Fila
+        rowArr(44) = "ALIM" 'L.Alim
+
+        'Añadir fila después de la última de lineas de alimentación
+        If framework35 Then 'ArrayList
+            arrayTabla1.Insert b - 1 , rowArr
+        Else    'Diccionario
+            nuevos.Add b, rowArr
+        End If
+
+        b = b + 1
+
+        If Cerrar Then GoTo SalirMCC
+
+        Call ActualizarBarra2
+    End If
+
+    Call ReiniciarBarra2
+    Exit Sub
+SalirMCC:
+    Call ReiniciarBarra2
+    ufProgressObr.TituloObra.Caption = "Cerrando macro correctamente.."
+    ufProgressObr.Caption = "Cerrando macro.."
+    'Borrar filas libres que se hayan generado de más
+    Call QuitarInexistentes
+    ws.Select
+    'Activar actualización de pantalla
+    Application.ScreenUpdating = True
+    'Activar calculacion automatica
+    Application.Calculation = xlCalculationAutomatic
+    Application.DisplayAlerts = True
+    Application.EnableEvents = True
+    Unload ufProgressObr
+    End
+    Exit Sub
+ErrorHandler:
+    'Si ocurre algun error ejecutar
+    MsgBox "Ha ocurrido un error al generar ArrayList de datos: " & Err.Description, vbExclamation, "Error 406"
+    'Activar actualización de pantalla
+    Application.ScreenUpdating = True
+    'Activar calculacion automatica
+    Application.Calculation = xlCalculationAutomatic
+    Application.DisplayAlerts = True
+    Application.EnableEvents = True
+    Unload ufProgressObr
+    End
+End Sub
+
+'===============================================================================================================================================
+'Ayudantes a generación por arrays
+'===============================================================================================================================================
+Sub InstaladoV35()
+    '---------------------------------------------------------------------------------
+    ' InstaladoV35
+    ' Comprobar si está instalado el .NET Framework v3.5
+    ' Si no está instalado, preguntar si se quiere instalar o usar método alternativo
+    '---------------------------------------------------------------------------------
+
+    Dim arrList As Object
+    On Error Resume Next
+    Set arrList = CreateObject("System.Collections.ArrayList")
+    On Error GoTo 0
+
+    If arrList Is Nothing Then
+        OutPut = MsgBox("Para que funcione esta macro, es recomendable la instalación del .NET Framework v3.5." & vbCrLf & _
+               "Se abrirá un cuadro de 'Características de Windows', elige el cuadrado de '.NET Framework 3.5'." & vbCrLf & _
+               "Intentar instalar?", vbYesNoCancel + vbExclamation, "Framework v3.5 recomendado")
+        Select Case OutPut
+            Case 6  'Si
+                'Abrir página oficial de Microsoft para descargar el instalador del .NET 3.5
+                'ThisWorkbook.FollowHyperlink "https://dotnet.microsoft.com/en-us/download/dotnet-framework/thank-you/net35-sp1-web-installer"
+                'Carácteristicas de Windows
+                Shell "control.exe appwiz.cpl,,2", vbNormalFocus
+                GoTo SalirFW
+            Case 7  'No
+                'Usar metodo de colecciones y diccionarios
+                Set nuevos = CreateObject("Scripting.Dictionary")
+                framework35 = False
+                Set arrayTabla2 = New Collection
+                ufProgressObr.Caption = ufProgressObr.Caption & " Usando colecciones."
+            Case 2  'Cancelar
+                GoTo SalirFW
+            Case Else
+                GoTo SalirFW
+        End Select
+    Else
+        framework35 = True
+        Set arrayTabla1 = CreateObject("System.Collections.ArrayList")
+        ufProgressObr.Caption = ufProgressObr.Caption & " Usando ArrayList."
+    End If
+
+    Exit Sub
+SalirFW:
+    'Activar actualización de pantalla
+    Application.ScreenUpdating = True
+    'Activar calculacion automatica
+    Application.Calculation = xlCalculationAutomatic
+    Application.DisplayAlerts = True
+    Application.EnableEvents = True
+    Unload ufProgressObr
+    End
+End Sub
+
+Sub CargarFormulas()
+    '---------------------------------------------------------------------------------
+    ' CargarFormulas
+    ' Guardar formulas en memoria de la primera fila de la tabla de resultados
+    '---------------------------------------------------------------------------------
+
+    Dim reslt As Worksheet, topLeft As String
+    Dim formula As Variant
+
+    Set reslt = ThisWorkbook.Sheets("TABLA DE RESULTADOS")
+    topLeft = tablaReslt.DataBodyRange.Cells(1, 1).Address
+    'Guardar formulas de primera fila de tabla en array
+    colsCount = tablaReslt.Range.Columns.Count
+    templateRow = reslt.Range(topLeft).Resize(1, colsCount).Formula
+
+    'Borrar todo lo que no sea fórmula (no contiene =)
+    For a = 1 To colsCount
+        If InStr(templateRow(1, a), "=") = 0 Then templateRow(1, a) = ""
+        'If DebugMensajes Then MsgBox templateRow(1, a)
+    Next a
+End Sub
+
+Sub ValoresFormulas()
+    '---------------------------------------------------------------------------------
+    ' ValoresFormulas
+    ' Introducir en array de fila las formulas guardadas en memoria
+    '---------------------------------------------------------------------------------
+
+    Dim r As Long
+    Dim formula As Variant
+
+    For r = 1 To tablaReslt.Range.Columns.Count
+        If templateRow(1, r) <> "" Then rowArr(r) = templateRow(1, r)   'Escribir formula guardada de cada celda
+    Next r
+End Sub
+
+Sub ValoresEstaticos(ByVal modo As String)
+    '---------------------------------------------------------------------------------
+    ' ValoresEstaticos
+    ' Introducir en array de fila los valores estáticos según el modo solicitado
+    '---------------------------------------------------------------------------------
+
+    Select Case modo
+        Case "" 'Vacío
+            rowArr(7) = ""  'Tipo tendido
+            rowArr(17) = "" 'Aislamiento
+            rowArr(16) = "" 'Sección
+            rowArr(18) = "" 'Agrupación
+            rowArr(19) = "" 'Conductores por fase
+            rowArr(21) = "" 'Material
+            rowArr(24) = "" 'PIA
+            rowArr(26) = "" 'Longitud
+            rowArr(28) = "" 'Tipo instalaciónn
+            rowArr(42) = "" 'Cuadro
+            rowArr(43) = "" 'Fila
+            rowArr(44) = "" 'L.Alim
+        Case "nuevo"    'Valores defecto
+            rowArr(7) = valoresDefecto(1, 1) 'Tipo tendido
+            rowArr(17) = valoresDefecto(4, 1) 'Aislamiento
+            rowArr(16) = "" 'Sección
+            rowArr(18) = 1 'Agrupación
+            rowArr(19) = 1 'Conductores por fase
+            rowArr(21) = valoresDefecto(2, 1) 'Material
+            rowArr(24) = "" 'PIA
+            rowArr(26) = "" 'Longitud
+            rowArr(28) = valoresDefecto(3, 1) 'Tipo instalaciónn
+            rowArr(42) = "" 'Cuadro
+            rowArr(43) = "" 'Fila
+            rowArr(44) = "" 'L.Alim
+        Case "extra"    'Sin uso
+
+        Case Else
+            rowArr(7) = ""  'Tipo tendido
+            rowArr(17) = "" 'Aislamiento
+            rowArr(16) = "" 'Sección
+            rowArr(18) = "" 'Agrupación
+            rowArr(19) = "" 'Conductores por fase
+            rowArr(21) = "" 'Material
+            rowArr(24) = "" 'PIA
+            rowArr(26) = "" 'Longitud
+            rowArr(28) = "" 'Tipo instalaciónn
+            rowArr(42) = "" 'Cuadro
+            rowArr(43) = "" 'Fila
+            rowArr(44) = "" 'L.Alim
+    End Select
+End Sub
+
+Sub PonerDatosExel(ByVal arr As Variant)
+    '---------------------------------------------------------------------------------
+    ' PonerDatosExel
+    ' Poner en la tabla de resultados los valores del array de 2 dimensiones
+    '---------------------------------------------------------------------------------
+
+    ufProgressObr.Proceso.Caption = "Introduciendo valores a Excel"
+    ufProgressObr.SubProceso.Caption = "Estableciendo variables.."
+    DoEvents
+    progreso2 = 1 / 3
+
+    Call VariablesTablas
+    Dim reslt As Worksheet, topLeft As String, topLeft1 As String
+    Set reslt = ThisWorkbook.Sheets("TABLA DE RESULTADOS")
+    topLeft = tablaReslt.DataBodyRange.Cells(1, 1).Address(0, 0)
+    topLeft1 = tablaReslt.DataBodyRange.Cells(1, 1).Offset(-1, 0).Address(0, 0) 'Con fila de títulos
+    Call ActualizarBarra2
+
+    ufProgressObr.SubProceso.Caption = "Estableciendo tamaño de tabla principal.."
+    DoEvents
+    tablaReslt.Resize reslt.Range(topLeft1).Resize(UBound(arr, 1) + 1, UBound(arr, 2))
+
+    Call ActualizarBarra2
+
+    ufProgressObr.SubProceso.Caption = "Poniendo valores en excel.."
+    DoEvents
+    'Pegar valores en una instrucción
+    Dim rngF As Range
+    Set rngF = reslt.Range(topLeft).Resize(UBound(arr, 1), UBound(arr, 2))
+
+    rngF.Value = arr
+
+    Call ActualizarBarra2
+    Call ReiniciarBarra2
+End Sub
+
+'===============================================================================================================================================
+'Generacíon por celdas en tabla
+'===============================================================================================================================================
+Sub MeterCuadro(ByVal nomCuadro As Variant)
+    '---------------------------------------------------------------------------------
+    ' MeterCuadro
+    ' Genera el cuadro solicitado en la tabla de resultados, usando la tabla de Excel
+    ' Método viejo, más lento. Se mantiene para cuadros individuales
+    '---------------------------------------------------------------------------------
+
+    DebugMensajes = ThisWorkbook.Sheets("Busquedas").Range("Debug")
+    If Not DebugMensajes Then On Error GoTo ErrorHandler
+
+    ufProgressObr.Proceso.Caption = "Moviendo cuadro " & nomCuadro & "."
+    ufProgressObr.SubProceso.Caption = "Buscando fila de cuadro.."
+    'Buscar i de cudaro solicitado
+    i = BuscarI(nomCuadro)
+
+    If Cerrar Then GoTo SalirMC
+
+    ufProgressObr.SubProceso.Caption = "Asignando hueco en tabla de resultados.."
+    'Añadir fila de título
+    tablaReslt.ListRows.Add
+    'Nombe de cuadro
+    columnNomReslt.DataBodyRange.Cells(ant).Value = nomCuadro
+
+    If Cerrar Then GoTo SalirMC
+
+    Set gen = ThisWorkbook.Sheets(nomCuadro)
+    'Abrir página y contar líneas con datos introducidos
+    cont = gen.ListObjects(nomCuadro).ListRows.Count
+
+    progreso2 = 1 / cont   'Variable para barra de progreso
+    'Variables contador
+    k = 4
+    j = ant + 1
+
+    ufProgressObr.SubProceso.Caption = "Generando tabla.."
+    'Loop para generar cuadro solicitado
+    Do While j <= cont + ant
+        If Cerrar Then GoTo SalirMC
+        ufProgressObr.SubProceso.Caption = "Introduciendo valores de circuito nº " & k - 3 & " de " & cont & ".."
+        Call MeterFila(nomCuadro)
+        k = k + 1
+        j = j + 1
+        Call ActualizarBarra2
+    Loop
+    'Guardar posición de último introducido
+    ant = j
+
+    Call ReiniciarBarra2
+    Exit Sub
+SalirMC:
+    Call ReiniciarBarra2
+    ufProgressObr.TituloObra.Caption = "Cerrando macro correctamente.."
+    ufProgressObr.Caption = "Cerrando macro.."
+    'Borrar filas libres que se hayan generado de más
+    Call QuitarInexistentes
+    ws.Select
+    'Activar actualización de pantalla
+    Application.ScreenUpdating = True
+    'Activar calculacion automatica
+    Application.Calculation = xlCalculationAutomatic
+    Application.DisplayAlerts = True
+    Application.EnableEvents = True
+    Unload ufProgressObr
+    End
+    Exit Sub
+ErrorHandler:
+    'Si ocurre algun error ejecutar
+    MsgBox "Ha ocurrido un error al mover tablas a resumen de resultados: " & Err.Description, vbExclamation, "Error 402"
+    'Activar actualización de pantalla
+    Application.ScreenUpdating = True
+    'Activar calculacion automatica
+    Application.Calculation = xlCalculationAutomatic
+    Application.DisplayAlerts = True
+    Application.EnableEvents = True
+    Unload ufProgressObr
+    End
+End Sub
+
+Sub CuadAct(ByVal cuadr As String)
+    '---------------------------------------------------------------------------------
+    ' CuadAct
+    ' Actualiza el cuadro solicitado en la tabla de resultados, usando la tabla de Excel
+    ' Método viejo, más lento. Se mantiene para cuadros individuales
+    '---------------------------------------------------------------------------------
+
+    Dim prim As Double, ult As Double
+    Dim tablaActualizar() As Variant
+    Dim nuev As Boolean
+
+    'Desactivar actulaizaciones de pantalla
+    Application.ScreenUpdating = False
+    'Desactivar calculacion manual
+    Application.Calculation = xlCalculationManual
+    Application.DisplayAlerts = False
+    Application.EnableEvents = False
+
+    'Página y tabla a actualizar
+    Set valores = ThisWorkbook.Sheets(cuadr).ListObjects(cuadr).DataBodyRange
+    tablaActualizar = valores.Value
+    'Array valores defecto
+    Set valores = ThisWorkbook.Sheets("Configuracion_cuadros").Range("valrDefect")
+    valoresDefecto = valores.Value
+
+    ufProgressObr.Proceso.Caption = "Actualizando cuadro " & cuadr & "."
+    ufProgressObr.SubProceso.Caption = "Buscando límites de cuadro actual.."
+
+    progreso2 = 1 / (1 + UBound(tablaActualizar, 1))
+
+    j = 1
+
+    If Cerrar Then GoTo SalirAC
+
+    'Encontrar primera y última instancia de nombre de cuadro
+    For i = 1 To UBound(tablaResultados, 1)
+        If cuadr = tablaResultados(i, 42) Then   'Sumar si se ha encontrado
+            If j = 1 Then prim = i  'Primera vez guardar valor
+            j = j + 1
+        Else    'Si se ha encontrado por primera vez, la siguiente que no se encuentre salir
+            If j > 1 Then Exit For
+        End If
+    Next i
+    ult = i - 1 'Guardar última instancia
+
+    Call ActualizarBarra2
+    ufProgressObr.SubProceso.Caption = "Buscando número de fila de cuadro actual.."
+    'Buscar i de cudaro solicitado
+    i = BuscarI(cuadr)
+
+    If Cerrar Then GoTo SalirAC
+
+    'Variables para meter línea
+    b = FilaAlimExt()   'Indicador número fila de línea de alimentación externa
+
+    ant = ult + 1
+    j = prim + 1
+    k = 4
+    nuev = False
+    'Loopear por el cuadro a actualizar e introducir nuevas líneas si hace falta
+    For a = 1 To UBound(tablaActualizar, 1)
+        If Cerrar Then GoTo SalirAC
+
+        ufProgressObr.SubProceso.Caption = "Contrastando fila nº " & a & " de " & UBound(tablaActualizar, 1) & ".."
+        'Sobreescribir línea de alimentación (marcado con True como segunda variable)
+        Call MeterFila(cuadr, True)
+
+        If a > ult - prim Then   'Hay filas nuevas que no estaban en la tabla de resultados
+            nuev = True
+            ufProgressObr.SubProceso.Caption = "Generando nueva fila para cuadro " & cuadr & ".."
+            Call MeterFila(cuadr, False, j)
+        End If
+        k = k + 1
+        j = j + 1
+        Call ActualizarBarra2
+    Next a
+
+    If nuev Then    'Recalcular hoja para conseguir velocidad de actualización rápida
+        ufProgressObr.SubProceso.Caption = "Recalculando.."
+        DoEvents
+        'Recalcular
+        Application.Calculation = xlCalculationAutomatic
+        Application.CalculateFullRebuild
+        DoEvents
+        Application.Calculation = xlCalculationManual
+    End If
+    Call ReiniciarBarra2
+    Exit Sub
+SalirAC:
+    Call ReiniciarBarra2
+    ufProgressObr.TituloObra.Caption = "Cerrando macro correctamente.."
+    ufProgressObr.Caption = "Cerrando macro.."
+    'Borrar filas libres que se hayan generado de más
+    Call QuitarInexistentes
+    ws.Select
+    'Activar actualización de pantalla
+    Application.ScreenUpdating = True
+    'Activar calculacion automatica
+    Application.Calculation = xlCalculationAutomatic
+    Application.DisplayAlerts = True
+    Application.EnableEvents = True
+    Unload ufProgressObr
+    End
+End Sub
+
+Sub MeterFila(ByVal nomCuadro As String, Optional aliment As Boolean, Optional enMedio As Double)
+    '---------------------------------------------------------------------------------
+    ' MeterFila
+    ' Genera una fila en la tabla de resultados, con los valores por defecto
+    '---------------------------------------------------------------------------------
+
+    If aliment Then GoTo ALIM:  'Únicamente sobreescribir línea de alimentación
+    'Generar una fila por línea de cuadro
+    If enMedio > 1 Then tablaReslt.ListRows.Add (enMedio)
+    DoEvents
+    If enMedio = 0 Then tablaReslt.ListRows.Add
+    DoEvents
+    'Call VariablesTablas    'Recargar valores
+    'Poner nombre y número de fila
+    columnNomReslt.DataBodyRange.Cells(j).Value = nomCuadro     'Cuadro
+    columnFilReslt.DataBodyRange.Cells(j).Value = k             'Fila
+ALIM:
+    If tablaPrincipal(i, 3) = "EXTERNO ------>" Then 'Se ha elegido externo, meter información de hoja ALIM
+        If Not ignorar Then
+            If DebugMensajes Then MsgBox tablaPrincipal(i, 1) & " tiene externo " & BuscarEnTabla(tablaPrincipal(i, 4), tablaResultados, 1) & " b= " & b & " j= " & j
+            If Not BuscarEnTabla(tablaPrincipal(i, 4), tablaResultados, 1) Then   'Si no se encuentra ya en la fila de "SALIDA", introducir la línea
+                'Añadir fila después de la última de lineas de alimentación
+                tablaReslt.ListRows.Add (b)
+                DoEvents
+                'Parámetros de cálculo
+                tablaReslt.ListColumns(42).DataBodyRange.Cells(b).Value = "ALIM"   'Cuadro
+                tablaReslt.ListColumns(43).DataBodyRange.Cells(b).Value = b + 2    'Fila
+                tablaReslt.ListColumns(44).DataBodyRange.Cells(b).Value = "ALIM"       'L.Alim
+                tablaReslt.ListColumns(7).DataBodyRange.Cells(b).Value = valoresDefecto(1, 1) 'Tipo tendido
+                tablaReslt.ListColumns(21).DataBodyRange.Cells(b).Value = valoresDefecto(2, 1) 'Material
+                tablaReslt.ListColumns(28).DataBodyRange.Cells(b).Value = valoresDefecto(3, 1) 'Tipo instalación
+                tablaReslt.ListColumns(17).DataBodyRange.Cells(b).Value = valoresDefecto(4, 1) 'Aislamiento
+                tablaReslt.ListColumns(18).DataBodyRange.Cells(b).Value = 1         'Agrupación
+                tablaReslt.ListColumns(19).DataBodyRange.Cells(b).Value = 1         'Conductores por fase
+                b = b + 1
+                j = j + 1
+                ant = ant + 1
+
+                Call VariablesTablas    'Recargar valores
+            End If
+            ignorar = True  'Únicamente añadir una fila de alimentación externa por cuadro
+        End If
+        'Nombre de línea de alimentación externa
+        'If tablaResultados(j, 43) <> "" Then columnAlmReslt.DataBodyRange.Cells(j).Value = tablaPrincipal(i, 4)
+        If tablaReslt.ListColumns(43).DataBodyRange.Cells(j).Value <> "" Then columnAlmReslt.DataBodyRange.Cells(j).Value = tablaPrincipal(i, 4)
+    Else
+        'Se ha elegido una línea o ningúna, introducir
+        'If tablaResultados(j, 43) <> "" Then columnAlmReslt.DataBodyRange.Cells(j).Value = ItemDesdeNombre(tablaPrincipal(i, 3))
+        If tablaReslt.ListColumns(43).DataBodyRange.Cells(j).Value <> "" Then columnAlmReslt.DataBodyRange.Cells(j).Value = ItemDesdeNombre(tablaPrincipal(i, 3))
+    End If
+    If aliment Then Exit Sub    'Salir de sub
+    'Valores por defecto
+    tablaReslt.ListColumns(7).DataBodyRange.Cells(j).Value = valoresDefecto(1, 1) 'Tipo tendido
+    tablaReslt.ListColumns(21).DataBodyRange.Cells(j).Value = valoresDefecto(2, 1) 'Material
+    tablaReslt.ListColumns(28).DataBodyRange.Cells(j).Value = valoresDefecto(3, 1) 'Tipo instalaciónn
+    tablaReslt.ListColumns(17).DataBodyRange.Cells(j).Value = valoresDefecto(4, 1) 'Aislamiento
+    tablaReslt.ListColumns(18).DataBodyRange.Cells(j).Value = 1 'Agrupación
+    tablaReslt.ListColumns(19).DataBodyRange.Cells(j).Value = 1 'Conductores por fase
+End Sub
+
+'===============================================================================================================================================
+'Subs ayudantes generales
+'===============================================================================================================================================
+Sub RellenarLineasALIM(Optional autom As String)
+    '---------------------------------------------------------------------------------
+    ' RellenarLineasALIM
+    ' Rellena la tabla de líneas de alimentación externas según los cuadros que
+    ' las necesiten
+    '---------------------------------------------------------------------------------
+
+    If autom = "A" Then
+        Call VariablesTablas
+        ignorar = True
+    Else
+        ignorar = False
+    End If
+    progreso2 = 1 / (tabla.ListRows.Count + 1)
+    ufProgressObr.SubProceso.Caption = "Generando tabla de alimentación externa.."
+
+    j = 0
+    b = 1   'Indicador número fila de línea de alimentación externa
+    faltaAlim = False
+    'Reiniciar tabla de ALIM
+    If tablaALIM.ListRows.Count > 1 Then tablaALIM.DataBodyRange.Offset(1).Resize(tablaALIM.ListRows.Count - 1).Rows.Delete
+    Call ActualizarBarra2
+    'Verificar que cada cuadro tiene su línea de alimentación
+    For i = 1 To UBound(tablaPrincipal, 1)
+        If Cerrar Then GoTo Salir
+        ufProgressObr.SubProceso.Caption = "Comprobando existencia de línea de alimentación para cuadro " & tablaPrincipal(i, 2) & ".."
+        If tablaPrincipal(i, 3) = "" Then faltaAlim = True   'No tiene linea de alimentación
+        If tablaPrincipal(i, 3) = "EXTERNO ------>" Then
+            If tablaPrincipal(i, 4) = "" Or tablaPrincipal(i, 5) = "" Then faltaAlim = True  'Si se ha elegido externo y no tiene o nombre o item mostrar aviso
+            ufProgressObr.SubProceso.Caption = "Introduciendo datos de línea de alimentación nº " & b & ".."
+            'Meter información de línea exterior
+            tablaALIM.ListRows.Add
+            'Poner item de cuadro a alimentar
+            tablaALIM.ListColumns(15).DataBodyRange.Cells(b).Value = tablaPrincipal(i, 2)
+            'Nombre y apellidos de línea externa elegida
+            tablaALIM.ListColumns(1).DataBodyRange.Cells(b).Value = tablaPrincipal(i, 4)
+            tablaALIM.ListColumns(2).DataBodyRange.Cells(b).Value = tablaPrincipal(i, 5)
+            b = b + 1
+        End If
+        Call ActualizarBarra2
+        'Mensaje de aviso por falta de linea de alimentación
+        If faltaAlim And Not ignorar Then
+            OutPut = MsgBox("Hay uno o más de un cuadro que no tiene línea de alimentación definida, se podrá actualizar más adelante. " & vbCrLf & _
+                " Proceder a pasar a resultados?", vbExclamation + vbYesNoCancel, "Faltan líneas de alimentación")
+            If OutPut = 7 Then GoTo Salir   'Salir macro
+            If OutPut = 2 Then GoTo Salir   'Salir macro
+            If OutPut = 6 Then ignorar = True   'No volver a mostrar
+        End If
+    Next i
+
+    If b > 2 Then tablaALIM.ListRows(tablaALIM.ListRows.Count).Delete   'Se introduce una fila de más, eliminar
+    Call ReiniciarBarra2
+    Exit Sub
+Salir:
+    ws.Select
+    'Activar actualización de pantalla
+    Application.ScreenUpdating = True
+    'Activar calculacion automatica
+    Application.Calculation = xlCalculationAutomatic
+    Application.DisplayAlerts = True
+    Application.EnableEvents = True
+    Unload ufProgressObr
+    End
+End Sub
+
+Sub QuitarInexistentes()
+    '---------------------------------------------------------------------------------
+    ' QuitarInexistentes
+    ' Elimina filas de la tabla de resultados que no tienen un cuadro asociado
+    ' o el cuadro no existe en la tabla principal
+    '---------------------------------------------------------------------------------
+
+    Dim rowList As Collection
+    Set rowList = New Collection
+
+    Call VariablesTablas        'Cargar tablas
+
+    progreso2 = 1 / UBound(tablaResultados, 1)
+
+    ufProgressObr.Proceso.Caption = "Buscando errores en tabla"
+
+    'Comprobar existentes o no
+    For i = 1 To UBound(tablaResultados, 1)
+        ufProgressObr.SubProceso.Caption = "Comprobando " & i & " de " & UBound(tablaResultados, 1) & ".."
+        If Not BuscarEnTabla(tablaResultados(i, 42), tablaPrincipal, 2) Or tablaResultados(i, 42) = "" Then 'No existe
+            If tablaResultados(i, 42) <> "ALIM" Then rowList.Add i   'Guardar número de fila a eliminar
+        ElseIf tablaResultados(i, 1) = "0" Then     'Fila de más en tabla de resultados comparando con cuadro original
+            If tablaResultados(i, 42) <> "ALIM" Then rowList.Add i   'Guardar número de fila a eliminar
+        End If
+        Call ActualizarBarra2
+    Next i
+    Call ReiniciarBarra2
+
+    If DebugMensajes Then MsgBox "Se han detectado " & rowList.Count & " filas erróneas en la tabla de resultados, se procederá a eliminarlas.", vbInformation, "Filas erróneas detectadas"
+
+    If rowList.Count = 0 Then
+        Call ReiniciarBarra2
+        Exit Sub
+    End If
+
+    progreso2 = 1 / rowList.Count
+    b = 1
+    'Borrar filas
+    For j = rowList.Count To 1 Step -1
+        ufProgressObr.SubProceso.Caption = "Borrando fila " & b & " de " & rowList.Count
+        tablaReslt.ListRows(rowList(j)).Delete
+        b = b + 1
+        Call ActualizarBarra2
+    Next j
+    ufProgressObr.SubProceso.Caption = "Recalculando variables y tablas.."
+    Call VariablesTablas        'Cargar tablas
+    DoEvents
+    'Recalcular
+    Application.Calculation = xlCalculationAutomatic
+    Application.CalculateFullRebuild
+    DoEvents
+    Application.Calculation = xlCalculationManual
+    DoEvents
+    Call ReiniciarBarra2
+End Sub
+
+Sub FormatearReslt(Optional ignr As String)
+    '---------------------------------------------------------------------------------
+    ' FormatearReslt
+    ' Formatea la tabla de resultados, dejando una única fila y los valores por defecto
+    '---------------------------------------------------------------------------------
+
+    On Error Resume Next 'Por si ya tiene una única fila
+
+    Call VariablesTablas        'Cargar tablas
+
+    progreso2 = 1 / (1)
+    ufProgressObr.SubProceso.Caption = "Formateando tabla de resultados.."
+
+    If ignr = "I" Then
+        ignorar = True
+    Else
+        ignorar = False
+    End If
+    'Verificar que no hay datos en tabla de resultados, sino, avisar
+    If tablaReslt.ListRows.Count > 1 And Not ignorar Then
+        OutPut = MsgBox("Se ha detectado que hay datos en la tabla de resultados, si continua, se borrarán permanentemente los datos introducidos." & vbCrLf & _
+            "Proceder a pasar a resultados?", vbExclamation + vbYesNoCancel, "Detectados datos existentes en tabla de resultados")
+        If OutPut = 7 Then GoTo SalirFr
+        If OutPut = 2 Then GoTo SalirFr
+    End If
+
+    If Cerrar Then GoTo SalirFr
+
+    ufProgressObr.SubProceso.Caption = "Borrando datos de tabla de resultados.."
+
+    'Dejar una única fila en la tabla de resultados
+    tablaReslt.DataBodyRange.Offset(1).Resize(tablaReslt.DataBodyRange.Rows.Count - 1).Rows.Delete
+    On Error GoTo 0
+    'Quitar formato de negrita y relleno de celda
+    With tablaReslt.DataBodyRange.Interior
+        .Pattern = xlNone
+        .TintAndShade = 0
+        .PatternTintAndShade = 0
+    End With
+
+    With tablaReslt.DataBodyRange.Font
+        .Name = "Arial Narrow"
+        .Size = 7
+        .Strikethrough = False
+        .Superscript = False
+        .Subscript = False
+        .OutlineFont = False
+        .Shadow = False
+        .Underline = xlUnderlineStyleNone
+        .Italic = False
+        .Bold = False
+        .ColorIndex = xlAutomatic
+        .TintAndShade = 0
+        .ThemeFont = xlThemeFontNone
+    End With
+    Call ActualizarBarra2
+
+    If Cerrar Then GoTo SalirFr
+
+    ufProgressObr.SubProceso.Caption = "Aplicando valores por defecto.."
+
+    'Borrar celdas de datos introducidos por usuario
+    tablaReslt.ListColumns(7).DataBodyRange.Cells(1).Value = ""         'Tipo tend
+    tablaReslt.ListColumns(16).DataBodyRange.Cells(1).Value = ""        'S. elegida
+    tablaReslt.ListColumns(17).DataBodyRange.Cells(1).Value = ""        'Aislamiento
+    tablaReslt.ListColumns(18).DataBodyRange.Cells(1).Value = ""        'Agrup
+    tablaReslt.ListColumns(19).DataBodyRange.Cells(1).Value = ""        'Fase
+    tablaReslt.ListColumns(21).DataBodyRange.Cells(1).Value = ""        'Material
+    tablaReslt.ListColumns(24).DataBodyRange.Cells(1).Value = ""        'PIA
+    tablaReslt.ListColumns(26).DataBodyRange.Cells(1).Value = ""        'Long
+    tablaReslt.ListColumns(28).DataBodyRange.Cells(1).Value = ""        'Inst
+    'tablaReslt.ListColumns(31).DataBodyRange.Cells(1).Value = ""        'Zcc
+    tablaReslt.ListColumns(42).DataBodyRange.Cells(1).Value = "ALIM"    'Cuadro
+    tablaReslt.ListColumns(43).DataBodyRange.Cells(1).Value = ""        'Fila
+    tablaReslt.ListColumns(44).DataBodyRange.Cells(1).Value = ""        'L. Alim
+
+    Call VariablesTablas        'Cargar tablas
+
+    Call ReiniciarBarra2
+    Exit Sub
+SalirFr:
+    ws.Select
+    'Activar actualización de pantalla
+    Application.ScreenUpdating = True
+    'Activar calculacion automatica
+    Application.Calculation = xlCalculationAutomatic
+    Application.DisplayAlerts = True
+    Application.EnableEvents = True
+    Unload ufProgressObr
+    End
+End Sub
+
+Private Sub VariablesTablas(Optional ReCargar As Boolean)
+    '---------------------------------------------------------------------------------
+    ' VariablesTablas
+    ' Carga las tablas necesarias en arrays para trabajar con ellas de forma más rápida
+    '---------------------------------------------------------------------------------
+
+    progreso2 = 1
+    ufProgressObr.SubProceso.Caption = "Cargando variables necesarias.."
+    'Borrar anteriores
+    Erase tablaPrincipal
+    Erase tablaResultados
+    Erase valoresDefecto
+
+    Set ws = ThisWorkbook.Sheets("Configuracion_cuadros")
+
+    Set tablaReslt = ThisWorkbook.Sheets("TABLA DE RESULTADOS").ListObjects("RESULTADOS")
+    Set tabla = ws.ListObjects("Nombre_cuadros")
+    Set tablaALIM = ThisWorkbook.Sheets("ALIM").ListObjects("ALIM")
+
+    'Guardar datos a trabajar en arrays
+    Set valores = tabla.DataBodyRange
+    tablaPrincipal = valores.Value
+
+    Set valores = tablaReslt.DataBodyRange
+    tablaResultados = valores.Value
+
+    Set valores = ws.Range("valrDefect")
+    valoresDefecto = valores.Value
+
+    'Columna nombre de resultados
+    Set columnNomReslt = tablaReslt.ListColumns(42)
+    'Columna fila de resultados
+    Set columnFilReslt = tablaReslt.ListColumns(43)
+    'Columna alimentación de resultados
+    Set columnAlmReslt = tablaReslt.ListColumns(44)
+End Sub
+
+'===============================================================================================================================================
+'Funciones ayudantes
+'===============================================================================================================================================
+Function BuscarI(ByVal cuadr As Variant) As Double
+    For j = 1 To UBound(tablaPrincipal, 1)
+        If tablaPrincipal(j, 2) = cuadr Then
+            Exit For
+        End If
+    Next j
+    BuscarI = j
+End Function
+
+Function FilaAlimExt() As Double
+    Dim alimExt() As Variant, valr As Range
+
+    Set valr = ThisWorkbook.Sheets("TABLA DE RESULTADOS").ListObjects("RESULTADOS").ListColumns(42).DataBodyRange
+
+    If valr.Count = 1 Then
+        FilaAlimExt = 2
+        Exit Function
+    End If
+
+    alimExt = valr.Value
+    For k = 1 To UBound(alimExt, 1)
+        If alimExt(k, 1) <> "ALIM" Then Exit For    'Si se encuentra uno que no sea ALIM, salir de loop y devolver número
+    Next k
+
+    FilaAlimExt = k
+End Function
+
+Function BuscarEnTabla(abrev As Variant, rng As Variant, columna As Double) As Boolean
+    Dim val As Variant, contador As Double
+
+    For contador = 1 To UBound(rng, 1)
+        val = Trim(rng(contador, columna))
+        If val = abrev Then
+            BuscarEnTabla = True    'Se ha encontrado
+            Exit Function
+        End If
+    Next contador
+End Function
+
+Function ExistePagina(nombrePag As String, Optional wb As Workbook) As Boolean
+    Dim test As Worksheet
+    If wb Is Nothing Then
+        Set wb = ThisWorkbook 'Usar el libro actual
+    End If
+    On Error GoTo ErrorHandler
+    Set test = wb.Sheets(nombrePag)
+    ExistePagina = True
+    Exit Function
+ErrorHandler:
+    'Ha ocurrido un error al abrir la pagina, no existe
+    ExistePagina = False
+End Function
+
+Function ItemDesdeNombre(s As Variant) As String
+    Dim pos As Long
+    pos = InStr(s, "-") - 1 'Encontrar primera estancia de "-"
+
+    If pos > 0 Then
+        ItemDesdeNombre = Trim(Left(s, pos))    'Devolver string sin espacios y sin el guion
+    Else
+        ItemDesdeNombre = s 'Si no se encuentra guión, devolver string comleto
+    End If
+End Function

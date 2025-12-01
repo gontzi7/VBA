@@ -1,0 +1,92 @@
+Option Explicit
+
+Dim ws As Worksheet, reslt As Worksheet
+Dim tablaReslt As ListObject
+Dim i As Double
+Dim OutPut As Integer
+
+Sub GenerarTitulos(Optional autom As String)
+    On Error GoTo ErrorHandler
+
+    'Desactivar actulaizaciones de pantalla
+    Application.ScreenUpdating = False
+    'Desactivar calculacion manual
+    Application.Calculation = xlCalculationManual
+
+    Set reslt = ThisWorkbook.Sheets("TABLA DE RESULTADOS")
+
+    'Tablas
+    Set tablaReslt = reslt.ListObjects("RESULTADOS")
+
+    For i = 1 To tablaReslt.ListRows.count
+        'Si no hay fila, poner formato de título de cuadro
+        If tablaReslt.ListColumns(43).DataBodyRange.Cells(i).value = "" Then
+            With tablaReslt.DataBodyRange.Rows(i).Font
+                .name = "Arial Narrow"
+                .Size = 7
+                .Strikethrough = False
+                .Superscript = False
+                .Subscript = False
+                .OutlineFont = False
+                .Shadow = False
+                .Underline = xlUnderlineStyleNone
+                .ColorIndex = xlAutomatic
+                .Bold = True
+                .TintAndShade = 0
+                .ThemeFont = xlThemeFontNone
+            End With
+            With tablaReslt.DataBodyRange.Rows(i).Interior
+                .Pattern = xlSolid
+                .PatternColorIndex = xlAutomatic
+                .Color = 52377
+                .TintAndShade = 0
+                .PatternTintAndShade = 0
+            End With
+        End If
+    Next
+    
+    If autom <> "A" Then
+        'Activar actualización de pantalla
+        Application.ScreenUpdating = True
+        'Activar calculacion automatica
+        Application.Calculation = xlCalculationAutomatic
+        Application.DisplayAlerts = True
+    End If
+    Exit Sub
+ErrorHandler:
+    'Si ocurre algun error ejecutar
+    MsgBox "Ha ocurrido un error al dar formato a los títulos de cuadros: " & Err.Description, vbExclamation, "Error 501"
+    'Activar actualización de pantalla
+    Application.ScreenUpdating = True
+    'Activar calculacion automatica
+    Application.Calculation = xlCalculationAutomatic
+    Application.DisplayAlerts = True
+End Sub
+
+Sub QuitarFormato()
+    Set reslt = ThisWorkbook.Sheets("TABLA DE RESULTADOS")
+    'Tablas
+    Set tablaReslt = reslt.ListObjects("RESULTADOS")
+    'Quitar formato de negrita y relleno de celda
+    With tablaReslt.DataBodyRange.Interior
+        .Pattern = xlNone
+        .TintAndShade = 0
+        .PatternTintAndShade = 0
+    End With
+
+    With tablaReslt.DataBodyRange.Font
+        .name = "Arial Narrow"
+        .Size = 7
+        .Strikethrough = False
+        .Superscript = False
+        .Subscript = False
+        .OutlineFont = False
+        .Shadow = False
+        .Underline = xlUnderlineStyleNone
+        .Italic = False
+        .Bold = False
+        .ColorIndex = xlAutomatic
+        .TintAndShade = 0
+        .ThemeFont = xlThemeFontNone
+    End With
+End Sub

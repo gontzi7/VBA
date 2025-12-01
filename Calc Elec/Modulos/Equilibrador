@@ -1,0 +1,115 @@
+Option Explicit
+
+Dim algoritmos As String
+Dim tiempo As Double
+
+Sub EquilibradorFases()
+    On Error GoTo ErrorHandler
+    
+    Dim ws As Worksheet
+    Set ws = ThisWorkbook.ActiveSheet
+    Dim primeraFila As Integer
+    primeraFila = 3
+    
+    algoritmos = "greedy"
+
+    Dim lastRow As Long
+    lastRow = ws.Cells(ws.Rows.Count, 2).End(xlUp).Row - 1
+
+    'Arrays para guardar las cargas monofasicas y sus números de filas
+    Dim loads() As Double
+    Dim loadRows() As Long
+    Dim countSingle As Long
+    countSingle = 0
+    
+    Dim i As Long
+    'Borrar columna de fases
+    ws.Range(ws.Cells(primeraFila, 14), ws.Cells(lastRow, 14)).ClearContents
+    
+    'Guardar en memoria las cargas monofásicas (Potencia prevista) y marcar las trifasicas como "RST"
+    For i = primeraFila To lastRow
+        Select Case UCase(ws.Cells(i, 13).Value)
+            Case "T"
+                ws.Cells(i, 14).Value = "RST"
+            Case "M"
+                ' One-phase load: add to arrays
+                countSingle = countSingle + 1
+                'Añadir un espacio a cada array por carga monofásica
+                ReDim Preserve loads(1 To countSingle)
+                ReDim Preserve loadRows(1 To countSingle)
+                'Guardar potencia y número de fila de cada carga
+                loads(countSingle) = ws.Cells(i, 12).Value
+                loadRows(countSingle) = i
+        End Select
+    Next i
+    
+    'No se han encontrado cargas monofásicas
+    If countSingle = 0 Then
+        MsgBox "No se han encontrado cargas monofásicas.", vbInformation
+        Exit Sub
+    End If
+    
+    'Ordenar cargas en orden descendente
+    Dim j As Long, tempLoad As Double, tempRow As Long
+    For i = 1 To countSingle - 1
+        For j = i + 1 To countSingle
+            If loads(j) > loads(i) Then
+                'Cargas
+                tempLoad = loads(i)
+                loads(i) = loads(j)
+                loads(j) = tempLoad
+                'Filas
+                tempRow = loadRows(i)
+                loadRows(i) = loadRows(j)
+                loadRows(j) = tempRow
+            End If
+        Next j
+    Next i
+    
+    'Select case para diferentes tipos de balanceos
+    Select Case algoritmos
+        Case "greedy"
+            'Distribución greedy
+            Dim phaseSums(1 To 3) As Double
+            Dim phases(1 To 3) As String
+            phases(1) = "R": phases(2) = "S": phases(3) = "T"
+            Dim minIdx As Long
+            
+            For i = 1 To countSingle
+                'Buscar fase con suma mínima
+                minIdx = 1
+                If phaseSums(2) < phaseSums(minIdx) Then minIdx = 2
+                If phaseSums(3) < phaseSums(minIdx) Then minIdx = 3
+
+                'Asignar carga a esa fase
+                ws.Cells(loadRows(i), 14).Value = phases(minIdx)
+                'Actualizar suma de fase
+                phaseSums(minIdx) = phaseSums(minIdx) + loads(i)
+            Next i
+        Case "LDM"
+
+        Case Else
+
+    End Select
+    'Marcar calculado
+    ws.Range("M1") = True
+
+    'Mensaje resumen de cálculo
+    Dim report As String
+    report = "Balanceo de fases (en vatios previstos):" & vbCrLf
+    report = report & "R: " & phaseSums(1) & " W" & vbCrLf
+    report = report & "S: " & phaseSums(2) & " W" & vbCrLf
+    report = report & "T: " & phaseSums(3) & " W"
+    MsgBox report, vbInformation, "Balanceo de cargas completado en " & tiempo & " segundos"
+
+    Exit Sub
+ErrorHandler:
+    'Si ocurre un error, ejecutar
+    MsgBox "Ha ocurrido un error mientras balanceaban las cargas: " & Err.Description, vbExclamation, "Error 01"
+    ActiveWindow.Visible = True
+    'Activar actualizacion de pantalla
+    Application.ScreenUpdating = True
+    Application.CutCopyMode = False
+    'Establecer calculación automática
+    Application.Calculation = xlCalculationAutomatic
+End Sub

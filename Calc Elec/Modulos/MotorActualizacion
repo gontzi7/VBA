@@ -1,0 +1,392 @@
+Option Explicit
+
+Dim DebugMensajes As Boolean
+Dim vbOut As Integer
+Dim RutaUsuario, RutaBase, RutaExcel As String
+Dim rutaArchivo As String
+Dim nombreArchivo As String, rutaAnterior As String
+Dim i As Integer
+Dim fso As Object
+
+Sub Actualizar2()
+    DebugMensajes = ThisWorkbook.Sheets("Busquedas").Range("Debug")
+    If Not DebugMensajes Then On Error GoTo ErrorHandler
+
+    Dim completado As Boolean
+
+    'Desactivar actulaizaciones de pantalla
+    Application.ScreenUpdating = False
+    'Desactivar calculacion automatica
+    Application.Calculation = xlCalculationManual
+    'Borrar portapapeles
+    Application.CutCopyMode = False
+
+Reintentar1:
+    Call ThisWorkbook.ComprobarActualizacion("A")
+    'Comparar versión actual y nueva
+    If Not ThisWorkbook.actualizado And Not ThisWorkbook.errorConexion Then
+        vbOut = MsgBox("Hay mas actualizado, actualizar a última versión?" & vbCrLf & _
+            "Fecha de nueva versión: " & ThisWorkbook.FechaVersion, vbYesNo + vbInformation, "Actualización disponible")
+        'If vbOut = 6 Then   'Sí
+        If vbOut = 7 Then Exit Sub   'No
+    ElseIf ThisWorkbook.actualizado And Not ThisWorkbook.errorConexion Then
+        MsgBox "Está actualizado.", vbInformation
+        Exit Sub
+    ElseIf ThisWorkbook.errorConexion Then
+        vbOut = MsgBox("No se ha podido establecer contacto con el servidor o no se ha seleccionado carpeta. Reintentar?", vbRetryCancel + vbExclamation, "Error conexión")
+        If vbOut = 4 Then GoTo Reintentar1   'Reintentar
+        If vbOut = 2 Then Exit Sub   'Cancelar
+        Exit Sub
+    End If
+
+    Call IniBarra
+    'Textos
+    ufProgress.Caption = "Actualizar código"
+    ufProgress.LabelCaption.Caption = "Extrayendo ruta de archivo actual.." & vbCrLf & _
+        "Por favor, no abra o seleccione otro documento de Excel o Word."
+
+    Dim fso = CreateObject("Scripting.FileSystemObject")
+    'Comprobar si existe archivo base
+    RutaUsuario = Environ("UserProfile")
+    RutaBase = "\BOSLAN INGENIERIA Y CONSULTORIA\Instalaciones - Imagenes\98-PROGRAMAS INST\Gontzal proba\Proyectos"
+    RutaExcel = "\CuadrosBT(Pr2)\CAL ELEC(mas actualizado).xlsm"
+
+    If Not fso.FileExists(RutaUsuario & RutaBase & RutaExcel) Then
+        MsgBox "No se ha encontrado el archivo base de actualización en la ruta:" & vbCrLf & _
+        RutaUsuario & RutaBase & RutaExcel & vbCrLf & _
+        "Por favor, contacte con el administrador.", vbOKOnly + vbExclamation, "Error 101"
+        'Descargar barra
+        Unload ufProgress
+        Exit Sub
+    End If
+
+
+    'Cuantas veces se llama a actualizar barra
+    progreso = 1 / 3
+
+
+
+    'Conseguir ruta de archivo actual
+    rutaArchivo = ThisWorkbook.path
+    If DebugMensajes Then
+        MsgBox "Ruta de archivo actual: " & rutaArchivo
+    End If
+    Call ActBarra
+    'Conseguir nombre de archivo actual para borrar al finalizar
+    ufProgress.LabelCaption.Caption = "Conectando con servidor.." & vbCrLf & _
+    "Por favor, no abra o seleccione otro documento de Excel o Word."
+    nombreArchivo = ThisWorkbook.name
+    If DebugMensajes Then
+        MsgBox "Nombre de archivo actual: " & nombreArchivo
+    End If
+    Call ActBarra
+    'Copiar el archivo actualizado a la misma ruta del antiguo
+    ufProgress.LabelCaption.Caption = "Copiando archivo actualizado.." & vbCrLf & _
+    "Por favor, no abra o seleccione otro documento de Excel o Word."
+    rutaAnterior = ThisWorkbook.FullName
+    If DebugMensajes Then
+        MsgBox "Ruta anterior: " & rutaAnterior
+    End If
+    Call ActBarra
+    'Descargar barra
+    Unload ufProgress
+    'FileCopy RutaUsuario & RutaBase & RutaExcel, rutaAnterior
+    Call ActBarra
+
+
+
+
+    Dim VBProj As VBIDE.VBProject
+    Dim VBComp As VBIDE.VBComponent
+    Dim WS As Worksheet
+    Dim Rng As Range
+    
+    Set VBProj = ActiveWorkbook.VBProject
+    Set WS = ActiveWorkbook.Worksheets("Lineas")
+    Set Rng = WS.Range("A1")
+    
+    For Each VBComp In VBProj.VBComponents
+        Rng(1, 1).Value = VBComp.name
+
+            Rng(1, 3).Value = TotalCodeLinesInVBComponent(VBComp)
+
+        Rng(1, 2).Value = ComponentTypeToString(VBComp.Type)
+        Set Rng = Rng(2, 1)
+    Next VBComp
+
+
+
+
+
+    For i = 1 To 5
+        Dim FromVBProject As VBIDE.VBProject
+        Dim ToVBProject As VBIDE.VBProject
+
+        Set FromVBProject = Workbooks("ActualizarPr2.xlsm").VBProject
+        Set ToVBProject = ThisWorkbook.VBProject
+
+        Select Case i
+            Case 1
+                completado = CopyModule("Generales", FromVBProject, ToVBProject, True)
+            Case 2
+                completado = CopyModule("ufBuscador", FromVBProject, ToVBProject, True)
+            Case 3
+                completado = CopyModule("ufProgress", FromVBProject, ToVBProject, True)
+            Case 4
+                completado = CopyModule("Módulo1", FromVBProject, ToVBProject, True)
+            Case 5
+                completado = CopyModule("Módulo2", FromVBProject, ToVBProject, True)
+        End Select
+        If Not completado Then Exit For 'Salir si hay error
+    Next i
+    
+    If completado Then
+        MsgBox "Módulo copiado correctamente.", vbInformation
+    Else
+        MsgBox "Error al copiar el módulo.", vbCritical
+    End If
+
+    'Activar actulaizaciones de pantalla
+    Application.ScreenUpdating = True
+    'Activar calculacion automatica
+    Application.Calculation = xlCalculationAutomatic
+Exit Sub
+
+ErrorHandler:
+    'Si ocurre algun error ejecutar
+    MsgBox "Se ha producido un error a la hora de actualizar el excel: " & Err.Description, vbOKOnly + vbExclamation, "Error 102"
+    'Activar actulaizaciones de pantalla
+    Application.ScreenUpdating = True
+    'Activar calculacion automatica
+    Application.Calculation = xlCalculationAutomatic
+    'Descargar barra
+    Unload ufProgress
+    End
+End Sub
+
+Function CopyModule(ModuleName As String, _
+    FromVBProject As VBIDE.VBProject, _
+    ToVBProject As VBIDE.VBProject, _
+    OverwriteExisting As Boolean) As Boolean
+    '''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+    ' CopyModule
+    ' This function copies a module from one VBProject to
+    ' another. It returns True if successful or  False
+    ' if an error occurs.
+    '
+    ' Parameters:
+    ' --------------------------------
+    ' FromVBProject         The VBProject that contains the module
+    '                       to be copied.
+    '
+    ' ToVBProject           The VBProject into which the module is
+    '                       to be copied.
+    '
+    ' ModuleName            The name of the module to copy.
+    '
+    ' OverwriteExisting     If True, the VBComponent named ModuleName
+    '                       in ToVBProject will be removed before
+    '                       importing the module. If False and
+    '                       a VBComponent named ModuleName exists
+    '                       in ToVBProject, the code will return
+    '                       False.
+    '
+    '''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+    
+    Dim VBComp As VBIDE.VBComponent
+    Dim FName As String
+    Dim CompName As String
+    Dim s As String
+    Dim SlashPos As Long
+    Dim ExtPos As Long
+    Dim TempVBComp As VBIDE.VBComponent
+    
+    '''''''''''''''''''''''''''''''''''''''''''''
+    ' Do some housekeeping validation.
+    '''''''''''''''''''''''''''''''''''''''''''''
+    If FromVBProject Is Nothing Then
+        CopyModule = False
+        Exit Function
+    End If
+    
+    If Trim(ModuleName) = vbNullString Then
+        CopyModule = False
+        Exit Function
+    End If
+    
+    If ToVBProject Is Nothing Then
+        CopyModule = False
+        Exit Function
+    End If
+    
+    If FromVBProject.Protection = vbext_pp_locked Then
+        CopyModule = False
+        Exit Function
+    End If
+    
+    If ToVBProject.Protection = vbext_pp_locked Then
+        CopyModule = False
+        Exit Function
+    End If
+    
+    On Error Resume Next
+    Set VBComp = FromVBProject.VBComponents(ModuleName)
+    If Err.Number <> 0 Then
+        CopyModule = False
+        Exit Function
+    End If
+    
+    ''''''''''''''''''''''''''''''''''''''''''''''''''''
+    ' FName is the name of the temporary file to be
+    ' used in the Export/Import code.
+    ''''''''''''''''''''''''''''''''''''''''''''''''''''
+    FName = Environ("Temp") & "\" & ModuleName & ".bas"
+    If OverwriteExisting = True Then
+        ''''''''''''''''''''''''''''''''''''''
+        ' If OverwriteExisting is True, Kill
+        ' the existing temp file and remove
+        ' the existing VBComponent from the
+        ' ToVBProject.
+        ''''''''''''''''''''''''''''''''''''''
+        If Dir(FName, vbNormal + vbHidden + vbSystem) <> vbNullString Then
+            Err.Clear
+            Kill FName
+            If Err.Number <> 0 Then
+                CopyModule = False
+                Exit Function
+            End If
+        End If
+        With ToVBProject.VBComponents
+            .Remove .Item(ModuleName)
+        End With
+    Else
+        '''''''''''''''''''''''''''''''''''''''''
+        ' OverwriteExisting is False. If there is
+        ' already a VBComponent named ModuleName,
+        ' exit with a return code of False.
+        ''''''''''''''''''''''''''''''''''''''''''
+        Err.Clear
+        Set VBComp = ToVBProject.VBComponents(ModuleName)
+        If Err.Number <> 0 Then
+            If Err.Number = 9 Then
+                ' module doesn't exist. ignore error.
+            Else
+                ' other error. get out with return value of False
+                CopyModule = False
+                Exit Function
+            End If
+        End If
+    End If
+    
+    ''''''''''''''''''''''''''''''''''''''''''''''''''''
+    ' Do the Export and Import operation using FName
+    ' and then Kill FName.
+    ''''''''''''''''''''''''''''''''''''''''''''''''''''
+    FromVBProject.VBComponents(ModuleName).Export Filename:=FName
+    
+    '''''''''''''''''''''''''''''''''''''
+    ' Extract the module name from the
+    ' export file name.
+    '''''''''''''''''''''''''''''''''''''
+    SlashPos = InStrRev(FName, "\")
+    ExtPos = InStrRev(FName, ".")
+    CompName = Mid(FName, SlashPos + 1, ExtPos - SlashPos - 1)
+    
+    ''''''''''''''''''''''''''''''''''''''''''''''
+    ' Document modules (SheetX and ThisWorkbook)
+    ' cannot be removed. So, if we are working with
+    ' a document object, delete all code in that
+    ' component and add the lines of FName
+    ' back in to the module.
+    ''''''''''''''''''''''''''''''''''''''''''''''
+    Set VBComp = Nothing
+    Set VBComp = ToVBProject.VBComponents(CompName)
+    
+    If VBComp Is Nothing Then
+        ToVBProject.VBComponents.Import Filename:=FName
+    Else
+        If VBComp.Type = vbext_ct_Document Then
+            ' VBComp is destination module
+            Set TempVBComp = ToVBProject.VBComponents.Import(FName)
+            ' TempVBComp is source module
+            With VBComp.CodeModule
+                .DeleteLines 1, .CountOfLines
+                s = TempVBComp.CodeModule.Lines(1, TempVBComp.CodeModule.CountOfLines)
+                .InsertLines 1, s
+            End With
+            On Error GoTo 0
+            ToVBProject.VBComponents.Remove TempVBComp
+        End If
+    End If
+    Kill FName
+    CopyModule = True
+End Function
+
+Function ComponentTypeToString(ComponentType As VBIDE.vbext_ComponentType) As String
+    Select Case ComponentType
+        Case vbext_ct_ActiveXDesigner
+            ComponentTypeToString = "ActiveX Designer"
+        Case vbext_ct_ClassModule
+            ComponentTypeToString = "Class Module"
+        Case vbext_ct_Document
+            ComponentTypeToString = "Document Module"
+        Case vbext_ct_MSForm
+            ComponentTypeToString = "UserForm"
+        Case vbext_ct_StdModule
+            ComponentTypeToString = "Code Module"
+        Case Else
+            ComponentTypeToString = "Unknown Type: " & CStr(ComponentType)
+    End Select
+End Function
+
+Public Function TotalCodeLinesInVBComponent(VBComp As VBIDE.VBComponent) As Long
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+' This returns the total number of code lines (excluding blank lines and
+' comment lines) in the VBComponent referenced by VBComp. Returns -1
+' if the VBProject is locked.
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+    Dim N As Long
+    Dim s As String
+    Dim LineCount As Long
+    
+    If VBComp.Collection.Parent.Protection = vbext_pp_locked Then
+        TotalCodeLinesInVBComponent = -1
+        Exit Function
+    End If
+    
+    With VBComp.CodeModule
+        For N = 1 To .CountOfLines
+            s = .Lines(N, 1)
+            If Trim(s) = vbNullString Then
+                ' blank line, skip it
+            ElseIf Left(Trim(s), 1) = "'" Then
+                ' comment line, skip it
+            Else
+                LineCount = LineCount + 1
+            End If
+        Next N
+    End With
+    TotalCodeLinesInVBComponent = LineCount
+End Function
+
+Private Sub ActBarra()
+    'Fracción por cada llamada
+    frac = progreso + frac
+    'Actualizar barra de progreso
+    With ufProgress
+        .LabelProgress.Width = frac * (.FrameProgress.Width)
+        .Repaint
+    End With
+    DoEvents
+End Sub
+
+Private Sub IniBarra()
+    'Inicializar barra de progreso
+    frac = 0
+    ufProgress.LabelProgress.Width = 0
+    ufProgress.Caption = "Actualizar documento"
+    ufProgress.LabelCaption.Caption = "Extrayendo ruta de archivo actual.." & vbCrLf & _
+        "Por favor, no abra o seleccione otro documento de Excel o Word."
+    ufProgress.TiempoEstimado.Caption = ""
+    ufProgress.Show
+End Sub

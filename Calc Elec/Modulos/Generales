@@ -1,0 +1,144 @@
+Option Explicit
+
+Public contraseñaPaginas As String
+Public Cerrar As Boolean
+
+Public Sub Contrasena()
+    contraseñaPaginas = "test"
+    Cerrar = False
+End Sub
+
+'================================================
+'Botones página principal
+'================================================
+Sub IrResultados()
+    ThisWorkbook.Sheets("TABLA DE RESULTADOS").Select
+End Sub
+
+Sub btnCargarCircuitos()
+    Call CargarCircuitos2
+End Sub
+
+Sub btnAct()
+    Call Actualizar2
+End Sub
+
+Sub btnCuadros()
+    Call Cuadros
+End Sub
+
+Sub btnFilas()
+    Call FormularioFilas
+End Sub
+
+Sub btnQuitarFilas()
+    Call QuitarFilas
+End Sub
+
+Sub btnPonerFila()
+    Call PonerFila
+End Sub
+
+Sub btnResultadosT()
+    Call PonerTodoEnResultado
+End Sub
+
+Sub btnActualizarT()
+    Call ActualizarTodo
+End Sub
+
+Sub btnPrevision() 
+    Call PonerTodoEnDoc
+End Sub
+
+Sub btnBorrar()
+    Call BorrarCuadros
+End Sub
+
+Sub btnReiniciar()
+    Call Reiniciar
+End Sub
+
+Sub btnExportar()
+    Call Exportar
+End Sub
+
+Sub btnImportar()
+    Call Importar
+End Sub
+
+Sub btnEndesa()
+    Call MemoriaEndesa
+End Sub
+'================================================
+'Botones resultdos
+'================================================
+Sub btnInicio()
+    ThisWorkbook.Sheets("Configuracion_cuadros").Select
+End Sub
+
+Sub btnWordR()
+    Call PonerResltEnDoc
+End Sub
+
+Sub btnCAD()
+    Call ActCAD
+End Sub
+
+Sub bntPanel()
+    ufBuscador.Show
+End Sub
+
+Sub btnBorrarResultados()
+    Call FormatearReslt
+End Sub
+
+Sub btnTitulos()
+    Call GenerarTitulos
+End Sub
+
+Sub btnQuitarTitulos()
+    Call QuitarFormato
+End Sub
+'================================================
+'Botones cuadros
+'================================================
+Sub btnSiguiente()
+    Dim wb As Workbook
+    Dim WS As Worksheet
+    Dim siguiente As Worksheet
+    
+    Set wb = ThisWorkbook
+    Set WS = wb.ActiveSheet
+    Set siguiente = WS.Next
+    
+    If Not siguiente Is Nothing Then
+        siguiente.Activate
+    End If
+End Sub
+
+Sub btnAnterior()
+    Dim wb As Workbook
+    Dim WS As Worksheet
+    Dim Anterior As Worksheet
+    
+    Set wb = ThisWorkbook
+    Set WS = wb.ActiveSheet
+    Set Anterior = WS.Previous
+    
+    If Not Anterior Is Nothing Then
+        Anterior.Activate
+    End If
+End Sub
+
+Sub btnUnoWord()
+    Call PonerUnoEnDoc
+End Sub
+
+Sub btnUnoResultados()
+    Call PonerUnoEnResultado
+End Sub
+
+Sub btnEquilibrador()
+    Call EquilibradorFases
+End Sub

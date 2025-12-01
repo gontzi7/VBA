@@ -1,0 +1,310 @@
+Option Explicit
+
+Dim libOriginal As Workbook, libroCAD As Workbook
+Dim resultados As Worksheet, hojaCAD As Worksheet
+Dim rangoCuadroReslt As Range, esqCuadro As Range, esqDatos As Range, rangoCuadroCAD As Range
+Dim nomCuad As String, rutaCAD As String
+Dim ini As Double, fin As Double, i As Double, j As Double, n As Double, num As Double, k As Double, a As Double, b As Long, c As Long
+Dim uno As Boolean, DebugMensajes As Boolean
+Dim FSO As Object
+'Arrays y ayudantes de arrays
+Dim tablaPrincipal() As Variant, tablaResultados() As Variant, valores As Range
+Dim arrayTabla2 As Collection, arrayTabla1 As Object, nuevos As Object
+Dim tabla As ListObject, tablaReslt As ListObject
+
+Function SalidaDesdeNombre(s As Variant) As String
+    Dim pos As Long, largo As Long
+    pos = InStr(s, "-") 'Encontrar primera estancia de "-"
+    largo = Len(s)  'Longitud de string
+
+    If pos > 0 Then
+        SalidaDesdeNombre = Trim(Right(s, largo - pos))    'Devolver string sin espacios y sin el guion
+    Else
+        SalidaDesdeNombre = s 'Si no se encuentra guión, devolver string comleto
+    End If
+End Function
+
+Sub ActCAD(Optional nom As String, Optional autom As Boolean)
+    DebugMensajes = ThisWorkbook.Sheets("Busquedas").Range("Debug")
+    If Not DebugMensajes Then On Error GoTo ErrorHandler
+    'Desactivar actulaizaciones de pantalla
+    Application.ScreenUpdating = False
+    'Desactivar calculacion manual
+    Application.Calculation = xlCalculationManual
+    'No mostrar avisos
+    Application.DisplayAlerts = False
+    'Borrar portapapeles
+    Application.CutCopyMode = False
+    'Eventos
+    Application.EnableEvents = False
+
+    'Iniciar barra de progreso
+    Call IniciarBarra
+    ufProgressObr.Caption = "Generar cuadros con formato para AutoCAD."
+    ufProgressObr.Proceso.Caption = "Realizando preparativos"
+    ufProgressObr.SubProceso.Caption = "Iniciando barra.."
+
+    Set libOriginal = ThisWorkbook
+    Set resultados = ThisWorkbook.Sheets("TABLA DE RESULTADOS")
+
+    'Guardar arrays
+    Erase tablaPrincipal
+    Erase tablaResultados
+
+    Set tablaReslt = ThisWorkbook.Sheets("TABLA DE RESULTADOS").ListObjects("RESULTADOS")
+    Set tabla = ThisWorkbook.Sheets("Configuracion_cuadros").ListObjects("Nombre_cuadros")
+
+    'Guardar datos a trabajar en arrays
+    Set valores = tabla.DataBodyRange
+    tablaPrincipal = valores.Value
+
+    Set valores = tablaReslt.DataBodyRange
+    tablaResultados = valores.Value
+
+    ufProgressObr.SubProceso.Caption = "Comprobando repetidos.."
+    Call ComprobarRepetidos(True)
+
+    progreso = 1 / (UBound(tablaPrincipal, 1) + 4)  'Uno por cuadro, más 2 por quitar inexistentes y 2 por demás funciones
+    'ufProgressObr.SubProceso.Caption = "Comprobando repetidos.."
+    Call QuitarInexistentes
+
+    Call VerificarNombres
+    'Variables
+    ini = 0
+    fin = 0
+    num = 0
+    If nom = "" Then    'No se ha pasado nombre, pasar todos
+        nomCuad = "ALIM"
+        uno = False
+        For i = 1 To UBound(tablaResultados, 1)    'Contar instancias únicas de cuadros
+            If nomCuad <> tablaResultados(i, 42) And tablaResultados(i, 42) <> "" Then
+                num = num + 1   'Sumar
+                nomCuad = tablaResultados(i, 42) 'Nuevo nombre a comparar
+            End If
+            If tablaResultados(i, 42) = "ALIM" Then fin = fin + 1    'Variable para inciar
+        Next i
+    Else    'Se ha pasado nombre, pasar solo ese
+        uno = True
+        num = 1
+    End If
+    'Iniciar FSO para comprobación de existencia de archivo
+    Set FSO = CreateObject("Scripting.FileSystemObject")
+
+    progreso2 = 1 / 4
+
+    'Ruta de tabla CAD (siempre mismo nombre)
+    rutaCAD = libOriginal.Path & Application.PathSeparator & "CuadrosCAD.xlsx"
+    Call ActualizarBarra2
+    'Comprobar si ya existe tabla de CAD
+    Select Case FSO.FileExists(rutaCAD)
+        Case True   'Existe
+            ufProgressObr.SubProceso.Caption = "Creando nuevo documento Excel.."
+            Set libroCAD = Workbooks.Open(rutaCAD)
+            Call ActualizarBarra2
+            Set hojaCAD = libroCAD.Sheets(1)
+        Case False  'No existe
+            ufProgressObr.SubProceso.Caption = "Abriendo documento Excel existente.."
+            Set libroCAD = Workbooks.Add
+            Call ActualizarBarra2
+            Set hojaCAD = libroCAD.Sheets(1)
+    End Select
+    libroCAD.Windows(1).Visible = False 'Esconder libro
+    Call ActualizarBarra2
+    ufProgressObr.SubProceso.Caption = "Borrando nombres anteriores.."
+    Dim nombres As Variant
+    Set nombres = libroCAD.Names
+    If nombres.Count > 0 Then
+        For i = 1 To nombres.Count
+            nombres(1).Delete   'Borrar primer item siempre, ya que al borrarlo se redimensiona la colección
+        Next i
+    End If
+    Call ActualizarBarra2
+    Call ReiniciarBarra2
+    'Desagrupar celdas
+    hojaCAD.Cells.UnMerge
+    hojaCAD.Cells.Clear 'Borrar contenido
+    ufProgressObr.Proceso.Caption = "Generando tablas con formato para AutoCAD."
+    j = 1
+    For i = 1 To num    'Loopear por cada cuadro a exportar
+        ufProgressObr.TituloObra.Caption = i & " de " & num & "."
+        ufProgressObr.SubProceso.Caption = "(" & nomCuad &  ") Estableciendo variables.."
+        progreso2 = 1 / 5
+        'Nombre de cuadro solicitado
+        If uno Then
+            nomCuad = nom
+        Else
+            nomCuad = tablaResultados(fin + 1, 42)
+        End If
+
+        'Buscar primera posición de cuadro solicitado
+        For n = 1 To UBound(tablaResultados, 1)
+            If nomCuad = tablaResultados(n, 42) Then Exit For
+        Next n
+        ini = n
+
+        'Buscar última posición de cuadro solicitado
+        For n = ini To UBound(tablaResultados, 1)
+            If nomCuad <> tablaResultados(n, 42) Then Exit For
+        Next n
+        fin = n - 1
+
+        'Esquina superior izquierda para cuadro
+        Set esqCuadro = hojaCAD.Cells(j + 1, 1) 'Esquina del cuadro
+        Set esqDatos = hojaCAD.Cells(j + 3, 4)  'Primera nombres, segunda linea alimentación, tercera protector sobretensiones (offset por circuito y salida)
+        'Rango a transponer
+        Set rangoCuadroReslt = resultados.Range(resultados.Cells(ini + 11, 32), resultados.Cells(fin + 11, 41))
+        Call ActualizarBarra2
+        ufProgressObr.SubProceso.Caption = "(" & nomCuad &  ") Escribiendo nombres de fila.."
+        'Primera columna (nombres)
+        hojaCAD.Cells(j + 1, 1) = "CIRCUITO"
+        hojaCAD.Cells(j + 2, 1) = "SALIDA"
+        hojaCAD.Cells(j + 3, 1) = "Nº ELE."
+        hojaCAD.Cells(j + 4, 1) = "POT. (kW)"
+        hojaCAD.Cells(j + 5, 1) = "In (A)"
+        hojaCAD.Cells(j + 6, 1) = "I REG. (A)"
+        hojaCAD.Cells(j + 7, 1) = "TENDIDO *"
+        hojaCAD.Cells(j + 8, 1) = "'%%C TUBO **"
+        hojaCAD.Cells(j + 9, 1) = "P. de C. (kA)"
+        hojaCAD.Cells(j + 10, 1) = "TIPO CABLE"
+        hojaCAD.Cells(j + 11, 1) = "SECCIÓN (mm2)"
+        hojaCAD.Cells(j + 12, 1) = "LONG. (m)"
+
+        Call ActualizarBarra2
+        ufProgressObr.SubProceso.Caption = "(" & nomCuad &  ") Escribiendo línea de alimentación.."
+        'Segunda columna (linea alimentación)
+        For b = 1 To fin - ini  'Buscar linea de alimentación no vacía
+            If tablaResultados(ini + b, 44) <> "" Then Exit For
+        Next
+        c = ini + b
+        hojaCAD.Cells(j + 2, 2) = tablaResultados(c, 44) 'Salida de línea de alimentación (1 mas que el inicio de cuadro)
+        For n = 1 To UBound(tablaResultados, 1) 'Buscar fila de línea de alimentación
+            If tablaResultados(n, 1) = tablaResultados(c, 44) Then Exit For
+        Next n
+
+        'Nombre de circuito de alimentación
+
+        'Fila nombre páginas de cuadro
+        For a = 1 To UBound(tablaPrincipal, 1)
+            If tablaPrincipal(a, 2) = tablaResultados(ini, 42) Then
+                Exit For
+            End If
+        Next a
+
+        If tablaPrincipal(a, 3) = "EXTERNO ------>" Then   'Alimentacion externa
+            hojaCAD.Cells(j + 1, 2) = "ACOMETIDA DESDE " & SalidaDesdeNombre(tablaResultados(n, 2)) 'Nombre de línea
+        ElseIf tablaPrincipal(a, 3) <> "" Then 'Nombre de cuadro
+            'Buscar nombre de cuadro padre
+            For b = 1 To UBound(tablaResultados, 1)
+                If tablaResultados(b, 1) = tablaResultados(c, 44) Then Exit For
+            Next b
+
+            Do
+                b = b - 1
+            Loop Until tablaResultados(b, 43) = "" 'Encontrar fila de título
+
+            hojaCAD.Cells(j + 1, 2) = "ACOMETIDA DESDE " & tablaResultados(b, 2)
+        Else
+            hojaCAD.Cells(j + 1, 2) = "ACOMETIDA DESDE "    'Sin especificar
+        End If
+
+        hojaCAD.Cells(j + 3, 2) = tablaResultados(n, 32) 'Nº elemento
+        hojaCAD.Cells(j + 4, 2) = tablaResultados(n, 33) 'Potencia
+        hojaCAD.Cells(j + 5, 2) = tablaResultados(n, 34) 'Corriente nominal
+        hojaCAD.Cells(j + 6, 2) = tablaResultados(n, 35) 'Corriente máxima
+        hojaCAD.Cells(j + 7, 2) = tablaResultados(n, 36) 'Tendido
+        hojaCAD.Cells(j + 8, 2) = tablaResultados(n, 37) 'Diam tubo
+        hojaCAD.Cells(j + 9, 2) = tablaResultados(n, 38) 'Potencia corte
+        hojaCAD.Cells(j + 10, 2) = tablaResultados(n, 39)  'Tipo cable
+        hojaCAD.Cells(j + 11, 2) = tablaResultados(n, 40)  'Sección
+        hojaCAD.Cells(j + 12, 2) = tablaResultados(n, 41)  'Longitud
+
+        'Tercera columna (protector sobretensiones)
+        hojaCAD.Cells(j + 1, 3) = "PROTECTOR SOBRETENSIONES"
+        For n = 2 To 12
+            If n = 3 Then
+                hojaCAD.Cells(j + n, 3) = "1"
+            Else
+                hojaCAD.Cells(j + n, 3) = "---"
+            End If
+        Next n
+
+        Call ActualizarBarra2
+        ufProgressObr.SubProceso.Caption = "(" & nomCuad &  ") Insertando datos de líneas.."
+        'Transponer rango
+        With esqDatos
+            .Resize(rangoCuadroReslt.Columns.Count, rangoCuadroReslt.Rows.Count).Value = _
+                Application.WorksheetFunction.Transpose(rangoCuadroReslt.Value)
+        End With
+
+        'Salida y nombre de líneas
+        k = 4
+        For n = ini + 1 To fin
+            hojaCAD.Cells(j + 1, k) = SalidaDesdeNombre(tablaResultados(n, 2))  'Nombre circuito
+            hojaCAD.Cells(j + 2, k) = tablaResultados(n, 1) 'Salida
+            k = k + 1   'Siguiente columna
+        Next n
+        Call ActualizarBarra2
+        ufProgressObr.SubProceso.Caption = "(" & nomCuad & ") Nombrando rango.."
+        'Pegar y nombrar rango
+        Set rangoCuadroCAD = esqCuadro.Resize(rangoCuadroReslt.Columns.Count + 2, rangoCuadroReslt.Rows.Count + 2 )  '3 columnas mas para abarcar nombres, alimentación y protector
+        libroCAD.Names.Add Name:=nomCuad, RefersTo:=rangoCuadroCAD
+        'Título de cuadro
+        hojaCAD.Range(hojaCAD.Cells(j, 1), hojaCAD.Cells(j, rangoCuadroReslt.Rows.Count + 2)).Merge
+        hojaCAD.Range(hojaCAD.Cells(j, 1), hojaCAD.Cells(j, rangoCuadroReslt.Rows.Count + 2)).Value = tablaPrincipal(a, 1)
+        hojaCAD.Range(hojaCAD.Cells(j, 1), hojaCAD.Cells(j, rangoCuadroReslt.Rows.Count + 2)).Font.Bold = True
+        Call ActualizarBarra2
+        'Siguiente cuadro a 14 filas del anterior
+        j = j + 14
+        Call ReiniciarBarra2
+    Next i
+    progreso2 = 1 / 4
+    ufProgressObr.Proceso.Caption = "Últimos ajustes"
+    ufProgressObr.SubProceso.Caption = "Estableciendo formato de datos.."
+    DoEvents
+    'Formato datos
+    hojaCAD.Cells.HorizontalAlignment = xlCenter
+    hojaCAD.Columns("A:A").Font.Bold = True
+    Call ActualizarBarra2
+    'Fuente y tamaño de texto
+    ufProgressObr.SubProceso.Caption = "Aplicando formato de texto.."
+    DoEvents
+    hojaCAD.Cells.Font.Name = "Arial"
+    hojaCAD.Cells.Font.Size = 8
+
+    Call ActualizarBarra2
+    ufProgressObr.SubProceso.Caption = "Guardando libro.."
+    DoEvents
+    'Guardar libro generado
+    libroCAD.Windows(1).Visible = True  'Mostrar documento
+    libroCAD.SaveAs Filename:=rutaCAD, FileFormat:=xlOpenXMLWorkbook
+    Call ActualizarBarra2
+    DoEvents
+    ufProgressObr.Proceso.Caption = "Tabla generada, guardando libro."
+    ufProgressObr.SubProceso.Caption = ""
+    Call ActualizarBarra2
+    Call ReiniciarBarra2
+    'Activar actualización de pantalla
+    Application.ScreenUpdating = True
+    'Activar calculacion automatica
+    Application.Calculation = xlCalculationAutomatic
+    Application.DisplayAlerts = True
+    'Eventos
+    Application.EnableEvents = True
+    Set FSO = Nothing
+    If Not autom Then MsgBox "Se han pasado los cuadros a hoja listos para introducir en CAD sin errores.", vbInformation, "Hoja generada sin errores"
+    Unload ufProgressObr
+    Exit Sub
+ErrorHandler:
+    'Si ocurre algun error ejecutar
+    MsgBox "Ha ocurrido un error al crear o abrir el archivo de excel: " & Err.Description, vbExclamation, "Error 501"
+    'Activar actualización de pantalla
+    Application.ScreenUpdating = True
+    'Activar calculacion automatica
+    Application.Calculation = xlCalculationAutomatic
+    Application.DisplayAlerts = True
+    'Eventos
+    Application.EnableEvents = True
+    Set FSO = Nothing
+    Unload ufProgressObr
+    End
+End Sub
