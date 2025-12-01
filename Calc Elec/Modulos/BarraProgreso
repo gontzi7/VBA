@@ -1,0 +1,60 @@
+Option Explicit
+
+'Parametros barra progreso
+Public progreso As Double, frac As Double, progreso2 As Double, frac2 As Double
+Public veces As Integer
+
+'===============================================================================================================================================
+'Barra de progreso
+'===============================================================================================================================================
+Public Sub ActualizarBarra()
+    'Fracción por cada llamada
+    frac = progreso + frac
+    'Actualizar barra de progreso
+    With ufProgressObr
+        .LabelProgress.Width = frac * (.FrameProgress.Width)
+        .Repaint
+    End With
+    DoEvents
+    veces = veces + 1
+End Sub
+
+Public Sub ActualizarBarra2()
+    'Fracción por cada llamada
+    ' Application.Wait Now + #12:00:01 AM#
+    frac2 = progreso2 + frac2
+    'Actualizar barra de progreso secundaria
+    With ufProgressObr
+        .LabelProgress2.Width = frac2 * (.FrameProgress2.Width)
+    End With
+    DoEvents
+End Sub
+
+Public Sub ReiniciarBarra2()
+    'Reiniciar barra de progreso secundaria
+    ' Application.Wait Now + #12:00:01 AM#
+    'SubProceso.Caption = ""
+    ufProgressObr.LabelProgress2.Width = 0
+    frac2 = 0
+    progreso2 = 0
+    'Avanzar la barra de progreso primaria
+    Call ActualizarBarra
+End Sub
+
+Public Sub IniciarBarra()
+    veces = 0
+    'Variables y textos
+    frac = 0
+    frac2 = 0
+    ufProgressObr.TituloObra.Caption = ""
+    ufProgressObr.LabelProgress.Width = 0
+    ufProgressObr.LabelProgress2.Width = 0
+    ufProgressObr.Caption = ""
+    ufProgressObr.Proceso.Caption = ""
+    ufProgressObr.SubProceso.Caption = "Iniciando barra.."
+    ufProgressObr.TiempoEstimado.Caption = ""
+    ufProgressObr.Denbora.Caption = ""
+    ufProgressObr.Show vbModeless
+    'Variable de parada
+    Cerrar = False
+End Sub

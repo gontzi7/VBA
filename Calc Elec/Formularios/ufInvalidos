@@ -1,0 +1,41 @@
+Option Explicit
+
+Private Sub Automatico_Click()
+    CorregirAutomatico = True
+    Unload Me
+End Sub
+
+Private Sub Cancelar_Click()
+    salirMacr = True
+    ContinuarEjecucion = True
+    Unload Me
+End Sub
+
+Private Sub Manual_Click()
+    CorregirManual = True
+    ufCorregirInv.Show vbModeless
+    Unload Me
+End Sub
+
+Private Sub UserForm_Initialize()
+    'On Error Resume Next
+    'Poner en medio de la pantalla
+    With Me
+        .StartUpPosition = 0
+        .Left = Application.Left + (0.5 * Application.Width) - (0.5 * .Width)
+        .Top = Application.Top + (0.5 * Application.Height) - (0.5 * .Height)
+        .Show
+    End With
+    'Cargar cantidad
+    Cantidad.Caption = "Inválidos encontrados: " & NoCmpt.count
+End Sub
+
+Private Sub UserForm_QueryClose(Cancel As Integer, CloseMode As Integer)
+    If CorregirManual Then
+        ContinuarEjecucion = False
+        salirMacr = False
+    Else
+        salirMacr = True
+        ContinuarEjecucion = True
+    End If
+End Sub

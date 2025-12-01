@@ -1,0 +1,36 @@
+Option Explicit
+
+Private Sub Cancelar_Click()
+    salirMacr = True
+    ContinuarEjecucion = True
+    'Desactivar actulaizaciones de pantalla
+    Application.ScreenUpdating = False
+    'Desactivar calculacion manual
+    Application.Calculation = xlCalculationManual
+    MsgBox salirMacr
+    Unload Me
+End Sub
+
+Private Sub UserForm_Initialize()
+    'On Error Resume Next
+    'Poner en medio de la pantalla
+    With Me
+        .StartUpPosition = 0
+        .Left = Application.Left + (0.5 * Application.Width) - (0.5 * .Width)
+        .Top = Application.Top + (0.5 * Application.Height) - (0.5 * .Height)
+        .Show
+    End With
+    'Activar actualización de pantalla
+    Application.ScreenUpdating = True
+    'Activar calculacion automatica
+    Application.Calculation = xlCalculationAutomatic
+    Application.DisplayAlerts = True
+End Sub
+
+Private Sub UserForm_QueryClose(Cancel As Integer, CloseMode As Integer)
+    'Desactivar actulaizaciones de pantalla
+    Application.ScreenUpdating = False
+    'Desactivar calculacion manual
+    Application.Calculation = xlCalculationManual
+    ContinuarEjecucion = True
+End Sub

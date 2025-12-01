@@ -1,0 +1,131 @@
+Option Explicit
+
+Sub ProfileFormulaPerformanceAccurate()
+    Dim cell As Range
+    Dim WS As Worksheet
+    Dim startTime As Double, elapsed As Double
+    Dim report As Worksheet
+    Dim row As Long
+
+    Application.ScreenUpdating = False
+    Application.Calculation = xlCalculationManual
+    Application.EnableEvents = False
+
+    Set WS = ActiveSheet
+    Set report = Worksheets.Add
+    report.name = "Formula Times"
+    report.Cells(1, 1).Value = "Address"
+    report.Cells(1, 2).Value = "Formula"
+    report.Cells(1, 3).Value = "Time (ms)"
+    row = 2
+
+    For Each cell In WS.UsedRange.Cells
+        If cell.HasFormula Then
+            ' Force recalculation by invalidating cache
+            cell.Dirty
+            
+            startTime = Timer
+            cell.Calculate
+            DoEvents
+            elapsed = (Timer - startTime) * 1000
+
+            report.Cells(row, 1).Value = cell.Address
+            report.Cells(row, 2).Value = "'" & cell.formula
+            report.Cells(row, 3).Value = Round(elapsed, 2)
+            row = row + 1
+        End If
+    Next cell
+
+    Application.Calculation = xlCalculationAutomatic
+    Application.ScreenUpdating = True
+    Application.EnableEvents = True
+
+    MsgBox "Done. Check the 'Formula Times' sheet.", vbInformation
+End Sub
+
+Sub lineasCod()
+    MsgBox TotalLinesInProject & " " & TotalCodeLinesInProject(ActiveWorkbook.VBProject)
+End Sub
+
+Public Function TotalLinesInProject(Optional VBProj As VBIDE.VBProject = Nothing) As Long
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+' This returns the total number of lines in all components of the VBProject
+' referenced by VBProj. If VBProj is missing, the VBProject of the ActiveWorkbook
+' is used. Returns -1 if the VBProject is locked.
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+
+    Dim VBP As VBIDE.VBProject
+    Dim VBComp As VBIDE.VBComponent
+    Dim LineCount As Long
+    
+    If VBProj Is Nothing Then
+        Set VBP = ActiveWorkbook.VBProject
+    Else
+        Set VBP = VBProj
+    End If
+    
+    If VBP.Protection = vbext_pp_locked Then
+        TotalLinesInProject = -1
+        Exit Function
+    End If
+    
+    For Each VBComp In VBP.VBComponents
+        LineCount = LineCount + VBComp.CodeModule.CountOfLines
+    Next VBComp
+    
+    TotalLinesInProject = LineCount
+End Function
+
+Public Function TotalCodeLinesInProject(VBProj As VBIDE.VBProject) As Long
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+' This returns the total number of code lines (excluding blank lines and
+' comment lines) in all VBComponents of VBProj. Returns -1 if VBProj
+' is locked.
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+    
+    Dim VBComp As VBIDE.VBComponent
+    Dim LineCount As Long
+    If VBProj.Protection = vbext_pp_locked Then
+        TotalCodeLinesInProject = -1
+        Exit Function
+    End If
+    For Each VBComp In VBProj.VBComponents
+        LineCount = LineCount + TotalCodeLinesInVBComponent(VBComp)
+    Next VBComp
+    
+    TotalCodeLinesInProject = LineCount
+End Function
+
+Public Function TotalCodeLinesInVBComponent(VBComp As VBIDE.VBComponent) As Long
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+' This returns the total number of code lines (excluding blank lines and
+' comment lines) in the VBComponent referenced by VBComp. Returns -1
+' if the VBProject is locked.
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+    Dim N As Long
+    Dim s As String
+    Dim LineCount As Long
+    
+    If VBComp.Collection.Parent.Protection = vbext_pp_locked Then
+        TotalCodeLinesInVBComponent = -1
+        Exit Function
+    End If
+    
+    With VBComp.CodeModule
+        For N = 1 To .CountOfLines
+            s = .Lines(N, 1)
+            If Trim(s) = vbNullString Then
+                ' blank line, skip it
+            ElseIf Left(Trim(s), 1) = "'" Then
+                ' comment line, skip it
+            Else
+                LineCount = LineCount + 1
+            End If
+        Next N
+    End With
+    TotalCodeLinesInVBComponent = LineCount
+End Function
+
+Sub proba1()
+    MsgBox Environ("UserProfile")
+End Sub

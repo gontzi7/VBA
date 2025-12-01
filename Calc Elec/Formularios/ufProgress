@@ -1,0 +1,21 @@
+Option Explicit
+
+Dim OutPut As Integer
+
+Private Sub CommandButton1_Click()
+    OutPut = MsgBox("Se parará el programa, continuar?", vbCritical + vbYesNo, "Detener programa")
+    If OutPut = 6 Then
+        Cerrar = True
+    End If
+End Sub
+
+Private Sub UserForm_Initialize()
+    With Me
+        .StartUpPosition = 0
+        .Left = Application.Left + (0.5 * Application.Width) - (0.5 * .Width)
+        .Top = Application.Top + (0.5 * Application.Height) - (0.5 * .Height)
+        .Show
+    End With
+    'Variable de parada
+    Cerrar = False
+End Sub

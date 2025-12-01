@@ -6,7 +6,6 @@ Dim RutaUsuario, RutaBase, RutaExcel As String
 Dim rutaArchivo As String
 Dim nombreArchivo As String, rutaAnterior As String
 Dim i As Integer
-Dim fso As Object
 
 Sub Actualizar2()
     DebugMensajes = ThisWorkbook.Sheets("Busquedas").Range("Debug")
@@ -44,27 +43,12 @@ Reintentar1:
     ufProgress.Caption = "Actualizar código"
     ufProgress.LabelCaption.Caption = "Extrayendo ruta de archivo actual.." & vbCrLf & _
         "Por favor, no abra o seleccione otro documento de Excel o Word."
-
-    Dim fso = CreateObject("Scripting.FileSystemObject")
-    'Comprobar si existe archivo base
-    RutaUsuario = Environ("UserProfile")
-    RutaBase = "\BOSLAN INGENIERIA Y CONSULTORIA\Instalaciones - Imagenes\98-PROGRAMAS INST\Gontzal proba\Proyectos"
-    RutaExcel = "\CuadrosBT(Pr2)\CAL ELEC(mas actualizado).xlsm"
-
-    If Not fso.FileExists(RutaUsuario & RutaBase & RutaExcel) Then
-        MsgBox "No se ha encontrado el archivo base de actualización en la ruta:" & vbCrLf & _
-        RutaUsuario & RutaBase & RutaExcel & vbCrLf & _
-        "Por favor, contacte con el administrador.", vbOKOnly + vbExclamation, "Error 101"
-        'Descargar barra
-        Unload ufProgress
-        Exit Sub
-    End If
-
-
     'Cuantas veces se llama a actualizar barra
     progreso = 1 / 3
 
-
+    RutaUsuario = Environ("UserProfile")
+    RutaBase = "\BOSLAN INGENIERIA Y CONSULTORIA\Instalaciones - Imagenes\98-PROGRAMAS INST\Gontzal proba\Proyectos"
+    RutaExcel = "\CuadrosBT(Pr2)\CAL ELEC(mas actualizado).xlsm"
 
     'Conseguir ruta de archivo actual
     rutaArchivo = ThisWorkbook.path
@@ -72,46 +56,28 @@ Reintentar1:
         MsgBox "Ruta de archivo actual: " & rutaArchivo
     End If
     Call ActBarra
-    'Conseguir nombre de archivo actual para borrar al finalizar
-    ufProgress.LabelCaption.Caption = "Conectando con servidor.." & vbCrLf & _
-    "Por favor, no abra o seleccione otro documento de Excel o Word."
-    nombreArchivo = ThisWorkbook.name
-    If DebugMensajes Then
-        MsgBox "Nombre de archivo actual: " & nombreArchivo
-    End If
-    Call ActBarra
-    'Copiar el archivo actualizado a la misma ruta del antiguo
-    ufProgress.LabelCaption.Caption = "Copiando archivo actualizado.." & vbCrLf & _
-    "Por favor, no abra o seleccione otro documento de Excel o Word."
-    rutaAnterior = ThisWorkbook.FullName
-    If DebugMensajes Then
-        MsgBox "Ruta anterior: " & rutaAnterior
-    End If
-    Call ActBarra
-    'Descargar barra
-    Unload ufProgress
-    Call ActBarra
+        'Conseguir nombre de archivo actual para borrar al finalizar
+        ufProgress.LabelCaption.Caption = "Extrayendo nombre de archivo.." & vbCrLf & _
+        "Por favor, no abra o seleccione otro documento de Excel o Word."
+        nombreArchivo = ThisWorkbook.name
+        If DebugMensajes Then
+            MsgBox "Nombre de archivo actual: " & nombreArchivo
+        End If
+        Call ActBarra
+        'Copiar el archivo actualizado a la misma ruta del antiguo
+        ufProgress.LabelCaption.Caption = "Copiando archivo actualizado.." & vbCrLf & _
+        "Por favor, no abra o seleccione otro documento de Excel o Word."
+        rutaAnterior = ThisWorkbook.FullName
+        If DebugMensajes Then
+            MsgBox "Ruta anterior: " & rutaAnterior
+        End If
+        Call ActBarra
+        'Descargar barra
+        Unload ufProgress
+        'FileCopy RutaUsuario & RutaBase & RutaExcel, rutaAnterior
+        Call ActBarra
 
 
-
-
-    Dim VBProj As VBIDE.VBProject
-    Dim VBComp As VBIDE.VBComponent
-    Dim WS As Worksheet
-    Dim Rng As Range
-    
-    Set VBProj = ActiveWorkbook.VBProject
-    Set WS = ActiveWorkbook.Worksheets("Lineas")
-    Set Rng = WS.Range("A1")
-    
-    For Each VBComp In VBProj.VBComponents
-        Rng(1, 1).Value = VBComp.name
-
-            Rng(1, 3).Value = TotalCodeLinesInVBComponent(VBComp)
-
-        Rng(1, 2).Value = ComponentTypeToString(VBComp.Type)
-        Set Rng = Rng(2, 1)
-    Next VBComp
 
     For i = 1 To 5
         Dim FromVBProject As VBIDE.VBProject
@@ -316,6 +282,26 @@ Function CopyModule(ModuleName As String, _
     Kill FName
     CopyModule = True
 End Function
+
+Sub ListModules()
+    Dim VBProj As VBIDE.VBProject
+    Dim VBComp As VBIDE.VBComponent
+    Dim WS As Worksheet
+    Dim Rng As Range
+    
+    Set VBProj = ActiveWorkbook.VBProject
+    Set WS = ActiveWorkbook.Worksheets("Lineas")
+    Set Rng = WS.Range("A1")
+    
+    For Each VBComp In VBProj.VBComponents
+        Rng(1, 1).Value = VBComp.name
+
+            Rng(1, 3).Value = TotalCodeLinesInVBComponent(VBComp)
+
+        Rng(1, 2).Value = ComponentTypeToString(VBComp.Type)
+        Set Rng = Rng(2, 1)
+    Next VBComp
+End Sub
 
 Function ComponentTypeToString(ComponentType As VBIDE.vbext_ComponentType) As String
     Select Case ComponentType

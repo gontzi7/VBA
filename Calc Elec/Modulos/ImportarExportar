@@ -1,8 +1,8 @@
 Option Explicit
 
 Dim exportPath As String
-Dim ws As Worksheet
-Dim rng As Range
+Dim WS As Worksheet
+Dim Rng As Range
 Dim rowArr As Variant
 Dim i As Long, j As Long, k As Long, cantCuad As Long, colorPag As Long
 Dim fNum As Integer, OutPut As Integer
@@ -16,11 +16,12 @@ Dim nombreHoja As String, nombreTabla As String
 Dim filasTabla As Long, colCount As Long
 Dim columnasRellenar As Collection
 
-Dim importPath As Variant
-Dim textoLinea As String
-Dim rowValues() As String
-Dim rowNum As Long
-Dim colNum As Long
+
+    Dim importPath As Variant
+    Dim textoLinea As String
+    Dim rowValues() As String
+    Dim rowNum As Long
+    Dim colNum As Long
     
 
 Sub Exportar()
@@ -43,35 +44,35 @@ Seleccionado1:
     Open exportPath For Output As #fNum
 
     'Exportar páginas fijas
-    For Each ws In ThisWorkbook.Worksheets
-        Select Case ws.name
+    For Each WS In ThisWorkbook.Worksheets
+        Select Case WS.name
             Case "Configuracion_cuadros"
                 tipoPagina = "Fijo"
-                nombrePagina = ws.name
-                colorPag = ws.Tab.color
+                nombrePagina = WS.name
+                colorPag = WS.Tab.color
 
                 Call MeterEnArchivo(tipoPagina, nombrePagina, colorPag)
             Case "TABLA DE RESULTADOS"
                 tipoPagina = "Fijo"
-                nombrePagina = ws.name
-                colorPag = ws.Tab.color
+                nombrePagina = WS.name
+                colorPag = WS.Tab.color
 
                 Call MeterEnArchivo(tipoPagina, nombrePagina, colorPag)
         End Select
-    Next ws
+    Next WS
 
     'Exportar páginas generadas
-    For Each ws In ThisWorkbook.Worksheets
-        Select Case ws.name
+    For Each WS In ThisWorkbook.Worksheets
+        Select Case WS.name
             Case "|", "ALIM", "PLANTILLA_CUADROS", "Busquedas", "Lineas", "Configuracion_cuadros", "TABLA DE RESULTADOS", "Mediciones cable", "BANDEJAS", "BANDEJAS DAT"    'Páginas a ignorar
             Case Else   'Páginas generadas
                 tipoPagina = "Generado"
-                nombrePagina = ws.name
-                colorPag = ws.Tab.color
+                nombrePagina = WS.name
+                colorPag = WS.Tab.color
 
                 Call MeterEnArchivo(tipoPagina, nombrePagina, colorPag)
         End Select
-    Next ws
+    Next WS
 
     Close #fNum
     MsgBox "Hoja exportada a archivo: " & exportPath & vbCrLf _
@@ -264,15 +265,15 @@ Seleccionado2:
     i = 1
 
     'Colores de pestañas
-    For Each ws In ThisWorkbook.Worksheets
-        If colores.Exists(ws.name) Then
+    For Each WS In ThisWorkbook.Worksheets
+        If colores.Exists(WS.name) Then
             ufProgressObr.SubProceso.Caption = "Hoja" & i & " de " & colores.count
-            ufProgressObr.TituloObra.Caption = "Hoja: " & ws.name
-            ws.Tab.color = colores(ws.name) 'ID color de página
+            ufProgressObr.TituloObra.Caption = "Hoja: " & WS.name
+            WS.Tab.color = colores(WS.name) 'ID color de página
             i = i + 1
             Call ActualizarBarra2
         End If
-    Next ws
+    Next WS
     Call ReiniciarBarra2
     ufProgressObr.TituloObra.Caption = ""
 
@@ -317,12 +318,12 @@ End Sub
 
 Private Sub MeterEnArchivo(ByVal tipP As String, ByVal nomP As String, ByVal color As Long)
 
-    filTabla = ws.ListObjects(1).ListRows.count
+    filTabla = WS.ListObjects(1).ListRows.count
     
-    Set rng = ws.ListObjects(1).DataBodyRange 'rango de valores
+    Set Rng = WS.ListObjects(1).DataBodyRange 'rango de valores
 
     ' MsgBox rng.Address
-    rowArr = rng.value
+    rowArr = Rng.Value
 
     'Título de página
     Select Case tipP
@@ -387,20 +388,20 @@ Private Sub PonerEnExcel(ByVal nomH As String, ByVal nomT As String, ByVal filas
     ufProgressObr.SubProceso.Caption = "Preparando tabla para pegar valores.."
 
     'Comprobar si se ha corregido nombre de tabla
-    ' On Error GoTo ignor
-    ' If cambios.Exists(nomH) Then
-    '     nomH = cambios.Item(nomH)
-    ' End If
+    On Error GoTo ignor
+    If cambios.Exists(nomH) Then
+        nomH = cambios.Item(nomH)
+    End If
 
-    ' If cambios.Exists(nomT) Then
-    '     nomT = cambios.Item(nomT)
-    ' End If
-    ' ignor:
-    ' On Error GoTo 0
+    If cambios.Exists(nomT) Then
+        nomT = cambios.Item(nomT)
+    End If
+ignor:
+    On Error GoTo 0
 
     'Variables por tabla
-    Set ws = ThisWorkbook.Sheets(nomH)
-    Set tabla = ws.ListObjects(nomT)
+    Set WS = ThisWorkbook.Sheets(nomH)
+    Set tabla = WS.ListObjects(nomT)
     topLeft1 = tabla.DataBodyRange.Cells(1, 1).Offset(-1, 0).Address(0, 0) 'Con fila de títulos
 
     Call ActualizarBarra2
@@ -417,7 +418,7 @@ Private Sub PonerEnExcel(ByVal nomH As String, ByVal nomT As String, ByVal filas
     Call ActualizarBarra2
 
     'Tamaño tabla
-    tabla.Resize ws.Range(topLeft1).Resize(UBound(valrs, 1) + 2, UBound(valrs, 2))
+    tabla.Resize WS.Range(topLeft1).Resize(UBound(valrs, 1) + 2, UBound(valrs, 2))
 
     'Loopear por array de columnas, pegar las que apliquen
     For i = 1 To col.count
@@ -427,11 +428,59 @@ Private Sub PonerEnExcel(ByVal nomH As String, ByVal nomT As String, ByVal filas
 
         arrCopy = Application.WorksheetFunction.Index(valrs, 0, col(i))   'Extraer columna de array
 
-        topLeft = tabla.DataBodyRange.Cells(1, col(i)).Address(0, 0)    'Celda superior izquierda de columna a pegar
+        topLeft = tabla.DataBodyRange.Cells(1, col(i)).Address(0, 0)
 
-        Set rngF = ws.Range(topLeft).Resize(UBound(arrCopy, 1), 1)   'Rango a pegar
+        ' On Error Resume Next
+        ' MsgBox IsArray(arrCopy(1))
+        ' MsgBox IsArray(arrCopy) & " " & LBound(arrCopy) & " " & UBound(arrCopy) & " " & UBound(arrCopy, 1) & " " & UBound(arrCopy, 2)
+        ' longArr = UBound(arrCopy, 2)
+        ' If Err.Number <> 0 Then
+        '     longArr = 1
+        '     Err.Clear
+        ' End If
+        ' On Error GoTo 0
 
-        rngF.value = arrCopy
+
+
+        '  If IsArray(arrCopy) Then
+        '      If UBound(arrCopy, 1) >= 1 Then
+        '          If IsArray(arrCopy(1)) Then
+        '              longArr = UBound(arrCopy, 2)
+        '          Else
+        '              longArr = 1
+        '          End If
+        '      Else
+        '          longArr = 1
+        '      End If
+        '  Else
+        '      longArr = 1
+        '  End If
+
+
+
+        '  If IsArray(arrCopy) Then
+        '      If (Not IsEmpty(arrCopy)) And (LBound(arrCopy) = 1 Or LBound(arrCopy) = 0) Then
+        '          On Error Resume Next
+        '          longArr = UBound(arrCopy, 2)
+        '          If Err.Number <> 0 Then
+        '              longArr = 1
+        '              Err.Clear
+        '          End If
+        '          On Error GoTo 0
+        '      Else
+        '          longArr = 1
+        '      End If
+        '  Else
+        '      longArr = 1
+        '  End If
+
+
+
+
+
+        Set rngF = WS.Range(topLeft).Resize(UBound(arrCopy, 1), 1)   'Rango a pegar
+
+        rngF.Value = arrCopy
 
         Call ActualizarBarra2
     Next i

@@ -1,13 +1,13 @@
 Option Explicit
 
-Dim ws As Worksheet, gen As Worksheet
+Dim WS As Worksheet, gen As Worksheet
 Dim nomCuad As String, msg As String
 Dim columnNomReslt As ListColumn, columnFilReslt As ListColumn, columnAlmReslt As ListColumn
 Dim tabla As ListObject, tablaReslt As ListObject, tablaALIM As ListObject
-Dim i As Double, j As Double, cont As Double, ant As Double, k As Double, a As Double, b As Double, sinGenerar As Double, faltan As Double
+Dim i As Double, j As Double, cont As Double, ant As Double, k As Double, a As Double, b As Double, sinGenerar As Double, Faltan As Double
 Dim colsCount As Long, colCount As Long
 Dim OutPut As Integer
-Dim ignorar As Boolean, DebugMensajes As Boolean, encontrado As Boolean, faltaAlim As Boolean, CAD As Boolean, framework35 As Boolean, primeraFila As Boolean
+Dim Ignorar As Boolean, DebugMensajes As Boolean, encontrado As Boolean, faltaAlim As Boolean, CAD As Boolean, framework35 As Boolean, primeraFila As Boolean
 'Arrays y ayudantes de arrays
 Dim tablaPrincipal() As Variant, tablaResultados() As Variant, valoresDefecto() As Variant, finalArr() As Variant, rowArr() As Variant, templateRow As Variant, valores As Range
 Dim arrayTabla2 As Collection, arrayTabla1 As Object, nuevos As Object
@@ -67,7 +67,7 @@ Sub PonerTodoEnResultado()
         'Nombre de página a estudiar
         nomCuad = tablaPrincipal(i, 2)
         If ExistePagina(nomCuad) Then
-            ignorar = False
+            Ignorar = False
             a = a + 1
             ufProgressObr.TituloObra.Caption = i & " de " & UBound(tablaPrincipal, 1)
             Call MeterCuadroCod(nomCuad)
@@ -79,36 +79,36 @@ Sub PonerTodoEnResultado()
     ufProgressObr.TituloObra.Caption = ""
     ufProgressObr.Proceso.Caption = "Dando formato a array de datos."
     ufProgressObr.SubProceso.Caption = "Construyendo array de 2 dimensiones.."
-    If framework35 Then progreso2 = 1 / arrayTabla1.Count
-    If Not framework35 Then progreso2 = 1 / (arrayTabla2.Count + nuevos.Count)
+    If framework35 Then progreso2 = 1 / arrayTabla1.count
+    If Not framework35 Then progreso2 = 1 / (arrayTabla2.count + nuevos.count)
     DoEvents
 
     If framework35 Then
         'Convertir ArrayList en array de 2 dimensiones
-        ReDim finalArr(1 To arrayTabla1.Count, 1 To colCount)
-        For i = 1 To arrayTabla1.Count
+        ReDim finalArr(1 To arrayTabla1.count, 1 To colCount)
+        For i = 1 To arrayTabla1.count
             For j = 1 To colCount
                 finalArr(i, j) = arrayTabla1(i - 1)(j)
             Next j
             Call ActualizarBarra2
         Next i
     Else
-        faltan = nuevos.Count
+        Faltan = nuevos.count
         'Convertir colección de arrays a array de 2 dimensiones
-        ReDim finalArr(1 To arrayTabla2.Count + nuevos.Count, 1 To colCount)
-        For i = arrayTabla2.Count + nuevos.Count To 1 Step -1   'De maximo a minimo para mantener relación
+        ReDim finalArr(1 To arrayTabla2.count + nuevos.count, 1 To colCount)
+        For i = arrayTabla2.count + nuevos.count To 1 Step -1   'De maximo a minimo para mantener relación
             If nuevos.Exists(i) Then
                 For j = 1 To colCount
                     finalArr(i, j) = nuevos(i)(j)
                 Next j
                 nuevos.Remove i   'Eliminar ocurrencia
-                faltan = faltan - 1
-                GoTo Siguiente
+                Faltan = Faltan - 1
+                GoTo siguiente
             End If
             For j = 1 To colCount
-                finalArr(i, j) = arrayTabla2(i - faltan)(j)
+                finalArr(i, j) = arrayTabla2(i - Faltan)(j)
             Next j
-            Siguiente:
+siguiente:
             Call ActualizarBarra2
         Next i
     End If
@@ -171,11 +171,11 @@ Sub PonerUnoEnResultado()
 
     Call RellenarLineasALIM     'Rellenar tabla de lineas de alimentación externas
 
-    ignorar = False
+    Ignorar = False
     'Si hay información introducida en resultados ya, preguntar si borrar o no
     If UBound(tablaResultados, 1) > 1 Then
         'Si se encuentra mismo item de cuadro (abreviatura), actualizar automáticamente
-        If BuscarEnTabla(ActiveSheet.Name, tablaResultados, 42) Then
+        If BuscarEnTabla(ActiveSheet.name, tablaResultados, 42) Then
             OutPut = MsgBox("Se ha encontrado el cuadro solicitado en resultados, si presiona 'Sí', actualizará el cudro sin borrar datos." & vbCrLf & _
                 "Si pulsa 'No' se borrará la tabla entera para que únicamente quede el cuadro solicitado." & vbCrLf & "Actualizar in situ?", vbQuestion + vbYesNoCancel, _
                 "Detectados datos existentes en tabla de resultados")
@@ -183,8 +183,8 @@ Sub PonerUnoEnResultado()
                 Case 6  'Si
                     b = FilaAlimExt()   'Indicador número fila de línea de alimentación externa
                     ant = UBound(tablaResultados, 1) + 1 'Primera fila a introducir cuadro
-                    Call CuadAct(ActiveSheet.Name)  'Actualizar
-                    MsgBox "Se ha actualizado correctamente el cuadro " & ActiveSheet.Name, vbInformation, "Proceso completado sin errores"
+                    Call CuadAct(ActiveSheet.name)  'Actualizar
+                    MsgBox "Se ha actualizado correctamente el cuadro " & ActiveSheet.name, vbInformation, "Proceso completado sin errores"
                     Exit Sub    'Salir de sub
                 Case 7  'No
                     Call FormatearReslt("I") 'Borrar tabla de resultados
@@ -219,9 +219,9 @@ Sub PonerUnoEnResultado()
         ant = 2 'Primera fila a introducir cuadro
     End If
     'Buscar i de cudaro solicitado
-    i = BuscarI(ActiveSheet.Name)
+    i = BuscarI(ActiveSheet.name)
     'Meter cuadro
-    Call MeterCuadro(ActiveSheet.Name)
+    Call MeterCuadro(ActiveSheet.name)
     ufProgressObr.SubProceso.Caption = "Recalculando formatos de títulos.."
     'Recalcular formatos de títulos
     Call QuitarFormato
@@ -279,7 +279,7 @@ Sub ActualizarTodo()
     ufProgressObr.Proceso.Caption = "Realizando preparativos"
     ufProgressObr.SubProceso.Caption = "Iniciando barra.."
 
-    progreso = 1 / (2 + 2 + tabla.ListRows.Count)   'Variable barra de progreso principal
+    progreso = 1 / (2 + 2 + tabla.ListRows.count)   'Variable barra de progreso principal
 
     Call QuitarInexistentes
 
@@ -306,12 +306,12 @@ Sub ActualizarTodo()
         ufProgressObr.TituloObra.Caption = i & " de " & UBound(tablaPrincipal, 1)
         If BuscarEnTabla(tablaPrincipal(i, 2), tablaResultados, 42) Then
             If DebugMensajes Then MsgBox tablaPrincipal(i, 2) & " Encontrado"
-            ignorar = False
+            Ignorar = False
             Call CuadAct(tablaPrincipal(i, 2))    'Se ha encontrado, actualizar
             contAct = contAct + 1
         Else
             If DebugMensajes Then MsgBox tablaPrincipal(i, 2) & " No encontrado"
-            ignorar = False
+            Ignorar = False
             Call MeterCuadro(tablaPrincipal(i, 2)) 'No se ha encontrado, poner nuevo
             contGen = contGen + 1
             Call VariablesTablas(True)        'Cargar tablas
@@ -393,10 +393,10 @@ Sub ActualizarUno()
 
     Call RellenarLineasALIM     'Rellenar tabla de lineas de alimentación externas
 
-    If BuscarEnTabla(ThisWorkbook.ActiveSheet.Name, tablaResultados, 42) Then
-        Call CuadAct(ThisWorkbook.ActiveSheet.Name)    'Se ha encontrado, actualizar
+    If BuscarEnTabla(ThisWorkbook.ActiveSheet.name, tablaResultados, 42) Then
+        Call CuadAct(ThisWorkbook.ActiveSheet.name)    'Se ha encontrado, actualizar
     Else
-        Call MeterCuadro(ThisWorkbook.ActiveSheet.Name) 'No se ha encontrado, poner nuevo
+        Call MeterCuadro(ThisWorkbook.ActiveSheet.name) 'No se ha encontrado, poner nuevo
     End If
 
     ufProgressObr.SubProceso.Caption = "Recalculando formatos de títulos.."
@@ -447,7 +447,7 @@ Sub MeterCuadroCod(ByVal nomCuadro As Variant, Optional mantener As Boolean)
     ufProgressObr.SubProceso.Caption = "Midiendo tamaño de cuadro.."
     Set gen = ThisWorkbook.Sheets(nomCuadro)
     'Abrir página y contar líneas con datos introducidos
-    cont = gen.ListObjects(nomCuadro).ListRows.Count
+    cont = gen.ListObjects(nomCuadro).ListRows.count
 
     progreso2 = 1 / (cont + 2)   'Variable para barra de progreso, 1 más para construcción de array 2D
 
@@ -518,7 +518,7 @@ Sub MeterCuadroCod(ByVal nomCuadro As Variant, Optional mantener As Boolean)
 
         'Añadir fila después de la última de lineas de alimentación
         If framework35 Then 'ArrayList
-            arrayTabla1.Insert b - 1 , rowArr
+            arrayTabla1.Insert b - 1, rowArr
         Else    'Diccionario
             nuevos.Add b, rowArr
         End If
@@ -538,7 +538,7 @@ SalirMCC:
     ufProgressObr.Caption = "Cerrando macro.."
     'Borrar filas libres que se hayan generado de más
     Call QuitarInexistentes
-    ws.Select
+    WS.Select
     'Activar actualización de pantalla
     Application.ScreenUpdating = True
     'Activar calculacion automatica
@@ -628,8 +628,8 @@ Sub CargarFormulas()
     Set reslt = ThisWorkbook.Sheets("TABLA DE RESULTADOS")
     topLeft = tablaReslt.DataBodyRange.Cells(1, 1).Address
     'Guardar formulas de primera fila de tabla en array
-    colsCount = tablaReslt.Range.Columns.Count
-    templateRow = reslt.Range(topLeft).Resize(1, colsCount).Formula
+    colsCount = tablaReslt.Range.Columns.count
+    templateRow = reslt.Range(topLeft).Resize(1, colsCount).formula
 
     'Borrar todo lo que no sea fórmula (no contiene =)
     For a = 1 To colsCount
@@ -647,7 +647,7 @@ Sub ValoresFormulas()
     Dim r As Long
     Dim formula As Variant
 
-    For r = 1 To tablaReslt.Range.Columns.Count
+    For r = 1 To tablaReslt.Range.Columns.count
         If templateRow(1, r) <> "" Then rowArr(r) = templateRow(1, r)   'Escribir formula guardada de cada celda
     Next r
 End Sub
@@ -769,7 +769,7 @@ Sub MeterCuadro(ByVal nomCuadro As Variant)
 
     Set gen = ThisWorkbook.Sheets(nomCuadro)
     'Abrir página y contar líneas con datos introducidos
-    cont = gen.ListObjects(nomCuadro).ListRows.Count
+    cont = gen.ListObjects(nomCuadro).ListRows.count
 
     progreso2 = 1 / cont   'Variable para barra de progreso
     'Variables contador
@@ -797,7 +797,7 @@ SalirMC:
     ufProgressObr.Caption = "Cerrando macro.."
     'Borrar filas libres que se hayan generado de más
     Call QuitarInexistentes
-    ws.Select
+    WS.Select
     'Activar actualización de pantalla
     Application.ScreenUpdating = True
     'Activar calculacion automatica
@@ -883,14 +883,16 @@ Sub CuadAct(ByVal cuadr As String)
     For a = 1 To UBound(tablaActualizar, 1)
         If Cerrar Then GoTo SalirAC
 
-        ufProgressObr.SubProceso.Caption = "Contrastando fila nº " & a & " de " & UBound(tablaActualizar, 1) & ".."
-        'Sobreescribir línea de alimentación (marcado con True como segunda variable)
-        Call MeterFila(cuadr, True)
+
 
         If a > ult - prim Then   'Hay filas nuevas que no estaban en la tabla de resultados
             nuev = True
             ufProgressObr.SubProceso.Caption = "Generando nueva fila para cuadro " & cuadr & ".."
             Call MeterFila(cuadr, False, j)
+        Else
+            ufProgressObr.SubProceso.Caption = "Contrastando fila nº " & a & " de " & UBound(tablaActualizar, 1) & ".."
+            'Sobreescribir línea de alimentación (marcado con True como segunda variable)
+            Call MeterFila(cuadr, True)
         End If
         k = k + 1
         j = j + 1
@@ -914,7 +916,7 @@ SalirAC:
     ufProgressObr.Caption = "Cerrando macro.."
     'Borrar filas libres que se hayan generado de más
     Call QuitarInexistentes
-    ws.Select
+    WS.Select
     'Activar actualización de pantalla
     Application.ScreenUpdating = True
     'Activar calculacion automatica
@@ -943,7 +945,7 @@ Sub MeterFila(ByVal nomCuadro As String, Optional aliment As Boolean, Optional e
     columnFilReslt.DataBodyRange.Cells(j).Value = k             'Fila
 ALIM:
     If tablaPrincipal(i, 3) = "EXTERNO ------>" Then 'Se ha elegido externo, meter información de hoja ALIM
-        If Not ignorar Then
+        If Not Ignorar Then
             If DebugMensajes Then MsgBox tablaPrincipal(i, 1) & " tiene externo " & BuscarEnTabla(tablaPrincipal(i, 4), tablaResultados, 1) & " b= " & b & " j= " & j
             If Not BuscarEnTabla(tablaPrincipal(i, 4), tablaResultados, 1) Then   'Si no se encuentra ya en la fila de "SALIDA", introducir la línea
                 'Añadir fila después de la última de lineas de alimentación
@@ -965,7 +967,7 @@ ALIM:
 
                 Call VariablesTablas    'Recargar valores
             End If
-            ignorar = True  'Únicamente añadir una fila de alimentación externa por cuadro
+            Ignorar = True  'Únicamente añadir una fila de alimentación externa por cuadro
         End If
         'Nombre de línea de alimentación externa
         'If tablaResultados(j, 43) <> "" Then columnAlmReslt.DataBodyRange.Cells(j).Value = tablaPrincipal(i, 4)
@@ -997,18 +999,18 @@ Sub RellenarLineasALIM(Optional autom As String)
 
     If autom = "A" Then
         Call VariablesTablas
-        ignorar = True
+        Ignorar = True
     Else
-        ignorar = False
+        Ignorar = False
     End If
-    progreso2 = 1 / (tabla.ListRows.Count + 1)
+    progreso2 = 1 / (tabla.ListRows.count + 1)
     ufProgressObr.SubProceso.Caption = "Generando tabla de alimentación externa.."
 
     j = 0
     b = 1   'Indicador número fila de línea de alimentación externa
     faltaAlim = False
     'Reiniciar tabla de ALIM
-    If tablaALIM.ListRows.Count > 1 Then tablaALIM.DataBodyRange.Offset(1).Resize(tablaALIM.ListRows.Count - 1).Rows.Delete
+    If tablaALIM.ListRows.count > 1 Then tablaALIM.DataBodyRange.Offset(1).Resize(tablaALIM.ListRows.count - 1).Rows.Delete
     Call ActualizarBarra2
     'Verificar que cada cuadro tiene su línea de alimentación
     For i = 1 To UBound(tablaPrincipal, 1)
@@ -1029,20 +1031,20 @@ Sub RellenarLineasALIM(Optional autom As String)
         End If
         Call ActualizarBarra2
         'Mensaje de aviso por falta de linea de alimentación
-        If faltaAlim And Not ignorar Then
+        If faltaAlim And Not Ignorar Then
             OutPut = MsgBox("Hay uno o más de un cuadro que no tiene línea de alimentación definida, se podrá actualizar más adelante. " & vbCrLf & _
                 " Proceder a pasar a resultados?", vbExclamation + vbYesNoCancel, "Faltan líneas de alimentación")
             If OutPut = 7 Then GoTo Salir   'Salir macro
             If OutPut = 2 Then GoTo Salir   'Salir macro
-            If OutPut = 6 Then ignorar = True   'No volver a mostrar
+            If OutPut = 6 Then Ignorar = True   'No volver a mostrar
         End If
     Next i
 
-    If b > 2 Then tablaALIM.ListRows(tablaALIM.ListRows.Count).Delete   'Se introduce una fila de más, eliminar
+    If b > 2 Then tablaALIM.ListRows(tablaALIM.ListRows.count).Delete   'Se introduce una fila de más, eliminar
     Call ReiniciarBarra2
     Exit Sub
 Salir:
-    ws.Select
+    WS.Select
     'Activar actualización de pantalla
     Application.ScreenUpdating = True
     'Activar calculacion automatica
@@ -1081,18 +1083,18 @@ Sub QuitarInexistentes()
     Next i
     Call ReiniciarBarra2
 
-    If DebugMensajes Then MsgBox "Se han detectado " & rowList.Count & " filas erróneas en la tabla de resultados, se procederá a eliminarlas.", vbInformation, "Filas erróneas detectadas"
+    If DebugMensajes Then MsgBox "Se han detectado " & rowList.count & " filas erróneas en la tabla de resultados, se procederá a eliminarlas.", vbInformation, "Filas erróneas detectadas"
 
-    If rowList.Count = 0 Then
+    If rowList.count = 0 Then
         Call ReiniciarBarra2
         Exit Sub
     End If
 
-    progreso2 = 1 / rowList.Count
+    progreso2 = 1 / rowList.count
     b = 1
     'Borrar filas
-    For j = rowList.Count To 1 Step -1
-        ufProgressObr.SubProceso.Caption = "Borrando fila " & b & " de " & rowList.Count
+    For j = rowList.count To 1 Step -1
+        ufProgressObr.SubProceso.Caption = "Borrando fila " & b & " de " & rowList.count
         tablaReslt.ListRows(rowList(j)).Delete
         b = b + 1
         Call ActualizarBarra2
@@ -1123,12 +1125,12 @@ Sub FormatearReslt(Optional ignr As String)
     ufProgressObr.SubProceso.Caption = "Formateando tabla de resultados.."
 
     If ignr = "I" Then
-        ignorar = True
+        Ignorar = True
     Else
-        ignorar = False
+        Ignorar = False
     End If
     'Verificar que no hay datos en tabla de resultados, sino, avisar
-    If tablaReslt.ListRows.Count > 1 And Not ignorar Then
+    If tablaReslt.ListRows.count > 1 And Not Ignorar Then
         OutPut = MsgBox("Se ha detectado que hay datos en la tabla de resultados, si continua, se borrarán permanentemente los datos introducidos." & vbCrLf & _
             "Proceder a pasar a resultados?", vbExclamation + vbYesNoCancel, "Detectados datos existentes en tabla de resultados")
         If OutPut = 7 Then GoTo SalirFr
@@ -1140,7 +1142,7 @@ Sub FormatearReslt(Optional ignr As String)
     ufProgressObr.SubProceso.Caption = "Borrando datos de tabla de resultados.."
 
     'Dejar una única fila en la tabla de resultados
-    tablaReslt.DataBodyRange.Offset(1).Resize(tablaReslt.DataBodyRange.Rows.Count - 1).Rows.Delete
+    tablaReslt.DataBodyRange.Offset(1).Resize(tablaReslt.DataBodyRange.Rows.count - 1).Rows.Delete
     On Error GoTo 0
     'Quitar formato de negrita y relleno de celda
     With tablaReslt.DataBodyRange.Interior
@@ -1150,7 +1152,7 @@ Sub FormatearReslt(Optional ignr As String)
     End With
 
     With tablaReslt.DataBodyRange.Font
-        .Name = "Arial Narrow"
+        .name = "Arial Narrow"
         .Size = 7
         .Strikethrough = False
         .Superscript = False
@@ -1190,7 +1192,7 @@ Sub FormatearReslt(Optional ignr As String)
     Call ReiniciarBarra2
     Exit Sub
 SalirFr:
-    ws.Select
+    WS.Select
     'Activar actualización de pantalla
     Application.ScreenUpdating = True
     'Activar calculacion automatica
@@ -1214,10 +1216,10 @@ Private Sub VariablesTablas(Optional ReCargar As Boolean)
     Erase tablaResultados
     Erase valoresDefecto
 
-    Set ws = ThisWorkbook.Sheets("Configuracion_cuadros")
+    Set WS = ThisWorkbook.Sheets("Configuracion_cuadros")
 
     Set tablaReslt = ThisWorkbook.Sheets("TABLA DE RESULTADOS").ListObjects("RESULTADOS")
-    Set tabla = ws.ListObjects("Nombre_cuadros")
+    Set tabla = WS.ListObjects("Nombre_cuadros")
     Set tablaALIM = ThisWorkbook.Sheets("ALIM").ListObjects("ALIM")
 
     'Guardar datos a trabajar en arrays
@@ -1227,7 +1229,7 @@ Private Sub VariablesTablas(Optional ReCargar As Boolean)
     Set valores = tablaReslt.DataBodyRange
     tablaResultados = valores.Value
 
-    Set valores = ws.Range("valrDefect")
+    Set valores = WS.Range("valrDefect")
     valoresDefecto = valores.Value
 
     'Columna nombre de resultados
@@ -1255,7 +1257,7 @@ Function FilaAlimExt() As Double
 
     Set valr = ThisWorkbook.Sheets("TABLA DE RESULTADOS").ListObjects("RESULTADOS").ListColumns(42).DataBodyRange
 
-    If valr.Count = 1 Then
+    If valr.count = 1 Then
         FilaAlimExt = 2
         Exit Function
     End If
@@ -1268,11 +1270,11 @@ Function FilaAlimExt() As Double
     FilaAlimExt = k
 End Function
 
-Function BuscarEnTabla(abrev As Variant, rng As Variant, columna As Double) As Boolean
+Function BuscarEnTabla(abrev As Variant, Rng As Variant, columna As Double) As Boolean
     Dim val As Variant, contador As Double
 
-    For contador = 1 To UBound(rng, 1)
-        val = Trim(rng(contador, columna))
+    For contador = 1 To UBound(Rng, 1)
+        val = Trim(Rng(contador, columna))
         If val = abrev Then
             BuscarEnTabla = True    'Se ha encontrado
             Exit Function

@@ -1,8 +1,8 @@
 Option Explicit
 
 Dim DebugMensajes As Boolean
-Dim ws As Worksheet, principal As Worksheet, resultados As Worksheet
-Dim n As Long, rsrv As Long, i As Long
+Dim WS As Worksheet, principal As Worksheet, resultados As Worksheet
+Dim N As Long, rsrv As Long, i As Long
 Dim dict As Object
 'Arrays
 Dim listaNombres() As Variant, listaLineas() As Variant, listaMedicion() As Variant, tablaResultados() As Variant, tablaPrinc() As Variant, valores As Range
@@ -134,7 +134,7 @@ Private Sub Buscar_Click()
 End Sub
 
 Private Sub ListaMediciones_DblClick(ByVal Cancel As MSForms.ReturnBoolean)
-    MsgBox ListaMediciones.List(ListaMediciones.ListIndex, 1)
+    MsgBox listaMediciones.List(listaMediciones.ListIndex, 1)
 End Sub
 
 Private Sub MarcDesm_Click()
@@ -202,8 +202,8 @@ Sub CargarListas(Optional boton As Boolean)
     arrTemp = valores.Value
     tablaPrinc = valores.Value
 
-    ReDim listaNombres(1 To tabla.ListRows.Count)
-    For i = 1 To tabla.ListRows.Count
+    ReDim listaNombres(1 To tabla.ListRows.count)
+    For i = 1 To tabla.ListRows.count
         listaNombres(i) = arrTemp(i, 2) & " - " & arrTemp(i, 1)
     Next i
 
@@ -215,13 +215,13 @@ Sub CargarListas(Optional boton As Boolean)
     Me.Proceso.Caption = "Cargando nombres de lineas.."
     rsrv = 0
     'Cargar todos los paneles y sus respectivas líneas en diccionario
-    For j = 1 To tabla.ListRows.Count
+    For j = 1 To tabla.ListRows.count
         nomCuad = tabla.ListColumns(2).DataBodyRange.Cells(j).Value
 
         If ExistePagina(nomCuad) Then
             Set wsSrc = ThisWorkbook.Sheets(nomCuad)
             Set estCuad = wsSrc.ListObjects(nomCuad)
-            lastRow = estCuad.ListRows.Count
+            lastRow = estCuad.ListRows.count
 
             panel = Trim(nomCuad)   'Nombre panel
 
@@ -253,7 +253,7 @@ Sub CargarListas(Optional boton As Boolean)
     Me.Proceso.Caption = "Añadiendo nombres de líneas.."
 
     'Mover a array
-    ReDim listaLineas(1 To dict.Count)
+    ReDim listaLineas(1 To dict.count)
     Dim key As Variant
     k = 1
     For Each key In dict.Keys
@@ -270,7 +270,7 @@ Sub CargarListas(Optional boton As Boolean)
     Call ActualizarBarra
 
     Me.Proceso.Caption = "Generando lista de cuadros.."
-    For i = 1 To tabla.ListRows.Count
+    For i = 1 To tabla.ListRows.count
         With ListaSeleccionados
             .AddItem tablaPrinc(i, 1)       'Nombre cuadro
             .Selected(i - 1) = True             'Marcar seleccionado
@@ -279,7 +279,7 @@ Sub CargarListas(Optional boton As Boolean)
     Call ActualizarBarra
 
     Me.Proceso.Caption = "Añadiendo información.."
-    Me.NumCuadros.Caption = tabla.ListRows.Count
+    Me.NumCuadros.Caption = tabla.ListRows.count
     Me.NumLineas.Caption = k
     Me.NumReserva.Caption = rsrv
     Me.NumLineasTotal.Caption = k + rsrv
@@ -316,10 +316,10 @@ Sub CargarMediciones(Optional todos As Boolean)
     If todos Then
         'Dimensionar arrays
         ReDim listaReserva(1 To UBound(tablaResultados, 1), 1 To 8)
-        ReDim listaSinReserva (1 To CInt(Me.NumLineas.Caption) + CInt(Me.NumCuadros.Caption), 1 To 8)
+        ReDim listaSinReserva(1 To CInt(Me.NumLineas.Caption) + CInt(Me.NumCuadros.Caption), 1 To 8)
         ' MsgBox CInt(Me.NumLineas.Caption) + CInt(Me.NumCuadros.Caption)
         ' MsgBox UBound(tablaResultados, 1)
-        n = 1   'Contador no reserva
+        N = 1   'Contador no reserva
         For i = 1 To UBound(tablaResultados, 1)
             listaReserva(i, 1) = tablaResultados(i, 2)   'Descripcion
             listaReserva(i, 2) = tablaResultados(i, 1)  'Cuadro
@@ -330,15 +330,15 @@ Sub CargarMediciones(Optional todos As Boolean)
             listaReserva(i, 7) = tablaResultados(i, 16) 'Sección
             listaReserva(i, 8) = tablaResultados(i, 26) 'Longitud
             If Not tablaResultados(i, 50) Then   'No es reserva
-                listaSinReserva(n, 1) = tablaResultados(i, 2)   'Descripcion
-                listaSinReserva(n, 2) = tablaResultados(i, 1)  'Cuadro
-                listaSinReserva(n, 3) = tablaResultados(i, 17) 'Tipo aislami
-                listaSinReserva(n, 4) = tablaResultados(i, 18) 'Agrupamiento
-                listaSinReserva(n, 5) = tablaResultados(i, 19) 'Fase
-                listaSinReserva(n, 6) = tablaResultados(i, 20) 'Manguera
-                listaSinReserva(n, 7) = tablaResultados(i, 16) 'Sección
-                listaSinReserva(n, 8) = tablaResultados(i, 26) 'Longitud
-                n = n + 1
+                listaSinReserva(N, 1) = tablaResultados(i, 2)   'Descripcion
+                listaSinReserva(N, 2) = tablaResultados(i, 1)  'Cuadro
+                listaSinReserva(N, 3) = tablaResultados(i, 17) 'Tipo aislami
+                listaSinReserva(N, 4) = tablaResultados(i, 18) 'Agrupamiento
+                listaSinReserva(N, 5) = tablaResultados(i, 19) 'Fase
+                listaSinReserva(N, 6) = tablaResultados(i, 20) 'Manguera
+                listaSinReserva(N, 7) = tablaResultados(i, 16) 'Sección
+                listaSinReserva(N, 8) = tablaResultados(i, 26) 'Longitud
+                N = N + 1
             End If
         Next i
         listaMediciones.List = listaReserva
@@ -365,11 +365,11 @@ End Sub
 '===============================================================================================================================================
 'Ayudantes
 '===============================================================================================================================================
-Sub PoblarLista(ByVal Arr As Variant, ByVal cb As MSForms.ComboBox)
+Sub PoblarLista(ByVal arr As Variant, ByVal cb As MSForms.ComboBox)
     'Limpiar la caja de resultados
     cb.Clear
     'Insertar array
-    cb.List = Arr
+    cb.List = arr
 End Sub
 
 Function ExistePagina(nombrePag As String, Optional wb As Workbook) As Boolean
@@ -386,14 +386,14 @@ ErrorHandler:
     ExistePagina = False
 End Function
 
-Private Sub FiltrarComboBox(ByVal cb As MSForms.ComboBox, ByVal Arr As Variant)
+Private Sub FiltrarComboBox(ByVal cb As MSForms.ComboBox, ByVal arr As Variant)
     Dim arr2 As Variant
     If cb.Text <> "" Then
         'arr2 = Application.Transpose(Application.Index(Arr,0,1))
         cb.DropDown
-        cb.List = Filter(Arr, cb.Text, True, vbTextCompare)
+        cb.List = Filter(arr, cb.Text, True, vbTextCompare)
     Else
-        cb.List = Arr
+        cb.List = arr
     End If
 End Sub
 '===============================================================================================================================================

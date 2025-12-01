@@ -1,20 +1,27 @@
 Option Explicit
 
 Dim algoritmos As String
-Dim tiempo As Double
 
-Sub EquilibradorFases()
+Sub EquilibradorFases(Optional autom As Boolean)
     On Error GoTo ErrorHandler
     
-    Dim ws As Worksheet
-    Set ws = ThisWorkbook.ActiveSheet
+    Dim WS As Worksheet
+    Set WS = ThisWorkbook.ActiveSheet
     Dim primeraFila As Integer
-    primeraFila = 3
+    primeraFila = 4
     
     algoritmos = "greedy"
 
     Dim lastRow As Long
-    lastRow = ws.Cells(ws.Rows.Count, 2).End(xlUp).Row - 1
+
+    'Desactivar actulaizaciones de pantalla
+    Application.ScreenUpdating = False
+    'Desactivar calculacion manual
+    Application.Calculation = xlCalculationManual
+    'Borrar portapapeles
+    Application.CutCopyMode = False
+    
+    lastRow = WS.Cells(WS.Rows.count, 2).End(xlUp).row - 1
 
     'Arrays para guardar las cargas monofasicas y sus números de filas
     Dim loads() As Double
@@ -24,13 +31,13 @@ Sub EquilibradorFases()
     
     Dim i As Long
     'Borrar columna de fases
-    ws.Range(ws.Cells(primeraFila, 14), ws.Cells(lastRow, 14)).ClearContents
+    WS.Range(WS.Cells(primeraFila, 14), WS.Cells(lastRow, 14)).ClearContents
     
     'Guardar en memoria las cargas monofásicas (Potencia prevista) y marcar las trifasicas como "RST"
     For i = primeraFila To lastRow
-        Select Case UCase(ws.Cells(i, 13).Value)
+        Select Case UCase(WS.Cells(i, 13).Value)
             Case "T"
-                ws.Cells(i, 14).Value = "RST"
+                WS.Cells(i, 14).Value = "RST"
             Case "M"
                 ' One-phase load: add to arrays
                 countSingle = countSingle + 1
@@ -38,14 +45,16 @@ Sub EquilibradorFases()
                 ReDim Preserve loads(1 To countSingle)
                 ReDim Preserve loadRows(1 To countSingle)
                 'Guardar potencia y número de fila de cada carga
-                loads(countSingle) = ws.Cells(i, 12).Value
+                loads(countSingle) = WS.Cells(i, 12).Value
                 loadRows(countSingle) = i
         End Select
     Next i
     
     'No se han encontrado cargas monofásicas
     If countSingle = 0 Then
-        MsgBox "No se han encontrado cargas monofásicas.", vbInformation
+        If Not autom Then MsgBox "No se han encontrado cargas monofásicas.", vbInformation
+        'Marcar calculado
+        WS.Range("O1") = True
         Exit Sub
     End If
     
@@ -82,7 +91,7 @@ Sub EquilibradorFases()
                 If phaseSums(3) < phaseSums(minIdx) Then minIdx = 3
 
                 'Asignar carga a esa fase
-                ws.Cells(loadRows(i), 14).Value = phases(minIdx)
+                WS.Cells(loadRows(i), 14).Value = phases(minIdx)
                 'Actualizar suma de fase
                 phaseSums(minIdx) = phaseSums(minIdx) + loads(i)
             Next i
@@ -92,16 +101,24 @@ Sub EquilibradorFases()
 
     End Select
     'Marcar calculado
-    ws.Range("M1") = True
+    WS.Range("O1") = True
 
-    'Mensaje resumen de cálculo
-    Dim report As String
-    report = "Balanceo de fases (en vatios previstos):" & vbCrLf
-    report = report & "R: " & phaseSums(1) & " W" & vbCrLf
-    report = report & "S: " & phaseSums(2) & " W" & vbCrLf
-    report = report & "T: " & phaseSums(3) & " W"
-    MsgBox report, vbInformation, "Balanceo de cargas completado en " & tiempo & " segundos"
-
+    If Not autom Then
+        'Mensaje resumen de cálculo
+        Dim report As String
+        report = "Balanceo de fases (en vatios previstos):" & vbCrLf
+        report = report & "R: " & phaseSums(1) & " W" & vbCrLf
+        report = report & "S: " & phaseSums(2) & " W" & vbCrLf
+        report = report & "T: " & phaseSums(3) & " W"
+        MsgBox report, vbInformation, "Balanceo de cargas completado"
+        
+        'Desactivar actulaizaciones de pantalla
+        Application.ScreenUpdating = True
+        'Desactivar calculacion manual
+        Application.Calculation = xlCalculationAutomatic
+        'Borrar portapapeles
+        Application.CutCopyMode = False
+    End If
     Exit Sub
 ErrorHandler:
     'Si ocurre un error, ejecutar

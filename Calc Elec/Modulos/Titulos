@@ -1,6 +1,6 @@
 Option Explicit
 
-Dim ws As Worksheet, reslt As Worksheet
+Dim WS As Worksheet, reslt As Worksheet
 Dim tablaReslt As ListObject
 Dim i As Double
 Dim OutPut As Integer
@@ -20,7 +20,7 @@ Sub GenerarTitulos(Optional autom As String)
 
     For i = 1 To tablaReslt.ListRows.count
         'Si no hay fila, poner formato de título de cuadro
-        If tablaReslt.ListColumns(43).DataBodyRange.Cells(i).value = "" Then
+        If tablaReslt.ListColumns(43).DataBodyRange.Cells(i).Value = "" Then
             With tablaReslt.DataBodyRange.Rows(i).Font
                 .name = "Arial Narrow"
                 .Size = 7
@@ -38,7 +38,7 @@ Sub GenerarTitulos(Optional autom As String)
             With tablaReslt.DataBodyRange.Rows(i).Interior
                 .Pattern = xlSolid
                 .PatternColorIndex = xlAutomatic
-                .Color = 52377
+                .color = 52377
                 .TintAndShade = 0
                 .PatternTintAndShade = 0
             End With

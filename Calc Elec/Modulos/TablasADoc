@@ -4,8 +4,8 @@ Dim OutPut As Integer
 Dim texto As String
 Dim wordApp As Object, wordDoc As Object
 Dim wordTable As Object
-Dim cantidad As Double, faltan As Double, i As Double, j As Double, calculados As Double
-Dim principal As Worksheet, ws As Worksheet
+Dim Cantidad As Double, Faltan As Double, i As Double, j As Double, calculados As Double
+Dim principal As Worksheet, WS As Worksheet
 Dim primeraFila As Integer, primeraColumna As Integer, ultColumna As Integer
 Dim columnNom As ListColumn, nombres As ListColumn, tabla As ListObject
 Dim rutas() As String
@@ -42,20 +42,20 @@ Function RutaRelativa(s As String) As String
     End If
 End Function
 
-Sub MeterDict(ByVal rng As Range, ByVal dict As Object, ByVal nombre As String)
+Sub MeterDict(ByVal Rng As Range, ByVal dict As Object, ByVal Nombre As String)
     Dim cell As Range
     Dim val As Variant
 
     i = 0
 
     'Introducir valores en diccionario
-    For Each cell In rng
+    For Each cell In Rng
         val = Trim(cell.Value)
         If Len(val) > 0 Then
             If dict.Exists(val) Then
                 dict(val) = dict(val) + 1
                 ReDim Preserve rutas(0 To i + 1)
-                rutas(i) = nombre & "(" & cell.Address & ")"
+                rutas(i) = Nombre & "(" & cell.Address & ")"
                 i = i + 1
             Else
                 dict.Add val, 1
@@ -96,11 +96,11 @@ Sub PonerTodoEnDoc()
     Call ComprobarRepetidos(True)
 
     'Variables loop
-    faltan = 0
+    Faltan = 0
     calculados = 0
-    cantidad = principal.Cells(principal.Rows.Count, "D").End(xlUp).Row - 3
+    Cantidad = principal.Cells(principal.Rows.count, "D").End(xlUp).row - 3
 
-    If cantidad < 1 Then
+    If Cantidad < 1 Then
         MsgBox "No hay cuadros para poner en Word, primero dimensione los cuadros.", vbExclamation, "Sin cuadros para pasar a Word"
         Exit Sub
     End If
@@ -109,7 +109,7 @@ Sub PonerTodoEnDoc()
     Dim listaNom As Object
     Set listaNom = CreateObject("Scripting.Dictionary")
 
-    For j = 1 To cantidad
+    For j = 1 To Cantidad
         'Mirar si existe la página a calcular
         If ExistePagina(nombres.DataBodyRange.Cells(j).Value) Then
             Set columnNom = ThisWorkbook.Sheets(nombres.DataBodyRange.Cells(j).Value).ListObjects(nombres.DataBodyRange.Cells(j).Value).ListColumns(1)
@@ -128,14 +128,14 @@ Sub PonerTodoEnDoc()
 
     repetir = False
     'Pegar tablas
-    For j = 1 To cantidad
+    For j = 1 To Cantidad
         'Mirar si existe la página a calcular
         If Not ExistePagina(principal.Cells(j + 3, 5).Value) Then GoTo siguiente
         'Nombre de página de cuadro
-        Set ws = ThisWorkbook.Sheets(principal.Cells(j + 3, 5).Value)
+        Set WS = ThisWorkbook.Sheets(principal.Cells(j + 3, 5).Value)
         'Comprobar si se ha ejecutado el equilibrador
-        ws.Select
-        If Not ws.Range("O1") Then
+        WS.Select
+        If Not WS.Range("O1") Then
             'No se ha ejecutado el equilibrador de fases, preguntar si continuar o calcular
             If Not repetir Then
                 ufRepetir.Cuadro.Caption = principal.Cells(j + 3, 5).Value   'Nombre de cuadro
@@ -155,7 +155,7 @@ Continuar:
         primeraColumna = 3
         primeraFila = 3
         ultColumna = 12
-        Call MoverADoc(ws, primeraColumna, primeraFila, ultColumna)
+        Call MoverADoc(WS, primeraColumna, primeraFila, ultColumna)
         calculados = calculados + 1
 siguiente:
     Next
@@ -164,12 +164,12 @@ siguiente:
         MsgBox "No se ha movido ningún cuadro ya que no existen en la página.", vbInformation, "Sin tablas a mover a Word"
         GoTo Ninguno
     Else
-        If calculados < cantidad Then   'No se han calculado todos, camino diferente
+        If calculados < Cantidad Then   'No se han calculado todos, camino diferente
         'Cerrar correctamente (último número 33 en la llamada)
         primeraColumna = 0
         primeraFila = 0
         ultColumna = 0
-        Call MoverADoc(ws, primeraColumna, primeraFila, ultColumna, 33)
+        Call MoverADoc(WS, primeraColumna, primeraFila, ultColumna, 33)
         End If
         MsgBox "Se ha(n) movido " & calculados & " tabla(s) a word.", vbInformation, "Macro ejecutado sin problemas"
         principal.Select
@@ -207,12 +207,12 @@ Sub PonerUnoEnDoc()
     'Borrar portapapeles
     Application.CutCopyMode = False
 
-    Set ws = ThisWorkbook.ActiveSheet
+    Set WS = ThisWorkbook.ActiveSheet
 
-    faltan = 0
-    cantidad = 1
+    Faltan = 0
+    Cantidad = 1
     'Equilibrador
-    If Not ws.Range("O1") Then
+    If Not WS.Range("O1") Then
         'No se ha ejecutado el equilibrador de fases, preguntar si continuar o calcular
         OutPut = MsgBox("No se ha ejecutado el equilibrador de fases desde el último cambio. Ejecutar y mover a Word?", vbYesNoCancel + vbExclamation, "Fallo de secuencia")
         If OutPut = 6 Then Call EquilibradorFases
@@ -220,7 +220,7 @@ Sub PonerUnoEnDoc()
         If OutPut = 2 Then Exit Sub
     End If
     'Faltan datos por escribir
-    If ws.Range("N1") Then
+    If WS.Range("N1") Then
         'Hay un circuito sin definición de tipo
         OutPut = MsgBox("Se ha detectado uno o más de un circuito con falta de información (Nº Elem., Tipo, Potencia...). Continuar moviendo tabla a word?", vbYesNoCancel + vbExclamation, "Falta de datos")
         If OutPut = 6 Then GoTo Mover
@@ -234,7 +234,7 @@ Mover:
         primeraColumna = 3
         primeraFila = 3
         ultColumna = 12
-        Call MoverADoc(ws, primeraColumna, primeraFila, ultColumna)
+        Call MoverADoc(WS, primeraColumna, primeraFila, ultColumna)
         'Mensaje confirmaicón
         MsgBox "Se ha movido " & 1 & " tabla a word.", vbInformation, "Macro ejecutado sin problemas"
 Exit Sub
@@ -261,14 +261,14 @@ Sub PonerResltEnDoc()
     'Borrar portapapeles
     Application.CutCopyMode = False
 
-    Set ws = ThisWorkbook.ActiveSheet
+    Set WS = ThisWorkbook.ActiveSheet
 
     Call ComprobarRepetidos(True)
 
-    faltan = 0
-    cantidad = 1
+    Faltan = 0
+    Cantidad = 1
     'Comprobar si está toda la información introducida (comparar colores de celda)
-    If ws.Range("Fallo") Then
+    If WS.Range("Fallo") Then
         'No se ha ejecutado el equilibrador de fases, preguntar si continuar o calcular
         OutPut = MsgBox("Hay errores en alguna de las líneas (sección insuficiente, corriente protección mal definida..). Volver y corregir errores?", _
             vbYesNoCancel + vbQuestion, "Fallo de secuencia")
@@ -283,7 +283,7 @@ Mover:
         primeraColumna = 2
         primeraFila = 10
         ultColumna = 13
-        Call MoverADoc(ws, primeraColumna, primeraFila, ultColumna, 99)
+        Call MoverADoc(WS, primeraColumna, primeraFila, ultColumna, 99)
         'Mensaje confirmaicón
         MsgBox "Se ha movido " & 1 & " tabla a word.", vbInformation, "Macro ejecutado sin problemas"
 Exit Sub
@@ -318,7 +318,7 @@ Private Sub AbrirDoc(Optional plantilla As String, Optional rutaMem As String)
     ufProgressObr.Denbora.Caption = ""
     ufProgressObr.Show vbModeless
     'Cuantas veces se llama a actualizar barra
-    progreso = 1 / (cantidad + 1)
+    progreso = 1 / (Cantidad + 1)
     progreso2 = 1 / 2
     Set wordApp = CreateObject("Word.Application")
 
@@ -334,7 +334,7 @@ Private Sub AbrirDoc(Optional plantilla As String, Optional rutaMem As String)
     Application.CutCopyMode = False
 
     If plantilla <> "" Then
-        'rutaCopia = RutaRelativa(plantilla) & 
+        'rutaCopia = RutaRelativa(plantilla) &
         'Crear copia de plantilla en ruta de libro
         fso.FileCopy plantilla, rutaMem
         'Abrir documento plantilla
@@ -360,7 +360,7 @@ Private Sub AbrirDoc(Optional plantilla As String, Optional rutaMem As String)
         .AutomaticallyUpdate = False
         .BaseStyle = ""
         .NextParagraphStyle = "Normal"
-        .Font.Name = "Arial Narrow"
+        .Font.name = "Arial Narrow"
         .Font.Size = 11
     End With
     ' With wordApp.Selection
@@ -391,17 +391,17 @@ ErrorHandler:
     End
 End Sub
 
-Sub MoverADoc(ByVal nombre As Worksheet, ByVal columna As Integer, ByVal fila As Integer, ByVal limite As Integer, Optional numero As Long)
+Sub MoverADoc(ByVal Nombre As Worksheet, ByVal columna As Integer, ByVal fila As Integer, ByVal limite As Integer, Optional numero As Long)
     DebugMensajes = ThisWorkbook.Sheets("Busquedas").Range("Debug")
     If Not DebugMensajes Then On Error GoTo ErrorHandler
     'Si se abre por primera vez
-    If faltan = 0 Then
+    If Faltan = 0 Then
         i = 1
-        faltan = cantidad
+        Faltan = Cantidad
         'Título documento
         If numero <> 99 Then    'Si no es resultados
             With wordApp.Selection
-                .Font.Name = "Arial Narrow"
+                .Font.name = "Arial Narrow"
                 .Font.Size = 12
                 .Font.Bold = True
                 .TypeText Text:="PREVISIÓN CARGAS"
@@ -416,17 +416,17 @@ Sub MoverADoc(ByVal nombre As Worksheet, ByVal columna As Integer, ByVal fila As
     'Si se han calculado menos de los de la tabla
     If numero = 33 Then GoTo FinMacro
     progreso2 = 1 / 3
-    ufProgressObr.TituloObra.Caption = "Cuadro " & nombre.Range("E2")
-    ufProgressObr.Proceso.Caption = "Moviendo tabla(s) al documento Word. Faltan: " & faltan - 1
+    ufProgressObr.TituloObra.Caption = "Cuadro " & Nombre.Range("E2")
+    ufProgressObr.Proceso.Caption = "Moviendo tabla(s) al documento Word. Faltan: " & Faltan - 1
     ufProgressObr.SubProceso.Caption = "Escribiendo título de cuadro nº " & i & ".."
     'Escribir titulo de cuadros
     With wordApp.Selection
-        .Font.Name = "Arial Narrow"
+        .Font.name = "Arial Narrow"
         'Titulo de tabla
         If numero = 99 Then
             .TypeText Text:="Resumen de resultados"
         Else
-            .TypeText Text:="Cuadro " & nombre.Range("E2")
+            .TypeText Text:="Cuadro " & Nombre.Range("E2")
         End If
         .TypeParagraph
         .TypeParagraph
@@ -435,8 +435,8 @@ Sub MoverADoc(ByVal nombre As Worksheet, ByVal columna As Integer, ByVal fila As
     Application.CutCopyMode = False
     'Pegar tabla con formato
     Dim ultimaFila As Long
-    ultimaFila = nombre.Cells(nombre.Rows.Count, 3).End(xlUp).Row
-    nombre.Range(nombre.Cells(fila, columna), nombre.Cells(ultimaFila, limite)).Copy
+    ultimaFila = Nombre.Cells(Nombre.Rows.count, 3).End(xlUp).row
+    Nombre.Range(Nombre.Cells(fila, columna), Nombre.Cells(ultimaFila, limite)).Copy
     'wordDoc.Activate
     Call ActualizarBarra2
     'Aviso según proceso
@@ -526,9 +526,9 @@ Sub MoverADoc(ByVal nombre As Worksheet, ByVal columna As Integer, ByVal fila As
     'Aviso según proceso
     ufProgressObr.SubProceso.Caption = "Finalizando la tabla de cuadro nº " & i & ".."
     Call ReiniciarBarra2
-    faltan = faltan - 1
+    Faltan = Faltan - 1
     i = i + 1
-    If faltan = 0 Then GoTo FinMacro
+    If Faltan = 0 Then GoTo FinMacro
     Exit Sub
 FinMacro:
     'Finalizar macro
@@ -537,7 +537,7 @@ FinMacro:
     ufProgressObr.SubProceso.Caption = "Estableciendo formato a todo el documento.."
     'Quitar tachado (si aplica)
     wordApp.Selection.WholeStory
-    wordApp.Selection.Font.StrikeThrough = False
+    wordApp.Selection.Font.Strikethrough = False
 
     ufProgressObr.SubProceso.Caption = "Limpiando objetos.."
     wordApp.Visible = True
@@ -578,7 +578,7 @@ Sub MemoriaEndesa()
     Dim fileList As Collection
     Set fileList = New Collection
     Dim tempArr() As String
-    Dim i As Long, n As Long
+    Dim i As Long, N As Long
 
     ' Ask user for PDF file
 
@@ -604,7 +604,7 @@ Reintentar:
         If vbOut = 2 Then End   'Cancelar
     End If
 
-    cantidad = 4    'Uno por abrir word, 1 por previsión, 1 por resumen, 1 por imágenes
+    Cantidad = 4    'Uno por abrir word, 1 por previsión, 1 por resumen, 1 por imágenes
     ' Crear copia de plantilla
     ruta = RutaUsuario & "\BOSLAN INGENIERIA Y CONSULTORIA\Instalaciones - Imagenes\98-PROGRAMAS INST\Gontzal proba\Proyectos\CuadrosBT(Pr2)\MEMO INSTALACIONES ELEC.docx"
     '"https://boslan.sharepoint.com/proyectos/instalaciones/Imagenes/98-PROGRAMAS INST/Gontzal proba/Proyectos/CuadrosBT(Pr2)/MEMO INSTALACIONES ELEC.docx"
@@ -644,12 +644,12 @@ Reintentar:
     Call ActualizarBarra2
 
     ' Convert to array
-    n = fileList.count
-    ReDim tempArr(1 To n)
+    N = fileList.count
+    ReDim tempArr(1 To N)
 
     ufProgressObr.SubProceso.Caption = "Generando array.."
 
-    For i = 1 To n
+    For i = 1 To N
         tempArr(i) = fileList(i)
     Next
 

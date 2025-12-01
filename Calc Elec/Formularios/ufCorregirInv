@@ -1,0 +1,124 @@
+Option Explicit
+
+Dim i As Long, realizados As Long
+Dim corregidos As Boolean
+Dim OutPut As Integer
+Dim nombreRango As String
+
+Private Sub Cambiar_Click()
+    realizados = realizados + 1
+    'Guardar en diccionario
+    cambios.Add Nombre.Caption, Cambio.Text
+    'Añadir contador
+    Faltan.Caption = realizados & "/" & NoCmpt.count
+    'Borrar de lista
+    ListaIncompatibles.RemoveItem ListaIncompatibles.ListIndex
+    Call Limpiar_Click
+    'Mirar si falta alguno
+    If realizados = NoCmpt.count Then corregidos = True
+End Sub
+
+Private Sub Comprobar_Click()
+    If Cambio.Text = "" Then
+        MsgBox "Escribe un nombre para reemplazar", vbExclamation
+    Else
+        'Comprobar si es válido
+        nombreRango = Cambio.Text
+
+        On Error Resume Next
+        'ThisWorkbook.Sheets("Busquedas").Range("AG1").name = nombreRango
+        ThisWorkbook.Names.Add name:=nombreRango, RefersTo:=ThisWorkbook.Sheets("Busquedas").Range("AG1")
+        
+        If Err.Number <> 0 Or ExisteRango(nombreRango) Then    'Si da error o existe el nombre
+            MsgBox "No es válido", vbCritical, "Error"
+            Err.Clear
+            Exit Sub
+        Else
+            'Quitar nombre de prueba
+            ThisWorkbook.Names(nombreRango).Delete
+        End If
+        On Error GoTo 0 'Restaurar manejo de errores
+
+        'Es válido
+        MsgBox "Nombre válido", vbInformation, "Válido"
+        Cambiar.Enabled = True
+    End If
+End Sub
+
+Private Sub Limpiar_Click()
+    'Nombre
+    Nombre.Caption = "Elige uno de la lista"
+    'Selección
+    ListaIncompatibles.ListIndex = -1
+    'Campos
+    Cambio.Text = ""
+    Cambiar.Enabled = False
+    Cambio.Enabled = False
+End Sub
+
+Private Sub ListaIncompatibles_Click()
+    'Al elegir un elemento, añadir a estudio
+    If ListaIncompatibles.ListIndex <> -1 Then
+        Nombre.Caption = ListaIncompatibles.List(ListaIncompatibles.ListIndex)
+        'Campos
+        Cambio.Enabled = True
+    End If
+End Sub
+
+Private Sub Salir_Click()
+    Unload Me
+End Sub
+
+Private Sub UserForm_Initialize()
+    'On Error Resume Next
+    'Poner en medio de la pantalla
+    With Me
+        .StartUpPosition = 0
+        .Left = Application.Left + (0.5 * Application.Width) - (0.5 * .Width)
+        .Top = Application.Top + (0.5 * Application.Height) - (0.5 * .Height)
+        .Show
+    End With
+    'Marcador
+    corregidos = False
+    'Cargar lista para poder seleccionar
+    For i = 1 To NoCmpt.count
+        ListaIncompatibles.AddItem NoCmpt(i)
+    Next i
+    'Contador
+    realizados = 0
+    Faltan.Caption = realizados & "/" & NoCmpt.count
+    'Campos
+    Cambiar.Enabled = False
+    Cambio.Enabled = False
+End Sub
+
+Private Sub UserForm_QueryClose(Cancel As Integer, CloseMode As Integer)
+    If Not corregidos Then
+        OutPut = MsgBox("No se han corregido todas las ocurrencias." & vbCrLf & _
+            "Si sale se detendrá el programa. Salir?", vbExclamation + vbYesNoCancel, "Faltan nombres por corregir")
+        Select Case OutPut
+            Case 6  'Si
+                salirMacr = True
+                ContinuarEjecucion = True
+            Case 7  'No
+                Cancel = 1
+            Case 2  'Cancelar
+                Cancel = 1
+            Case Else   'Otro
+                Cancel = 1
+        End Select
+    Else
+        ContinuarEjecucion = True
+        salirMacr = False
+    End If
+End Sub
+
+Function ExisteRango(nom As String) As Boolean
+    'Comprueba si existe un nombre de rango en el libro
+    On Error GoTo Nocompatible
+    ExisteRango = Evaluate("IsRef(" & nom & ")")
+    Exit Function
+Nocompatible:
+    ExisteRango = False
+    On Error GoTo 0
+End Function

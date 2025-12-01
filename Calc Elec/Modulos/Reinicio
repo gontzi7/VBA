@@ -4,7 +4,7 @@ Dim OutPut As Integer
 Dim tabl As ListObject, tablaALIM As ListObject
 Dim DebugMensajes As Boolean, Ignorar As Boolean
 Dim nomCuadro As String
-Dim n As Long, ultFila As Long
+Dim N As Long, ultFila As Long
 Dim Apoyo As Worksheet
 Dim principal As Worksheet
 
@@ -118,11 +118,11 @@ Sub FormatearPrincipal(Optional ignr As String)
     Call ActualizarBarra2
 
     ufProgressObr.SubProceso.Caption = "Eliminando datos escritos por defecto.."
-    tabl.ListColumns(1).DataBodyRange.Cells(1).value = ""   'Nombre cuadro
-    tabl.ListColumns(2).DataBodyRange.Cells(1).value = ""   'Abreviatura
-    tabl.ListColumns(3).DataBodyRange.Cells(1).value = ""   'L. Alim
-    tabl.ListColumns(4).DataBodyRange.Cells(1).value = ""   'Item
-    tabl.ListColumns(5).DataBodyRange.Cells(1).value = ""   'Nombre
+    tabl.ListColumns(1).DataBodyRange.Cells(1).Value = ""   'Nombre cuadro
+    tabl.ListColumns(2).DataBodyRange.Cells(1).Value = ""   'Abreviatura
+    tabl.ListColumns(3).DataBodyRange.Cells(1).Value = ""   'L. Alim
+    tabl.ListColumns(4).DataBodyRange.Cells(1).Value = ""   'Item
+    tabl.ListColumns(5).DataBodyRange.Cells(1).Value = ""   'Nombre
     Call ActualizarBarra2
     Call ReiniciarBarra2
 
@@ -177,20 +177,20 @@ Sub BorrarCuadros(Optional autom As String)
         ultFila = principal.Cells(principal.Rows.count, "D").End(xlUp).row
         progreso2 = 1 / (ultFila - 3)
         'Limpiar hojas de apoyos
-        For n = 4 To ultFila
-            nomCuadro = principal.Cells(n, 5).Text
+        For N = 4 To ultFila
+            nomCuadro = principal.Cells(N, 5).Text
             'Si no es un espacio en blanco, borrar
-            If principal.Cells(n, 5).Text <> "" And ExistePagina(nomCuadro) Then
-                ufProgressObr.SubProceso.Caption = "Borrando cuadro nº " & n - 3 & " de " & ultFila - 4
+            If principal.Cells(N, 5).Text <> "" And ExistePagina(nomCuadro) Then
+                ufProgressObr.SubProceso.Caption = "Borrando cuadro nº " & N - 3 & " de " & ultFila - 4
                 Set Apoyo = ThisWorkbook.Sheets(nomCuadro)
                 Apoyo.Delete
                 'Quitar vinculos de titulos
                 principal.Select
-                principal.Cells(n, 4).Select
+                principal.Cells(N, 4).Select
                 Selection.Hyperlinks(1).Delete
                 Call ActualizarBarra2
             End If
-        Next n
+        Next N
         'Borrar copia si existe
         If ExistePagina("PLANTILLA_CUADROS (2)") Then
             ufProgressObr.SubProceso.Caption = "Borrando copia sin formatear.."

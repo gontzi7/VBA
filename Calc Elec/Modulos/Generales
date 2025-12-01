@@ -47,7 +47,7 @@ Sub btnActualizarT()
     Call ActualizarTodo
 End Sub
 
-Sub btnPrevision() 
+Sub btnPrevision()
     Call PonerTodoEnDoc
 End Sub
 

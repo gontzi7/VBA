@@ -1,0 +1,158 @@
+Option Explicit
+
+Dim i As Double, lastRowIndex As Double, Modificar As Double
+Dim lastRow As ListRow
+Dim Nombre As Integer
+
+Private Sub UserForm_Initialize()
+    'On Error Resume Next
+    'Poner en medio de la pantalla
+    With Me
+        .StartUpPosition = 0
+        .Left = Application.Left + (0.5 * Application.Width) - (0.5 * .Width)
+        .Top = Application.Top + (0.5 * Application.Height) - (0.5 * .Height)
+        .Show
+    End With
+    'Numero de filas al abrir formulario
+    ' nombre = ActiveSheet.Range("E2").Value
+    Nombre = 1
+    DoEvents
+    lastRowIndex = ActiveSheet.ListObjects(Nombre).ListRows.count
+    'Escribir numero de filas
+    FilasAct.Caption = "Actualmente hay " & lastRowIndex & " filas en la tabla."
+    Modif.Caption = "Al añadir o quitar las filas introducidas quedarán " & lastRowIndex & " filas."
+    'Hacer ajustable
+    Call MakeFormResizeable(Me)
+End Sub
+
+Private Sub UserForm_Resize()
+    Call AdjustSizeOfControls
+End Sub
+
+Private Sub SumRestFilas_SpinDown()
+    'Restar uno a valor
+    If TbFilas.Value <> "" Then TbFilas.Value = TbFilas.Value - 1
+    If TbFilas.Value = "" Then TbFilas.Value = -1
+End Sub
+
+Private Sub SumRestFilas_SpinUp()
+    'Sumar uno a valor
+    If TbFilas.Value <> "" Then TbFilas.Value = TbFilas.Value + 1
+    If TbFilas.Value = "" Then TbFilas.Value = 1
+End Sub
+
+Private Sub CbDejar_Change()
+    Call TbFilas_Change
+End Sub
+
+Private Sub TbFilas_Change()
+    On Error GoTo ErrorHandler
+    'Si es positivo añadir, si es negativo quitar
+    If Not CbDejar Then
+        If TbFilas < 0 Then
+            Accion.Caption = "Quitar"
+            Label1.Caption = "filas."
+            BtnAplicar.Caption = "Quitar"
+            BtnAplicar.Enabled = True
+        ElseIf TbFilas > 0 Then
+            Accion.Caption = "Añadir"
+            Label1.Caption = "filas."
+            BtnAplicar.Caption = "Añadir"
+            BtnAplicar.Enabled = True
+        ElseIf TbFilas = 0 Then
+            Accion.Caption = "Error"
+            Label1.Caption = "Error"
+            BtnAplicar.Caption = "Error"
+            BtnAplicar.Enabled = False
+        End If
+        'Calcular numero de filas
+        lastRowIndex = ActiveSheet.ListObjects(Nombre).ListRows.count
+        Set lastRow = ActiveSheet.ListObjects(Nombre).ListRows(lastRowIndex)
+        'Escribir resultado
+        If lastRowIndex + TbFilas.Value < 1 Then
+            Modif.Caption = "No es posible dejar " & lastRowIndex + TbFilas.Value & " filas."
+            BtnAplicar.Enabled = False
+        Else
+            If Not IsNumeric(TbFilas.Value) Then Modif.Caption = "Al añadir o quitar las filas introducidas quedarán " & lastRowIndex & " filas."
+            If IsNumeric(TbFilas.Value) Then Modif.Caption = "Al añadir o quitar las filas introducidas quedarán " & lastRowIndex + TbFilas.Value & " filas."
+            If TbFilas > 0 Then
+                BtnAplicar.Enabled = True
+            End If
+        End If
+    Else
+        If TbFilas <= 0 Then
+            Accion.Caption = "Error"
+            Label1.Caption = "Error"
+            BtnAplicar.Caption = "Error"
+            Modif.Caption = "No es posible dejar " & TbFilas.Value & " filas."
+            BtnAplicar.Enabled = False
+        Else
+            Accion.Caption = "Dejar"
+            Label1.Caption = "filas."
+            BtnAplicar.Caption = "Realizar"
+            BtnAplicar.Enabled = True
+            If Not IsNumeric(TbFilas.Value) Then Modif.Caption = "Quedarán " & lastRowIndex & " filas."
+            If IsNumeric(TbFilas.Value) Then Modif.Caption = "Quedarán " & TbFilas.Value & " filas."
+        End If
+    End If
+    Exit Sub
+ErrorHandler:
+    'Ha ocurrido un error (lo mas probable es que se haya borrado el número de filas)
+    TbFilas.Value = 0
+    'Unload Me
+End Sub
+
+Private Sub BtnAplicar_Click()
+    If Not CbDejar Then
+        If TbFilas.Value > 0 Then
+            'Si es mayor a 0 añadir filas indicadas
+            Modificar = TbFilas.Value
+            'Poner
+            PonerFila (Modificar)
+            Unload Me
+        ElseIf TbFilas.Value < 0 Then
+            'Si es menor a 0 quitar filas indicadas
+            Modificar = TbFilas.Value
+            'Quitar
+            'MsgBox Modificar
+            QuitarFila (Abs(Modificar))
+            Unload Me
+        Else
+            'Si es 0...
+            Unload Me
+        End If
+    Else
+        'Hacer suma o resta para dejar núemro de filas solicitadas.
+        Modificar = TbFilas.Value - lastRowIndex
+        If Modificar > 0 Then PonerFila (Modificar)
+        If Modificar < 0 Then QuitarFila (Abs(Modificar))
+        Unload Me
+    End If
+End Sub
+
+Private Sub BtnCancelar_Click()
+    Unload Me
+End Sub
+
+Private Sub BtnLimpiar_Click()
+    TbFilas.Value = 0
+End Sub
+
+Private Sub TbFilas_KeyPress(ByVal KeyAscii As MSForms.ReturnInteger)
+    Call TextBox_KeyPress(Me.TbFilas, KeyAscii)
+End Sub
+
+Private Sub TextBox_KeyPress(ByVal tb As MSForms.TextBox, ByVal KeyAscii As MSForms.ReturnInteger)
+    Dim userInput As String
+    Dim comp As String
+    Dim char As String
+    'Caracteres admitidos por tipo
+    comp = "0123456789-"
+    userInput = tb.Text
+    char = Chr(KeyAscii)
+    'Comprobar si caracter escrito esta en la lista
+    If InStr(comp & Chr(8), char) = 0 Then
+        'No es admitido, reemplazar con NULL
+        KeyAscii = 0
+    End If
+End Sub

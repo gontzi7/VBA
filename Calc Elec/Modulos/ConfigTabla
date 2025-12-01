@@ -1,0 +1,103 @@
+Option Explicit
+
+Dim Nombre As Integer
+Dim i As Double
+
+Public Sub PonerFila(Optional Num As Double)
+    On Error GoTo ErrorHandler
+    
+    'Desactivar actulaizaciones de pantalla
+    Application.ScreenUpdating = False
+    'Desactivar calculacion automatica hasta despues de pegar todos los valores
+    Application.Calculation = xlCalculationManual
+    'Desbloquear página
+    'ActiveSheet.Unprotect Password:=contraseñaPaginas
+
+    ' nombre = ActiveSheet.Range("E2")
+    Nombre = 1
+    ' ActiveSheet.ListObjects(1).Name = nombre
+    If Num = 0 Then Num = 1
+    For i = 1 To Num
+        ActiveSheet.ListObjects(Nombre).ListRows.Add
+    Next
+
+    'Activar actulaizaciones de pantalla
+    Application.ScreenUpdating = True
+    'Activar calculacion automatica
+    Application.Calculation = xlCalculationAutomatic
+    'Bloquear página
+    'ActiveSheet.Protect Password:=contraseñaPaginas
+    Exit Sub
+ErrorHandler:
+    'Si ocurre algun error ejecutar
+    MsgBox "Ha ocurrido un error al añadir una línea a la tabla: " & Err.Description, vbExclamation, "Error 04"
+    'Intentar reiniciar el nombre de la tabla
+    ' ActiveSheet.ListObjects(1).Name = nombre
+    'Desactivar actulaizaciones de pantalla
+    Application.ScreenUpdating = False
+    'Desactivar calculacion automatica hasta despues de pegar todos los valores
+    Application.Calculation = xlCalculationAutomatic
+    'Bloquear página
+    'ActiveSheet.Protect Password:=contraseñaPaginas
+End Sub
+
+Public Sub QuitarFila(Optional Num As Double)
+    On Error GoTo ErrorHandler
+    
+    Dim lastRow As ListRow
+    Dim lastRowIndex As Long
+
+    'Desbloquear página
+    'ActiveSheet.Unprotect Password:=contraseñaPaginas
+    'Desactivar actulaizaciones de pantalla
+    Application.ScreenUpdating = False
+    'Desactivar calculacion automatica hasta despues de pegar todos los valores
+    Application.Calculation = xlCalculationManual
+
+    ' nombre = ActiveSheet.Range("E2")
+    Nombre = 1
+    ' ActiveSheet.ListObjects(1).Name = nombre
+
+    If Num = 0 Then Num = 1
+    For i = 1 To Num
+        lastRowIndex = ActiveSheet.ListObjects(Nombre).ListRows.count
+        Set lastRow = ActiveSheet.ListObjects(Nombre).ListRows(lastRowIndex)
+        'Comprobar que se deja una fila con las fórmulas
+        If ActiveSheet.ListObjects(Nombre).ListRows.count = 1 Then
+            MsgBox "No se pueden borrar mas filas, se dejará una única fila.", vbExclamation
+            'Activar actulaizaciones de pantalla
+            Application.ScreenUpdating = True
+            'Activar calculacion automatica
+            Application.Calculation = xlCalculationAutomatic
+            Exit Sub
+        End If
+        'Borrar formato de la última fila
+        lastRow.Range.ClearFormats
+        lastRow.Range.ClearContents
+        
+        'Quitar la última fila de la tabla
+        lastRow.Delete
+    Next
+    'Activar actulaizaciones de pantalla
+    Application.ScreenUpdating = True
+    'Activar calculacion automatica
+    Application.Calculation = xlCalculationAutomatic
+    'Bloquear página
+    'ActiveSheet.Protect Password:=contraseñaPaginas
+    Exit Sub
+ErrorHandler:
+    'Si ocurre algun error ejecutar
+    MsgBox "Ha ocurrido un error al quitar una línea a la tabla: " & Err.Description, vbExclamation, "Error 05"
+    'Activar actulaizaciones de pantalla
+    Application.ScreenUpdating = True
+    'Activar calculacion automatica
+    Application.Calculation = xlCalculationAutomatic
+    'Intentar reiniciar el nombre de la tabla
+    ' ActiveSheet.ListObjects(1).Name = nombre
+    'Bloquear página
+    'ActiveSheet.Protect Password:=contraseñaPaginas
+End Sub
+
+Sub FormularioFilas()
+    ufFilasTabla.Show
+End Sub

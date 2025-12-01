@@ -1,6 +1,6 @@
 Option Explicit
 
-Dim ws As Worksheet, lins As Worksheet, est As Worksheet, busq As Worksheet
+Dim WS As Worksheet, lins As Worksheet, est As Worksheet, busq As Worksheet
 Dim valores As Range, rangoLista As Range
 Dim rangoCirc As String, nomCuad As String
 Dim columnAlim As ListColumn, columnNom As ListColumn
@@ -37,11 +37,11 @@ Sub CargarCircuitos()
 
     Call ComprobarRepetidos(True)
 
-    Set ws = ThisWorkbook.Sheets("Configuracion_cuadros")
+    Set WS = ThisWorkbook.Sheets("Configuracion_cuadros")
     Set busq = ThisWorkbook.Sheets("Busquedas")
     j = 0
     'Tabla
-    Set tabla = ws.ListObjects("Nombre_cuadros")
+    Set tabla = WS.ListObjects("Nombre_cuadros")
     'Columna para introducir lista de lineas de alimentación
     Set columnAlim = tabla.ListColumns(3)
     'Columna nombre páginas de cuadro
@@ -51,16 +51,16 @@ Sub CargarCircuitos()
     'Poner primer elemento
     busq.Cells(1, 33).Value = "EXTERNO ------>"
     'Copiar y pegar nombres de líneas definidas en cuadros
-    For i = 1 To tabla.ListRows.Count
+    For i = 1 To tabla.ListRows.count
         'Nombre de página a estudiar
-        nomCuad = ws.Cells(i + 3, 5)
+        nomCuad = WS.Cells(i + 3, 5)
         If ExistePagina(nomCuad) Then
             Set est = ThisWorkbook.Sheets(nomCuad)
             'Abrir página y contar y pegar nombres de líneas en ella a página "Busquedas"
             est.Select
             est.ListObjects(nomCuad).ListColumns(3).DataBodyRange.Copy
             busq.Cells(j + 2, 33).PasteSpecial Paste:=xlPasteValues
-            j = j + est.ListObjects(nomCuad).ListRows.Count
+            j = j + est.ListObjects(nomCuad).ListRows.count
         End If
     Next
     'Corrección errores si no existe o no se ha copiado ninguna línea
@@ -75,7 +75,7 @@ Sub CargarCircuitos()
         .Validation.InCellDropdown = True
     End With
     MsgBox "Se ha actualizado el listado de líneas existentes.", vbInformation, "Terminado de cargar"
-    ws.Select
+    WS.Select
     'Activar actualización de pantalla
     Application.ScreenUpdating = True
     'Activar calculacion automatica
@@ -118,15 +118,15 @@ Sub CargarCircuitos2(Optional autom As String)
     Dim lastRow As Long, i As Long, col As Long
     Dim panelLines As Object
 
-    Set ws = ThisWorkbook.Sheets("Configuracion_cuadros")
+    Set WS = ThisWorkbook.Sheets("Configuracion_cuadros")
     Set lins = ThisWorkbook.Sheets("Lineas")
     Set wsVal = ThisWorkbook.Sheets("Lineas")       ' Output sheet
     wsVal.Cells.Clear                               ' Reset
     'Tabla
-    Set tabla = ws.ListObjects("Nombre_cuadros")
+    Set tabla = WS.ListObjects("Nombre_cuadros")
 
     'Cuantas veces se llama a actualizar barra
-    progreso = 1 / (tabla.ListRows.Count + 4)
+    progreso = 1 / (tabla.ListRows.count + 4)
 
     Set dict = CreateObject("Scripting.Dictionary")
 
@@ -135,13 +135,13 @@ Sub CargarCircuitos2(Optional autom As String)
         "Por favor, no abra o seleccione otro documento de Excel o Word."
     DoEvents
     'Cargar todos los paneles y sus respectivas líneas en diccionario
-    For j = 1 To tabla.ListRows.Count
+    For j = 1 To tabla.ListRows.count
         nomCuad = tabla.ListColumns(2).DataBodyRange.Cells(j).Value
 
         If ExistePagina(nomCuad) Then
             Set wsSrc = ThisWorkbook.Sheets(nomCuad)
             Set estCuad = wsSrc.ListObjects(nomCuad)
-            lastRow = estCuad.ListRows.Count
+            lastRow = estCuad.ListRows.count
 
             panel = Trim(nomCuad)   'Nombre panel
 
@@ -150,7 +150,7 @@ Sub CargarCircuitos2(Optional autom As String)
             Set valores = estCuad.DataBodyRange
             arrTemp = valores.Value
 
-            'Contador 
+            'Contador
             cont = 0
             For i = 1 To lastRow
                 line = Trim(arrTemp(i, 3))
@@ -183,7 +183,7 @@ Sub CargarCircuitos2(Optional autom As String)
 
         col = col + 1
     
-        ufProgress.LabelCaption.Caption = "Construyendo lista de validación nº " & col & " de " & tabla.ListRows.Count & " .." & vbCrLf & _
+        ufProgress.LabelCaption.Caption = "Construyendo lista de validación nº " & col & " de " & tabla.ListRows.count & " .." & vbCrLf & _
             "Por favor, no abra o seleccione otro documento de Excel o Word."
         DoEvents
         wsVal.Cells(1, col).Value = "EXTERNO ------>"   'Opción de externo como primer valor
@@ -206,9 +206,9 @@ Sub CargarCircuitos2(Optional autom As String)
         "Por favor, no abra o seleccione otro documento de Excel o Word."
     DoEvents
     'Generar listas de validación por cuadro
-    For i = 1 To tabla.ListRows.Count
+    For i = 1 To tabla.ListRows.count
         'Ultima fila por columna
-        lastRow = wsVal.Cells(1, i).End(xlDown).Row
+        lastRow = wsVal.Cells(1, i).End(xlDown).row
 
         Set valores = wsVal.Range(wsVal.Cells(1, i), wsVal.Cells(lastRow, i))
         'Celda en la que insertar la lista de líneas
@@ -267,3 +267,4 @@ Private Sub ActBarra()
     End With
     DoEvents
 End Sub
+
