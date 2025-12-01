@@ -90,7 +90,6 @@ Reintentar1:
     Call ActBarra
     'Descargar barra
     Unload ufProgress
-    'FileCopy RutaUsuario & RutaBase & RutaExcel, rutaAnterior
     Call ActBarra
 
 
@@ -113,10 +112,6 @@ Reintentar1:
         Rng(1, 2).Value = ComponentTypeToString(VBComp.Type)
         Set Rng = Rng(2, 1)
     Next VBComp
-
-
-
-
 
     For i = 1 To 5
         Dim FromVBProject As VBIDE.VBProject
