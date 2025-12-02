@@ -51,32 +51,34 @@ Sub Actualizar2()
     'Número de reintentos automaticos
     reintentar = 5
 Reintentar1:
+    'Rutas
+    RutaUsuario = Environ("UserProfile")
+    RutaBase = "\BOSLAN INGENIERIA Y CONSULTORIA\Instalaciones - Imagenes\98-PROGRAMAS INST\Gontzal proba\Proyectos"
+
     Call ComprobarActualizacionIntegrado("A")
     'Reintentar si hay error de conexion
     If errorConexion Then
         reintentar = reintentar - 1
         If reintentar > 0 Then
             GoTo Reintentar1
+        Else
+            MsgBox "No se ha podido establecer contacto con el servidor tras varios intentos.", vbExclamation, "Error de conexión"
+            Exit Sub
         End If
     End If
 
     'Comparar versión actual y nueva
-    If Not actualizado And Not errorConexion Then
+    If Not actualizado Then
         vbOut = MsgBox("Hay mas actualizado, actualizar a última versión?" & vbCrLf & _
             "Fecha de nueva versión: " & FechaVersion, vbYesNo + vbInformation, "Actualización disponible")
         'If vbOut = 6 Then   'Sí
         If vbOut = 7 Then Exit Sub   'No
-    ElseIf actualizado And Not errorConexion Then
-        MsgBox "Está actualizado.", vbInformation
-        Exit Sub
-    ElseIf errorConexion Then
-        vbOut = MsgBox("No se ha podido establecer contacto con el servidor o no se ha seleccionado carpeta. Reintentar?", vbRetryCancel + vbExclamation, "Error conexión")
-        If vbOut = 4 Then GoTo Reintentar1   'Reintentar
-        If vbOut = 2 Then Exit Sub   'Cancelar
+    Else
+        MsgBox "No hay actualizaciones disponibles.", vbInformation, "Sin actualizaciones"
         Exit Sub
     End If
 
-    Set ExcelLocal = ThisWorkbook
+    Set ExcelLocal = ActiveWorkbook
 
     'Contar módulos
     modInicio = 0
@@ -97,10 +99,9 @@ Reintentar1:
         "Por favor, no abra o seleccione otro documento de Excel o Word."
     DoEvents
 
-    RutaUsuario = Environ("UserProfile")
-    RutaBase = "\BOSLAN INGENIERIA Y CONSULTORIA\Instalaciones - Imagenes\98-PROGRAMAS INST\Gontzal proba\Proyectos"
     RutaExcel = "\CuadrosBT(Pr2)\CAL ELEC(mas actualizado).xlsm"
 
+    'Comprobar que archivo existe
     If fso.FileExists(RutaUsuario & RutaBase & RutaExcel) Then
         If DebugMensajes Then
             MsgBox "Archivo actualizado encontrado en: " & RutaUsuario & RutaBase & RutaExcel
@@ -169,7 +170,7 @@ Reintentar1:
         ufProgress.LabelCaption.Caption = "Actualizando módulo " & i & " de " & nomModulo.Count & vbCrLf & _
         "Por favor, no abra o seleccione otro documento de Excel o Word."
 
-        If nomModulo(i) = "MotorActualizacion" Or nomModulo(i) = "ufProgress" Or nomModulo(i) = "Generales" Then
+        If nomModulo(i) = "MotorActualizacion" Or nomModulo(i) = "ufProgress" Then
             'Saltar módulo de actualización para evitar errores
         Else
             If DebugMensajes Then MsgBox nomModulo(i)
@@ -232,14 +233,22 @@ Reintentar1:
 
     'Actualizar versión de programa
     versionS = VersionCodigoIntegrado()
-    ThisWorkbook.Sheets("Configuracion_cuadros").Range("Version").Value = versionPuntos
+    ExcelLocal.Sheets("Configuracion_cuadros").Range("Version").Value = versionPuntos
 
     'Descargar barra
     Unload ufProgress
 
+    Set ExcelLocal = ActiveWorkbook
+
+    'Activar actulaizaciones de pantalla
+    Application.ScreenUpdating = True
+    'Activar calculacion automatica
+    Application.Calculation = xlCalculationAutomatic
+
     'Contar módulos
     modFinal = 0
     For Each VBComp In ExcelLocal.VBProject.VBComponents  'Contar módulos con código
+        'MsgBox VBComp.name
         modFinal = modFinal + 1
     Next VBComp
 
@@ -410,6 +419,8 @@ Function CopyModule(ModuleName As String, _
     Set VBComp = Nothing
     Set VBComp = ToVBProject.VBComponents(CompName)
     
+    MsgBox VBComp.Name & " " & CompName
+
     If VBComp Is Nothing Then
         ToVBProject.VBComponents.Import Filename:=FName
     Else
@@ -513,9 +524,6 @@ Sub ComprobarActualizacionIntegrado(Optional modo As String)
     Set fso = CreateObject("Scripting.FileSystemObject")
     'Conseguir versión actual de codigo
     VersionActual = VersionCodigoIntegrado()
-    'Valores de ruta por defecto
-    RutaUsuario = Environ("UserProfile")
-    RutaBase = "\BOSLAN INGENIERIA Y CONSULTORIA\Instalaciones - Imagenes\98-PROGRAMAS INST\Gontzal proba\Proyectos"
     'Conseguir última versión de programa
     RutaLicencia = RutaUsuario & RutaBase & "\Licencias.txt"
     Proyecto = 2
@@ -567,7 +575,7 @@ Reintentar:
     errorConexion = False
     'Limpiar objetos
     Set fso = Nothing
-    'Existe, continuar
+    'Obtener número de versión y fecha de servidor
     Call ObtenerVersionActualizadaIntegrado(RutaLicencia, Proyecto)
     If VersionActual <> NumVersion Then
         'Hay una actualizacion disponible
@@ -670,3 +678,30 @@ Sub ObtenerVersionActualizadaIntegrado(ruta As String, NumProyecto As Long)
     'Cerrar archivo de licencia
     Close #fileNum
 End Sub
+
+Function RutaRelativa(s As String) As String
+    Dim pos As Long, pos2 As Long
+    pos = InStr(s, "\") ' Encontrar primera instancia de \
+    pos2 = InStr(pos + 1, s, "\") ' Encontrar segunda instancia de \
+    pos = InStr(pos2 + 1, s, "\") ' Encontrar tercera instancia de \
+    If pos > 0 Then
+        RutaRelativa = Left(s, pos - 1)
+    Else
+        RutaRelativa = "" ' Si no se encuentra \ devolver ""
+    End If
+End Function
+
+Function IsEditorInSync() As Boolean
+'=======================================================================
+' IsEditorInSync
+' This tests if the VBProject selected in the Project window, and
+' therefore the ActiveVBProject is the same as the VBProject associated
+' with the ActiveCodePane. If these two VBProjects are the same,
+' the editor is in sync and the result is True. If these are not the
+' same project, the editor is out of sync and the result is True.
+'=======================================================================
+    With Application.VBE
+    IsEditorInSync = .ActiveVBProject Is _
+        .ActiveCodePane.CodeModule.Parent.Collection.Parent
+    End With
+End Function
