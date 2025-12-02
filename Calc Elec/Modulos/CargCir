@@ -10,7 +10,6 @@ Dim numFilas As Long, cont As Long
 Dim lineas As Collection
 Dim DebugMensajes As Boolean
 Dim lincuadr() As Variant, arrTemp() As Variant
-
 Dim frac As Double, progreso As Double
 
 Function ExistePagina(nombrePag As String, Optional wb As Workbook) As Boolean
