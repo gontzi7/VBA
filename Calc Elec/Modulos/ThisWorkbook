@@ -18,8 +18,8 @@ Dim wb As Workbook
 Dim fso As Object
 Dim contrasenaPaginas As String
 
-Public actualizado As Boolean, errorConexion As Boolean
-Public FechaVersion As String
+Dim actualizado As Boolean, errorConexion As Boolean
+Dim FechaVersion As String
 
 Function RutaRelativa(s As String) As String
     Dim pos As Long, pos2 As Long
@@ -34,6 +34,8 @@ Function RutaRelativa(s As String) As String
 End Function
 
 Private Sub Workbook_Open()
+    If ThisWorkbook.Sheets("Busquedas").Range("SERVIDOR") Then Exit Sub 'Ignorar si es versión servidor
+
     'Activar actualizaciones de pantalla
     Application.ScreenUpdating = True
     'Inicializar barra de progreso
@@ -261,7 +263,7 @@ ErrorHandler:
     End
 End Sub
 
-Public Sub ObtenerVersionActualizada(ruta As String, NumProyecto As Long)
+Sub ObtenerVersionActualizada(ruta As String, NumProyecto As Long)
     Dim fileNum As Integer
     Dim textLine As String
     Dim lineCounter As Long

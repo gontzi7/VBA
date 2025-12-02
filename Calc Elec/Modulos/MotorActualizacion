@@ -2,13 +2,16 @@ Option Explicit
 
 Dim DebugMensajes As Boolean
 Dim vbOut As Integer
-Dim RutaUsuario, RutaBase, RutaExcel As String
+Dim RutaUsuario, RutaBase, RutaExcel, RutaLicencia As String
+Dim ExcelActualizado As Workbook, ExcelLocal As Workbook
 Dim rutaArchivo As String
 Dim nombreArchivo As String, rutaAnterior As String
+Dim versionS As String
 Dim i As Integer, reintentar As Integer
+Dim Proyecto As Long
 
 Dim VBProj As VBIDE.VBProject
-Dim VBComp As VBIDE.VBComponent
+Dim VBComp As VBIDE.VBComponent, VBCompL As VBIDE.VBComponent
 Dim WS As Worksheet
 Dim Rng As Range
 
@@ -17,9 +20,24 @@ Dim ToVBProject As VBIDE.VBProject
 
 Dim nomModulo As Collection
 
+Dim progreso As Double
+Dim frac As Double
+
+Dim fso As Object
+
+Dim modInicio As Long
+Dim modFinal As Long
+Dim correcto As Long
+
+Dim errorConexion, actualizado As Boolean
+Dim VersionActual As String
+Dim NumVersion As String
+Dim FechaVersion As String
+Dim versionPuntos As String
+
 Sub Actualizar2()
-    DebugMensajes = ThisWorkbook.Sheets("Busquedas").Range("Debug")
-    If Not DebugMensajes Then On Error GoTo ErrorHandler
+    ' DebugMensajes = ThisWorkbook.Sheets("Busquedas").Range("Debug")
+    ' If Not DebugMensajes Then On Error GoTo ErrorHandler
 
     Dim completado As Boolean
 
@@ -33,9 +51,9 @@ Sub Actualizar2()
     'Número de reintentos automaticos
     reintentar = 5
 Reintentar1:
-    Call ThisWorkbook.ComprobarActualizacion("A")
+    Call ComprobarActualizacionIntegrado("A")
     'Reintentar si hay error de conexion
-    If ThisWorkbook.errorConexion Then
+    If errorConexion Then
         reintentar = reintentar - 1
         If reintentar > 0 Then
             GoTo Reintentar1
@@ -43,42 +61,79 @@ Reintentar1:
     End If
 
     'Comparar versión actual y nueva
-    If Not ThisWorkbook.actualizado And Not ThisWorkbook.errorConexion Then
+    If Not actualizado And Not errorConexion Then
         vbOut = MsgBox("Hay mas actualizado, actualizar a última versión?" & vbCrLf & _
-            "Fecha de nueva versión: " & ThisWorkbook.FechaVersion, vbYesNo + vbInformation, "Actualización disponible")
+            "Fecha de nueva versión: " & FechaVersion, vbYesNo + vbInformation, "Actualización disponible")
         'If vbOut = 6 Then   'Sí
         If vbOut = 7 Then Exit Sub   'No
-    ElseIf ThisWorkbook.actualizado And Not ThisWorkbook.errorConexion Then
+    ElseIf actualizado And Not errorConexion Then
         MsgBox "Está actualizado.", vbInformation
         Exit Sub
-    ElseIf ThisWorkbook.errorConexion Then
+    ElseIf errorConexion Then
         vbOut = MsgBox("No se ha podido establecer contacto con el servidor o no se ha seleccionado carpeta. Reintentar?", vbRetryCancel + vbExclamation, "Error conexión")
         If vbOut = 4 Then GoTo Reintentar1   'Reintentar
         If vbOut = 2 Then Exit Sub   'Cancelar
         Exit Sub
     End If
 
+    Set ExcelLocal = ThisWorkbook
+
+    'Contar módulos
+    modInicio = 0
+    For Each VBComp In ExcelLocal.VBProject.VBComponents  'Contar módulos con código
+        modInicio = modInicio + 1
+    Next VBComp
+
     'Iniciar colección
     Set nomModulo = New Collection
+
+    'Iniciar el fso
+    Set fso = CreateObject("Scripting.FileSystemObject")
 
     Call IniBarra
     'Textos
     ufProgress.Caption = "Actualizar código"
+    ufProgress.LabelCaption.Caption = "Generando ruta a servidor.." & vbCrLf & _
+        "Por favor, no abra o seleccione otro documento de Excel o Word."
+    DoEvents
+
+    RutaUsuario = Environ("UserProfile")
+    RutaBase = "\BOSLAN INGENIERIA Y CONSULTORIA\Instalaciones - Imagenes\98-PROGRAMAS INST\Gontzal proba\Proyectos"
+    RutaExcel = "\CuadrosBT(Pr2)\CAL ELEC(mas actualizado).xlsm"
+
+    If fso.FileExists(RutaUsuario & RutaBase & RutaExcel) Then
+        If DebugMensajes Then
+            MsgBox "Archivo actualizado encontrado en: " & RutaUsuario & RutaBase & RutaExcel
+        End If
+    Else
+        MsgBox "No se ha podido establecer conexión con el servidor." & RutaUsuario & RutaBase & RutaExcel, vbCritical
+        Unload ufProgress
+        Exit Sub
+    End If
+
+    ufProgress.LabelCaption.Caption = "Estableciendo conexión con servidor.." & vbCrLf & _
+        "Por favor, no abra o seleccione otro documento de Excel o Word."
+    DoEvents
+
+    Set ExcelActualizado = Workbooks.Open(RutaUsuario & RutaBase & RutaExcel)   'Abrir libro actualizado
+
+    ExcelActualizado.Windows(1).Visible = False 'Esconder libro
+
     ufProgress.LabelCaption.Caption = "Contando módulos a actualizar.." & vbCrLf & _
         "Por favor, no abra o seleccione otro documento de Excel o Word."
+    DoEvents
 
-    Set VBProj = ActiveWorkbook.VBProject
+    Set VBProj = ExcelActualizado.VBProject
 
-    For Each VBComp In VBProj.VBComponents
+    For Each VBComp In VBProj.VBComponents  'Contar módulos con código
         If TotalCodeLinesInVBComponent(VBComp) > 0 Then
             'Añadir nombre a colección
             nomModulo.Add VBComp.name
         End If
-    ' Rng(1, 2).Value = ComponentTypeToString(VBComp.Type)
     Next VBComp
 
     'Cuantas veces se llama a actualizar barra
-    progreso = 1 / (nomModulo.Count + 1) ' +5 por las llamadas extra
+    progreso = 1 / (nomModulo.Count + 4) ' +4 por las llamadas extra
 
     If DebugMensajes Then MsgBox nomModulo.Count
 
@@ -87,12 +142,8 @@ Reintentar1:
     ufProgress.LabelCaption.Caption = "Extrayendo ruta de archivo.." & vbCrLf & _
         "Por favor, no abra o seleccione otro documento de Excel o Word."
 
-    RutaUsuario = Environ("UserProfile")
-    RutaBase = "\BOSLAN INGENIERIA Y CONSULTORIA\Instalaciones - Imagenes\98-PROGRAMAS INST\Gontzal proba\Proyectos"
-    RutaExcel = "\CuadrosBT(Pr2)\CAL ELEC(mas actualizado).xlsm"
-
     'Conseguir ruta de archivo actual
-    rutaArchivo = ThisWorkbook.path
+    rutaArchivo = ExcelLocal.path
     If DebugMensajes Then
         MsgBox "Ruta de archivo actual: " & rutaArchivo
     End If
@@ -101,36 +152,103 @@ Reintentar1:
     'Conseguir nombre de archivo actual para borrar al finalizar
     ufProgress.LabelCaption.Caption = "Extrayendo nombre de archivo.." & vbCrLf & _
     "Por favor, no abra o seleccione otro documento de Excel o Word."
-    nombreArchivo = ThisWorkbook.name
+
+    nombreArchivo = ExcelLocal.name
+
     If DebugMensajes Then
         MsgBox "Nombre de archivo actual: " & nombreArchivo
     End If
 
     Call ActBarra
 
+    'Libros para copiar módulos
+    Set FromVBProject = ExcelActualizado.VBProject
+    Set ToVBProject = ExcelLocal.VBProject
+
     For i = 1 To nomModulo.Count
         ufProgress.LabelCaption.Caption = "Actualizando módulo " & i & " de " & nomModulo.Count & vbCrLf & _
         "Por favor, no abra o seleccione otro documento de Excel o Word."
 
-        MsgBox nomModulo(i)
-
-        Set FromVBProject = Workbooks("ActualizarPr2.xlsm").VBProject
-        Set ToVBProject = ThisWorkbook.VBProject
-
-        completado = CopyModule(nomModulo(i), FromVBProject, ToVBProject, True)
+        If nomModulo(i) = "MotorActualizacion" Or nomModulo(i) = "ufProgress" Or nomModulo(i) = "Generales" Then
+            'Saltar módulo de actualización para evitar errores
+        Else
+            If DebugMensajes Then MsgBox nomModulo(i)
+            completado = CopyModule(nomModulo(i), FromVBProject, ToVBProject, True)
+            DoEvents
+        End If
 
         Call ActBarra
 
-        If Not completado Then Exit For 'Salir si hay error
+        If Not completado Then 
+            MsgBox "Error al actualizar el módulo: " & nomModulo(i), vbCritical
+            Exit For 'Salir si hay error
+        End If
     Next i
+
+    ufProgress.LabelCaption.Caption = "Verificando actualización.." & vbCrLf & _
+    "Por favor, no abra o seleccione otro documento de Excel o Word."
+
+    correcto = 0
+
+    For Each VBComp In FromVBProject.VBComponents  'Módulos en servidor
+        If TotalCodeLinesInVBComponent(VBComp) > 0 Then
+            For Each VBCompL In ToVBProject.VBComponents  'Módulos en local
+                If TotalCodeLinesInVBComponent(VBCompL) > 0 And VBCompL.name = VBComp.name And VBCompL.name <> "MotorActualizacion" Then    'Ignorar módulo de actualización
+                    'Si existe, sumar
+                    If TotalCodeLinesInVBComponent(VBCompL) = TotalCodeLinesInVBComponent(VBComp) Then
+                        'Si tienen mismo número de líneas, continuar
+                        correcto = correcto + 1
+                        If DebugMensajes Then
+                            MsgBox "Módulo verificado correctamente: " & VBComp.name & vbCrLf & _
+                                "Líneas en servidor: " & TotalCodeLinesInVBComponent(VBComp) & vbCrLf & _
+                                "Líneas en local: " & TotalCodeLinesInVBComponent(VBCompL), vbInformation
+                        End If
+                    Else
+                        MsgBox "Error al verificar el módulo: " & VBComp.name & vbCrLf & _
+                            "Líneas en servidor: " & TotalCodeLinesInVBComponent(VBComp) & vbCrLf & _
+                            "Líneas en local: " & TotalCodeLinesInVBComponent(VBCompL), vbCritical
+                        completado = False
+                        Exit For
+                    End If
+                    Exit For
+                End If
+            Next VBCompL
+        End If
+    Next VBComp
+
+    'MsgBox "Módulos verificados correctamente: " & correcto & " de " & nomModulo.Count
+
+    ufProgress.LabelCaption.Caption = "Finalizando actualización.." & vbCrLf & _
+    "Por favor, no abra o seleccione otro documento de Excel o Word."
+
+    ' completado = CopyModule("ufProgress", FromVBProject, ToVBProject, True)
+    ' DoEvents
+    ' completado = CopyModule("Generales", FromVBProject, ToVBProject, True)
+
+    ExcelActualizado.Close SaveChanges:=False 'Cerrar libro actualizado sin guardar
+
+    ufProgress.LabelCaption.Caption = "Actualizando versión.." & vbCrLf & _
+    "Por favor, no abra o seleccione otro documento de Excel o Word."
+
+    'Actualizar versión de programa
+    versionS = VersionCodigoIntegrado()
+    ThisWorkbook.Sheets("Configuracion_cuadros").Range("Version").Value = versionPuntos
 
     'Descargar barra
     Unload ufProgress
 
-    Call ActBarra
+    'Contar módulos
+    modFinal = 0
+    For Each VBComp In ExcelLocal.VBProject.VBComponents  'Contar módulos con código
+        modFinal = modFinal + 1
+    Next VBComp
 
     If completado Then
-        MsgBox "Módulo copiado correctamente.", vbInformation
+        'MsgBox "Actualización completada con éxito.", vbInformation
+        MsgBox "Actualización completada con éxito." & vbCrLf & _
+            "Módulos actualizados: " & nomModulo.Count & vbCrLf & _
+            "Módulos antes de actualización: " & modInicio & vbCrLf & _
+            "Módulos después de actualización: " & modFinal, vbInformation
     Else
         MsgBox "Error al actualizar el archivo, inténtelo de nuevo.", vbCritical
     End If
@@ -139,6 +257,7 @@ Reintentar1:
     Application.ScreenUpdating = True
     'Activar calculacion automatica
     Application.Calculation = xlCalculationAutomatic
+    Set fso = Nothing
 Exit Sub
 
 ErrorHandler:
@@ -358,6 +477,10 @@ Public Function TotalCodeLinesInVBComponent(VBComp As VBIDE.VBComponent) As Long
     TotalCodeLinesInVBComponent = LineCount
 End Function
 
+'===========================================================
+' Barra de progreso
+'===========================================================
+
 Private Sub ActBarra()
     'Fracción por cada llamada
     frac = progreso + frac
@@ -378,4 +501,172 @@ Private Sub IniBarra()
     '     "Por favor, no abra o seleccione otro documento de Excel o Word."
     ufProgress.TiempoEstimado.Caption = ""
     ufProgress.Show
+End Sub
+
+'===========================================================
+' Funciones integradas a modulo de actualización
+'===========================================================
+
+Sub ComprobarActualizacionIntegrado(Optional modo As String)
+    On Error GoTo ErrorHandler
+    'Iniciar FSO para comprobación de existencia de archivo
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    'Conseguir versión actual de codigo
+    VersionActual = VersionCodigoIntegrado()
+    'Valores de ruta por defecto
+    RutaUsuario = Environ("UserProfile")
+    RutaBase = "\BOSLAN INGENIERIA Y CONSULTORIA\Instalaciones - Imagenes\98-PROGRAMAS INST\Gontzal proba\Proyectos"
+    'Conseguir última versión de programa
+    RutaLicencia = RutaUsuario & RutaBase & "\Licencias.txt"
+    Proyecto = 2
+    'Comprobar que archivo existe
+    If Not fso.FileExists(RutaLicencia) Then
+        'No existe
+        If modo = "A" Then  'Se ha pulsado el botón de buscar actualizacion, abrir selector de carpetas
+Reintentar:
+            Dim sFolder As String
+            'Abir selector de carpetas
+            With Application.FileDialog(msoFileDialogFolderPicker)
+                .Title = "Elige la carpeta de ESCRITORIO"
+                '.InitialFileName = ""
+                If .Show = -1 Then 'mirar si se ha presionado el OK
+                    sFolder = .SelectedItems(1)
+                End If
+            End With
+
+            If sFolder <> "" Then 'se ha seleccionado una carpeta
+                'Encontrar segunda instancia de \ para conseguir ruta relativa por usuario
+                If RutaRelativa(sFolder) <> "" Then
+                    RutaUsuario = RutaRelativa(sFolder)
+                Else
+                    'No se ha encontrado un \, se ha elegido una carpeta no válida
+                    vbOut = MsgBox("La carpeta que se ha elegido no es válida.", vbRetryCancel + vbExclamation, "Carpeta no válida")
+
+                    If vbOut = 4 Then GoTo Reintentar   'Reintentar
+                    If vbOut = 2 Then End   'Cancelar
+                End If
+                'Establecer nueva ruta a partir de la ruta relativa
+                RutaLicencia = RutaUsuario & RutaBase & "\Licencias.txt"
+                'MsgBox RutaLicencia
+                If Not fso.FileExists(RutaLicencia) Then
+                    'Sigue sin encontrarse la licencia
+                    errorConexion = True
+                End If
+            Else
+                'No se ha seleccionado carpeta
+                errorConexion = True
+            End If
+        Else
+            'MsgBox "No se ha podido establecer comunicación con el servidor, no se podrá actualizar la hoja a la versión más reciente.", vbExclamation, "Error de conexión al servidor"
+            errorConexion = True
+        End If
+        'Limpiar objetos
+        Set fso = Nothing
+        Exit Sub
+    End If
+    errorConexion = False
+    'Limpiar objetos
+    Set fso = Nothing
+    'Existe, continuar
+    Call ObtenerVersionActualizadaIntegrado(RutaLicencia, Proyecto)
+    If VersionActual <> NumVersion Then
+        'Hay una actualizacion disponible
+        actualizado = False
+    Else
+        'Ya está actualizado
+        actualizado = True
+    End If
+Exit Sub
+
+ErrorHandler:
+    'Si ocurre algun error ejecutar
+    MsgBox "Se ha producido un error a la hora de actualizar el excel: " & Err.Description, vbOKOnly + vbExclamation, "Error 102"
+    Set fso = Nothing
+    Application.ScreenUpdating = True
+    'Proteger
+    'principal.Protect Password:=contrasenaPaginas
+    'Descargar barra
+    Unload ufProgress
+    End
+End Sub
+
+Function VersionCodigoIntegrado() As String
+    Dim VBProj As Object
+    Set VBProj = ThisWorkbook.VBProject
+
+    'Acceder al modulo del excel
+    Dim vbMod As Object
+    Set vbMod = VBProj.VBComponents("ThisWorkbook").CodeModule
+    Dim lineNum As Long
+    lineNum = 1
+    Dim codeLine As String
+    Do While lineNum <= vbMod.CountOfLines
+        codeLine = vbMod.Lines(lineNum, 1)
+        If InStr(codeLine, "Version:") > 0 Then
+            'Extrae numero de string sin puntos ni espacios
+            Dim version As String
+            version = Trim(Replace(codeLine, "'", ""))
+            version = Replace(version, "Version:", "")
+            version = Trim(version)
+            versionPuntos = version
+            version = Replace(version, ".", "")
+            'Añadir 0 a la izquierda para formato de version
+            Do While Len(version) < 6
+                version = "0" & version
+            Loop
+            VersionCodigoIntegrado = version
+            If DebugMensajes Then
+                MsgBox "Version codigo: " & version
+                MsgBox "Version codigo: " & versionPuntos
+            End If
+            Exit Function
+        End If
+        lineNum = lineNum + 1
+    Loop
+    VersionCodigoIntegrado = "000000" 'Valor por defecto si no se encuentra
+End Function
+
+Sub ObtenerVersionActualizadaIntegrado(ruta As String, NumProyecto As Long)
+    Dim fileNum As Integer
+    Dim textLine As String
+    Dim lineCounter As Long
+    Dim startPos As Long
+    Dim spacePosBefore As Long
+
+    'Abrir archivo de licencia
+    fileNum = FreeFile
+    Open ruta For Input As #fileNum
+    'Escanear archivo de licencia por el proyecto afectado
+    lineCounter = 0
+    Do While Not EOF(fileNum)
+        Line Input #fileNum, textLine
+        lineCounter = lineCounter + 1
+        'Linea es la que se busca por proyecto
+        If lineCounter = NumProyecto Then
+            'Encontrar separador
+            startPos = InStr(textLine, "-")
+            If startPos > 0 Then
+                'Conseguir numero de versión
+                NumVersion = Mid(textLine, startPos + 1)
+                'Buscar segundo separador para fecha de version
+                spacePosBefore = InStrRev(Left(textLine, startPos - 1), " ")
+                If spacePosBefore > 0 Then
+                    'Conseguir fecha de version
+                    FechaVersion = Mid(textLine, spacePosBefore + 1, startPos - spacePosBefore - 1)
+                Else
+                    FechaVersion = "No hay fecha de versión"
+                End If
+                If DebugMensajes Then
+                    MsgBox "Fecha de la versión: " & FechaVersion & vbCrLf & _
+                        "Número de versión: " & NumVersion
+                End If
+            Else
+                MsgBox "No se ha encontrado número de licencia o se ha modificado el archivo." & NumProyecto, vbCritical
+                Exit Sub
+            End If
+            Exit Do
+        End If
+    Loop
+    'Cerrar archivo de licencia
+    Close #fileNum
 End Sub

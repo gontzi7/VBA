@@ -32,7 +32,7 @@ Sub btnFilas()
 End Sub
 
 Sub btnQuitarFilas()
-    Call QuitarFilas
+    Call QuitarFila
 End Sub
 
 Sub btnPonerFila()
