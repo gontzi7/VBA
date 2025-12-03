@@ -173,7 +173,9 @@ Reintentar1:
         If nomModulo(i) = "MotorActualizacion" Or nomModulo(i) = "ufProgress" Then
             'Saltar módulo de actualización para evitar errores
         Else
-            If DebugMensajes Then MsgBox nomModulo(i)
+            ufProgress.TiempoEstimado.Caption = "Exportando módulo: " & nomModulo(i)
+
+            ufProgress.TiempoEstimado.Caption = "Importando módulo: " & nomModulo(i)
             completado = CopyModule(nomModulo(i), FromVBProject, ToVBProject, True)
             DoEvents
         End If
@@ -188,7 +190,7 @@ Reintentar1:
 
     ufProgress.LabelCaption.Caption = "Verificando actualización.." & vbCrLf & _
     "Por favor, no abra o seleccione otro documento de Excel o Word."
-
+    ufProgress.TiempoEstimado.Caption = ""
     correcto = 0
 
     For Each VBComp In FromVBProject.VBComponents  'Módulos en servidor
@@ -211,17 +213,17 @@ Reintentar1:
                         completado = False
                         Exit For
                     End If
+                    ufProgress.TiempoEstimado.Caption = "Verificando módulo: " & VBComp.name & " " & correcto & "/" & nomModulo.Count & " correctos."
+                    DoEvents
                     Exit For
                 End If
             Next VBCompL
         End If
     Next VBComp
 
-    'MsgBox "Módulos verificados correctamente: " & correcto & " de " & nomModulo.Count
-
     ufProgress.LabelCaption.Caption = "Finalizando actualización.." & vbCrLf & _
     "Por favor, no abra o seleccione otro documento de Excel o Word."
-
+    ufProgress.TiempoEstimado.Caption = correcto & "/" & nomModulo.Count & " correctos."
     ' completado = CopyModule("ufProgress", FromVBProject, ToVBProject, True)
     ' DoEvents
     ' completado = CopyModule("Generales", FromVBProject, ToVBProject, True)
@@ -352,7 +354,8 @@ Function CopyModule(ModuleName As String, _
         CopyModule = False
         Exit Function
     End If
-    
+    Err.Clear
+
     ''''''''''''''''''''''''''''''''''''''''''''''''''''
     ' FName is the name of the temporary file to be
     ' used in the Export/Import code.
@@ -418,13 +421,15 @@ Function CopyModule(ModuleName As String, _
     ''''''''''''''''''''''''''''''''''''''''''''''
     Set VBComp = Nothing
     Set VBComp = ToVBProject.VBComponents(CompName)
-    
-    MsgBox VBComp.Name & " " & CompName
+
+    ExcelLocal.Sheets("Lineas").Cells(i, 3).Value = CompName
 
     If VBComp Is Nothing Then
+        ExcelLocal.Sheets("Lineas").Cells(i, 4).Value = CompName & " normal"
         ToVBProject.VBComponents.Import Filename:=FName
     Else
         If VBComp.Type = vbext_ct_Document Then
+            ExcelLocal.Sheets("Lineas").Cells(i, 4).Value = CompName & " reescribir"
             ' VBComp is destination module
             Set TempVBComp = ToVBProject.VBComponents.Import(FName)
             ' TempVBComp is source module
@@ -435,6 +440,9 @@ Function CopyModule(ModuleName As String, _
             End With
             On Error GoTo 0
             ToVBProject.VBComponents.Remove TempVBComp
+        Else
+            MsgBox "Modulo con fallos " & CompName & " tipo " & ComponentTypeToString(VBComp.Type)
+            ToVBProject.VBComponents.Import Filename:=FName
         End If
     End If
     Kill FName
@@ -519,7 +527,7 @@ End Sub
 '===========================================================
 
 Sub ComprobarActualizacionIntegrado(Optional modo As String)
-    On Error GoTo ErrorHandler
+    'On Error GoTo ErrorHandler
     'Iniciar FSO para comprobación de existencia de archivo
     Set fso = CreateObject("Scripting.FileSystemObject")
     'Conseguir versión actual de codigo
