@@ -1,4 +1,4 @@
-'Version: 4.6
+'Version: 1.01
 Option Explicit
 
 Dim RutaLicencia As String, RutaBase As String, RutaUsuario As String

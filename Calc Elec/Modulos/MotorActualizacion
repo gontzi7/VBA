@@ -35,6 +35,8 @@ Dim NumVersion As String
 Dim FechaVersion As String
 Dim versionPuntos As String
 
+Public Cerrar As Boolean
+
 'Rutas constantes independiente de usuario
 Const RutaBase As String = "\BOSLAN INGENIERIA Y CONSULTORIA\Instalaciones - Imagenes\98-PROGRAMAS INST\Gontzal proba\Proyectos"
 Const RutaExcel As String = "\CuadrosBT(Pr2)\CAL ELEC(mas actualizado).xlsm"
@@ -77,8 +79,8 @@ Reintentar1:
         'If vbOut = 6 Then   'Sí
         If vbOut = 7 Then Exit Sub   'No
     Else
-        MsgBox "No hay actualizaciones disponibles.", vbInformation, "Sin actualizaciones"
-        Exit Sub
+        vbOut = MsgBox("No hay actualizaciones disponibles." & vbCrLf & "Actualizar aún así?. Fecha de nueva versión: " & FechaVersion, vbYesNo + vbInformation, "Sin actualizaciones")
+        If vbOut = 7 Then Exit Sub   'No
     End If
 
     Set ExcelLocal = ActiveWorkbook
@@ -121,17 +123,18 @@ Reintentar1:
 
     ExcelActualizado.Windows(1).Visible = False 'Esconder libro
 
+    If Cerrar Then GoTo Salir
+
     ufProgress.LabelCaption.Caption = "Contando módulos a actualizar.." & vbCrLf & _
         "Por favor, no abra o seleccione otro documento de Excel o Word."
     DoEvents
 
     Set VBProj = ExcelActualizado.VBProject
 
-    For Each VBComp In VBProj.VBComponents  'Contar módulos con código
-        If TotalCodeLinesInVBComponent(VBComp) > 0 Then
-            'Añadir nombre a colección
-            nomModulo.Add VBComp.name
-        End If
+    For Each VBComp In VBProj.VBComponents  'Contar módulos
+        If Cerrar Then GoTo Salir
+        'Añadir nombre a colección
+        nomModulo.Add VBComp.name
     Next VBComp
 
     'Cuantas veces se llama a actualizar barra
@@ -167,6 +170,8 @@ Reintentar1:
     Set FromVBProject = ExcelActualizado.VBProject
     Set ToVBProject = ExcelLocal.VBProject
 
+    If Cerrar Then GoTo Salir
+
     'Eliminar todos los modulos excepto el de actualización
     Err.Clear
     On Error Resume Next
@@ -176,12 +181,16 @@ Reintentar1:
         "Por favor, no abra o seleccione otro documento de Excel o Word."
 
         Set VBComp = ToVBProject.VBComponents(nomModulo(i))
-        
+
+        If Cerrar Then GoTo Salir
+        reintentar = 1
         If nomModulo(i) = "MotorActualizacion" Or nomModulo(i) = "ufProgress" Or ComponentTypeToString(VBComp.Type) = "Document Module" Then
             'Saltar módulo de actualización para evitar errores
             If DebugMensajes Then MsgBox "Saltando módulo: " & nomModulo(i) & " tipo " & ComponentTypeToString(VBComp.Type)
             completado = True
         Else
+
+Reintentar:
             ufProgress.TiempoEstimado.Caption = "Eliminando módulo: " & nomModulo(i)
 
             ToVBProject.VBComponents.Remove ToVBProject.VBComponents(nomModulo(i))
@@ -199,21 +208,35 @@ Reintentar1:
             End If
         End If
 
-        If Not completado Then 
+        '3 intentos para borrar
+        If Not completado And reintentar < 4 Then 
+            ufProgress.TiempoEstimado.Caption = "Error al borrar el módulo: " & nomModulo(i) & " Reintento nº " & reintentar
+            reintentar = reintentar + 1
+
+            DoEvents
+            
+            GoTo Reintentar
+        ElseIf Not completado And reintentar = 3 Then
             MsgBox "Error al borrar el módulo: " & nomModulo(i), vbCritical
-            Exit For 'Salir si hay error
+            GoTo Fallo 'Salir si hay error
         End If
+        If Cerrar Then GoTo Salir
+        ufProgress.TiempoEstimado.Caption = ""
     Next i
     Call ActBarra
 
+    'Importar módulos
     For i = 1 To nomModulo.Count
         ufProgress.LabelCaption.Caption = "Actualizando módulo " & i & " de " & nomModulo.Count & vbCrLf & _
         "Por favor, no abra o seleccione otro documento de Excel o Word."
 
+        If Cerrar Then GoTo Salir
+
         If nomModulo(i) = "MotorActualizacion" Or nomModulo(i) = "ufProgress" Then
             'Saltar módulo de actualización para evitar errores
             completado = True
-        Else
+        ElseIf TotalCodeLinesInVBComponent(FromVBProject.VBComponents(nomModulo(i))) > 0 Then
+            'Si tiene código, importar
             ufProgress.TiempoEstimado.Caption = "Importando módulo: " & nomModulo(i)
             completado = CopyModule(nomModulo(i), FromVBProject, ToVBProject, True)
             DoEvents
@@ -235,6 +258,9 @@ Reintentar1:
     For Each VBComp In FromVBProject.VBComponents  'Módulos en servidor
         If TotalCodeLinesInVBComponent(VBComp) > 0 Then
             For Each VBCompL In ToVBProject.VBComponents  'Módulos en local
+
+                If Cerrar Then GoTo Salir
+
                 If TotalCodeLinesInVBComponent(VBCompL) > 0 And VBCompL.name = VBComp.name And VBCompL.name <> "MotorActualizacion" Then    'Ignorar módulo de actualización
                     'Si existe, sumar
                     If TotalCodeLinesInVBComponent(VBCompL) = TotalCodeLinesInVBComponent(VBComp) Then
@@ -263,9 +289,6 @@ Reintentar1:
     ufProgress.LabelCaption.Caption = "Finalizando actualización.." & vbCrLf & _
     "Por favor, no abra o seleccione otro documento de Excel o Word."
     ufProgress.TiempoEstimado.Caption = correcto & "/" & nomModulo.Count & " correctos."
-    ' completado = CopyModule("ufProgress", FromVBProject, ToVBProject, True)
-    ' DoEvents
-    ' completado = CopyModule("Generales", FromVBProject, ToVBProject, True)
 
     ExcelActualizado.Close SaveChanges:=False 'Cerrar libro actualizado sin guardar
 
@@ -294,12 +317,13 @@ Reintentar1:
     Next VBComp
 Fallo:
     If completado Then
-        'MsgBox "Actualización completada con éxito.", vbInformation
+        ExcelLocal.Sheets("Configuracion_cuadros").Range("AvisoActualizacion") = "El programa está actualizado."
         MsgBox "Actualización completada con éxito." & vbCrLf & _
             "Módulos actualizados: " & nomModulo.Count & vbCrLf & _
             "Módulos antes de actualización: " & modInicio & vbCrLf & _
             "Módulos después de actualización: " & modFinal, vbInformation
     Else
+        ExcelLocal.Sheets("Configuracion_cuadros").Range("AvisoActualizacion") = "Actualización fallida, intentar de nuevo."
         MsgBox "Error al actualizar el archivo, inténtelo de nuevo.", vbCritical
     End If
 
@@ -309,6 +333,17 @@ Fallo:
     Application.Calculation = xlCalculationAutomatic
     Set fso = Nothing
 Exit Sub
+
+Salir:
+    'Activar actulaizaciones de pantalla
+    Application.ScreenUpdating = True
+    'Activar calculacion automatica
+    Application.Calculation = xlCalculationAutomatic
+    Set fso = Nothing
+    Unload ufProgress
+    ExcelActualizado.Close SaveChanges:=False 'Cerrar libro actualizado sin guardar
+    MsgBox "Actualización cancelada por el usuario.", vbInformation, "Actualización cancelada"
+    End
 
 ErrorHandler:
     'Si ocurre algun error ejecutar
