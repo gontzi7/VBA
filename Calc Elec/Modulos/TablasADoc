@@ -14,6 +14,7 @@ Dim ruta As String, RutaUsuario As String
 Dim vbOut As Integer
 Dim DebugMensajes As Boolean
 
+'TablasADoc
 Public resp As String, repetir As Boolean
 
 Function ExistePagina(nombrePag As String, Optional wb As Workbook) As Boolean

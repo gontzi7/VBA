@@ -1,13 +1,5 @@
 Option Explicit
 
-Public contraseñaPaginas As String
-Public Cerrar As Boolean
-
-Public Sub Contrasena()
-    contraseñaPaginas = "test"
-    Cerrar = False
-End Sub
-
 '================================================
 'Botones página principal
 '================================================

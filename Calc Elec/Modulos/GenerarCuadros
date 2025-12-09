@@ -1,5 +1,12 @@
 Option Explicit
 
+Dim i As Double, j As Double, k As Double, ultFila As Double, N As Double, b As Double
+Dim OutPut As Integer
+Dim principal As Worksheet, WS As Worksheet, primerPag As Worksheet, ultPag As Worksheet
+Dim buttonCell As Range, valores As Range, columnNom As Range
+Dim DebugMensajes As Boolean
+Dim rutas() As String
+
 Public ContinuarEjecucion As Boolean
 Public salirMacr As Boolean
 Public dict As Object
@@ -7,13 +14,6 @@ Public CorregirAutomatico As Boolean
 Public CorregirManual As Boolean
 Public NoCmpt As Collection
 Public cambios As Object
-
-Dim i As Double, j As Double, k As Double, ultFila As Double, N As Double, b As Double
-Dim OutPut As Integer
-Dim principal As Worksheet, WS As Worksheet, primerPag As Worksheet, ultPag As Worksheet
-Dim buttonCell As Range, valores As Range, columnNom As Range
-Dim DebugMensajes As Boolean
-Dim rutas() As String
 
 Sub MeterDict(ByVal Rng As Range, ByVal dict As Object, ByVal Nombre As String)
     Dim cell As Variant

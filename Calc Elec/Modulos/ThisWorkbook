@@ -34,6 +34,7 @@ Function RutaRelativa(s As String) As String
 End Function
 
 Private Sub Workbook_Open()
+    On Error Resume Next
     If ThisWorkbook.Sheets("Busquedas").Range("SERVIDOR") Then Exit Sub 'Ignorar si es versión servidor
 
     'Activar actualizaciones de pantalla

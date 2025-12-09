@@ -1,6 +1,7 @@
 Option Explicit
 
 Dim OutPut As Integer
+Public Cerrar As Boolean
 
 Private Sub CommandButton1_Click()
     OutPut = MsgBox("Se parará el programa, continuar?", vbCritical + vbYesNo, "Detener programa")

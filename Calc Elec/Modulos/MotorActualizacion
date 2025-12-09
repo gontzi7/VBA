@@ -2,7 +2,7 @@ Option Explicit
 
 Dim DebugMensajes As Boolean
 Dim vbOut As Integer
-Dim RutaUsuario, RutaBase, RutaExcel, RutaLicencia As String
+Dim RutaUsuario, RutaLicencia As String
 Dim ExcelActualizado As Workbook, ExcelLocal As Workbook
 Dim rutaArchivo As String
 Dim nombreArchivo As String, rutaAnterior As String
@@ -35,6 +35,10 @@ Dim NumVersion As String
 Dim FechaVersion As String
 Dim versionPuntos As String
 
+'Rutas constantes independiente de usuario
+Const RutaBase As String = "\BOSLAN INGENIERIA Y CONSULTORIA\Instalaciones - Imagenes\98-PROGRAMAS INST\Gontzal proba\Proyectos"
+Const RutaExcel As String = "\CuadrosBT(Pr2)\CAL ELEC(mas actualizado).xlsm"
+
 Sub Actualizar2()
     ' DebugMensajes = ThisWorkbook.Sheets("Busquedas").Range("Debug")
     ' If Not DebugMensajes Then On Error GoTo ErrorHandler
@@ -53,7 +57,6 @@ Sub Actualizar2()
 Reintentar1:
     'Rutas
     RutaUsuario = Environ("UserProfile")
-    RutaBase = "\BOSLAN INGENIERIA Y CONSULTORIA\Instalaciones - Imagenes\98-PROGRAMAS INST\Gontzal proba\Proyectos"
 
     Call ComprobarActualizacionIntegrado("A")
     'Reintentar si hay error de conexion
@@ -99,8 +102,6 @@ Reintentar1:
         "Por favor, no abra o seleccione otro documento de Excel o Word."
     DoEvents
 
-    RutaExcel = "\CuadrosBT(Pr2)\CAL ELEC(mas actualizado).xlsm"
-
     'Comprobar que archivo existe
     If fso.FileExists(RutaUsuario & RutaBase & RutaExcel) Then
         If DebugMensajes Then
@@ -134,7 +135,7 @@ Reintentar1:
     Next VBComp
 
     'Cuantas veces se llama a actualizar barra
-    progreso = 1 / (nomModulo.Count + 4) ' +4 por las llamadas extra
+    progreso = 1 / (nomModulo.Count + 5) ' +5 por las llamadas extra
 
     If DebugMensajes Then MsgBox nomModulo.Count
 
@@ -166,15 +167,53 @@ Reintentar1:
     Set FromVBProject = ExcelActualizado.VBProject
     Set ToVBProject = ExcelLocal.VBProject
 
+    'Eliminar todos los modulos excepto el de actualización
+    Err.Clear
+    On Error Resume Next
+
+    For i = 1 To nomModulo.Count
+        ufProgress.LabelCaption.Caption = "Borrando módulo " & i & " de " & nomModulo.Count & vbCrLf & _
+        "Por favor, no abra o seleccione otro documento de Excel o Word."
+
+        Set VBComp = ToVBProject.VBComponents(nomModulo(i))
+        
+        If nomModulo(i) = "MotorActualizacion" Or nomModulo(i) = "ufProgress" Or ComponentTypeToString(VBComp.Type) = "Document Module" Then
+            'Saltar módulo de actualización para evitar errores
+            If DebugMensajes Then MsgBox "Saltando módulo: " & nomModulo(i) & " tipo " & ComponentTypeToString(VBComp.Type)
+            completado = True
+        Else
+            ufProgress.TiempoEstimado.Caption = "Eliminando módulo: " & nomModulo(i)
+
+            ToVBProject.VBComponents.Remove ToVBProject.VBComponents(nomModulo(i))
+            DoEvents
+
+            'Comprobar si se ha borrado
+            Set VBComp = Nothing
+            Set VBComp = ToVBProject.VBComponents(nomModulo(i))
+
+            If VBComp Is Nothing Then
+                completado = True
+            Else
+                'Existe todavía, fallo al borrar
+                completado = False
+            End If
+        End If
+
+        If Not completado Then 
+            MsgBox "Error al borrar el módulo: " & nomModulo(i), vbCritical
+            Exit For 'Salir si hay error
+        End If
+    Next i
+    Call ActBarra
+
     For i = 1 To nomModulo.Count
         ufProgress.LabelCaption.Caption = "Actualizando módulo " & i & " de " & nomModulo.Count & vbCrLf & _
         "Por favor, no abra o seleccione otro documento de Excel o Word."
 
         If nomModulo(i) = "MotorActualizacion" Or nomModulo(i) = "ufProgress" Then
             'Saltar módulo de actualización para evitar errores
+            completado = True
         Else
-            ufProgress.TiempoEstimado.Caption = "Exportando módulo: " & nomModulo(i)
-
             ufProgress.TiempoEstimado.Caption = "Importando módulo: " & nomModulo(i)
             completado = CopyModule(nomModulo(i), FromVBProject, ToVBProject, True)
             DoEvents
@@ -184,7 +223,7 @@ Reintentar1:
 
         If Not completado Then 
             MsgBox "Error al actualizar el módulo: " & nomModulo(i), vbCritical
-            Exit For 'Salir si hay error
+            GoTo Fallo 'Salir si hay error
         End If
     Next i
 
@@ -253,7 +292,7 @@ Reintentar1:
         'MsgBox VBComp.name
         modFinal = modFinal + 1
     Next VBComp
-
+Fallo:
     If completado Then
         'MsgBox "Actualización completada con éxito.", vbInformation
         MsgBox "Actualización completada con éxito." & vbCrLf & _
@@ -311,8 +350,7 @@ Function CopyModule(ModuleName As String, _
     '                       False.
     '
     '''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
-    
-    Dim VBComp As VBIDE.VBComponent
+
     Dim FName As String
     Dim CompName As String
     Dim s As String
