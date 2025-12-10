@@ -482,7 +482,7 @@ Sub EmpezarLog()
     LogWrite "Ruta: " & ExcelLocal.FullName
 
     Print #tempFileHandle, Format(Now, "YYYY/MM/DD hh:nn:ss") & " - Inicializado registro." 'Encabezado log temporal
-    LogLogWriteTempWrite "Usuario: " & Environ("Username")
+    LogWriteTemp "Usuario: " & Environ("Username")
     LogWriteTemp "Ruta: " & ExcelLocal.FullName
 End Sub
 
