@@ -2,7 +2,7 @@ Option Explicit
 
 Dim DebugMensajes As Boolean
 Dim vbOut As Integer
-Dim RutaUsuario, RutaLicencia As String
+Dim RutaUsuario As String, RutaLicencia As String, RutaLogsUsuario As String
 Dim ExcelActualizado As Workbook, ExcelLocal As Workbook
 Dim rutaArchivo As String
 Dim nombreArchivo As String
@@ -22,10 +22,10 @@ Dim frac As Double
 
 Dim fso As Object
 
-Dim modInicio, modFinal As Long
+Dim modInicio As Long, modFinal As Long
 Dim correcto As Long
 
-Dim errorConexion, actualizado, completado As Boolean
+Dim errorConexion As Boolean, actualizado As Boolean, completado As Boolean
 Dim VersionActual As String
 Dim NumVersion As String
 Dim FechaVersion As String
@@ -34,10 +34,26 @@ Dim versionPuntos As String
 Public Cerrar As Boolean
 
 'Rutas constantes independiente de usuario
-Const RutaBase As String = "\BOSLAN INGENIERIA Y CONSULTORIA\Instalaciones - Imagenes\98-PROGRAMAS INST\Gontzal proba\Proyectos"
+Const RutaServidor As String = "\BOSLAN INGENIERIA Y CONSULTORIA\Instalaciones - Imagenes\98-PROGRAMAS INST\Gontzal proba"
+Const RutaBase As String = RutaServidor & "\Proyectos"
+Const RutaLogs As String = RutaBase & "\Logs"
+
 Const RutaExcel As String = "\CuadrosBT(Pr2)\CAL ELEC(mas actualizado).xlsm"
 Const Proyecto As Long = 2
 
+'Variables para logging
+Private Const PERMANENT_LOG As String = "logfile.txt"
+
+Private tempLogPath As String
+Private permanentLogPath As String
+
+Private permanentFileHandle As Integer
+Private tempFileHandle As Integer
+Private logsInitialized As Boolean
+
+'===========================================================
+' Procedimiento principal de actualización
+'===========================================================
 Sub Actualizar2()
     ' DebugMensajes = ThisWorkbook.Sheets("Busquedas").Range("Debug")
     ' If Not DebugMensajes Then On Error GoTo ErrorHandler
@@ -82,11 +98,17 @@ Reintentar1:
 
     Set ExcelLocal = ActiveWorkbook
 
+    'Empezar logging
+    Call EmpezarLog
+    LogWriteTemp "Empezado proceso de actualización"
+
     'Contar módulos
     modInicio = 0
     For Each VBComp In ExcelLocal.VBProject.VBComponents  'Contar módulos con código
         modInicio = modInicio + 1
     Next VBComp
+
+    LogWriteTemp "Módulos contados en local: " & modInicio
 
     'Iniciar colecciones
     Set nomModulo = New Collection
@@ -94,6 +116,8 @@ Reintentar1:
 
     'Iniciar el fso
     Set fso = CreateObject("Scripting.FileSystemObject")
+
+    LogWriteTemp "FSO y colecciones de módulos iniciados."
 
     Call IniBarra
     'Textos
@@ -110,6 +134,10 @@ Reintentar1:
     Else
         MsgBox "No se ha podido establecer conexión con el servidor." & RutaUsuario & RutaBase & RutaExcel, vbCritical
         Unload ufProgress
+        'Gestión de logs
+        LogWrite "Sin conexión al servidor."
+        LogWriteTemp "No se ha podido borrar/importar módulo: " & nomModulo(i)
+        CloseLogs success:=False
         Exit Sub
     End If
 
@@ -121,6 +149,8 @@ Reintentar1:
     ExcelActualizado.Windows(1).Visible = False 'Esconder libro
 
     If Cerrar Then GoTo Salir
+
+    LogWriteTemp "Conexión establecida con servidor."
 
     ufProgress.LabelCaption.Caption = "Contando módulos a actualizar.." & vbCrLf & _
         "Por favor, no abra o seleccione otro documento de Excel o Word."
@@ -138,6 +168,8 @@ Reintentar1:
         End If
     Next VBComp
 
+    LogWriteTemp "Módulos contados en servidor: " & nomModulo.Count
+
     Set VBProj = ExcelLocal.VBProject 'Proyecto de usuario
 
     For Each VBComp In VBProj.VBComponents  'Crear lista de módulos en archivo base
@@ -149,6 +181,8 @@ Reintentar1:
             If DebugMensajes Then MsgBox "Módulo encontrado en base: " & VBComp.name & " Líneas: " & TotalCodeLinesInVBComponent(VBComp)
         End If
     Next VBComp
+
+    LogWriteTemp "Módulos contados en base: " & nomModuloB.Count
 
     'Cuantas veces se llama a actualizar barra
     progreso = 1 / (nomModulo.Count + 5) ' +5 por las llamadas extra
@@ -162,9 +196,8 @@ Reintentar1:
 
     'Conseguir ruta de archivo actual
     rutaArchivo = ExcelLocal.path
-    If DebugMensajes Then
-        MsgBox "Ruta de archivo actual: " & rutaArchivo
-    End If
+    If DebugMensajes Then MsgBox "Ruta de archivo actual: " & rutaArchivo
+
     Call ActBarra
 
     'Conseguir nombre de archivo actual para borrar al finalizar
@@ -173,9 +206,7 @@ Reintentar1:
 
     nombreArchivo = ExcelLocal.name
 
-    If DebugMensajes Then
-        MsgBox "Nombre de archivo actual: " & nombreArchivo
-    End If
+    If DebugMensajes Then MsgBox "Nombre de archivo actual: " & nombreArchivo
 
     Call ActBarra
 
@@ -184,6 +215,8 @@ Reintentar1:
     Set ToVBProject = ExcelLocal.VBProject
 
     If Cerrar Then GoTo Salir
+
+    LogWriteTemp "Iniciando proceso de actualización de módulos."
 
     'Eliminar todos los modulos excepto el de actualización
     Err.Clear
@@ -228,13 +261,15 @@ Reintentar:
             DoEvents
             GoTo Reintentar
         ElseIf Not completado And reintentar = 4 Then
-            MsgBox "Error al borrar el módulo: " & nomModuloB(i), vbCritical
+            If DebugMensajes Then MsgBox "Error al borrar el módulo: " & nomModuloB(i), vbCritical
             GoTo Fallo 'Salir si hay error
         End If
         If Cerrar Then GoTo Salir
         ufProgress.TiempoEstimado.Caption = ""
     Next i
     Call ActBarra
+
+    LogWriteTemp "Módulos borrados en local."
 
     'Importar módulos
     For i = 1 To nomModulo.Count
@@ -256,10 +291,12 @@ Reintentar:
         Call ActBarra
 
         If Not completado Then 
-            MsgBox "Error al actualizar el módulo: " & nomModulo(i), vbCritical
+            If DebugMensajes Then MsgBox "Error al actualizar el módulo: " & nomModulo(i), vbCritical
             GoTo Fallo 'Salir si hay error
         End If
     Next i
+
+    LogWriteTemp "Módulos importados en local."
 
     ufProgress.LabelCaption.Caption = "Verificando actualización.." & vbCrLf & _
     "Por favor, no abra o seleccione otro documento de Excel o Word."
@@ -287,9 +324,12 @@ Reintentar:
                             "Líneas en servidor: " & TotalCodeLinesInVBComponent(VBComp) & vbCrLf & _
                             "Líneas en local: " & TotalCodeLinesInVBComponent(VBCompL), vbCritical
                         completado = False
+
+                        LogWriteTemp "Error de verificación en módulo: " & nomModulo(i)
+
                         Exit For
                     End If
-                    ufProgress.TiempoEstimado.Caption = "Verificando módulo: " & VBComp.name & " " & correcto & "/" & nomModulo.Count & " correctos."
+                    ufProgress.TiempoEstimado.Caption = "Verificando módulo: " & VBComp.name & " " & correcto & "/" & nomModulo.Count - 1 & " correctos."
                     DoEvents
                     Exit For
                 End If
@@ -299,9 +339,12 @@ Reintentar:
 
     ufProgress.LabelCaption.Caption = "Finalizando actualización.." & vbCrLf & _
     "Por favor, no abra o seleccione otro documento de Excel o Word."
-    ufProgress.TiempoEstimado.Caption = correcto & "/" & nomModulo.Count & " correctos."
+    ufProgress.TiempoEstimado.Caption = correcto & "/" & nomModulo.Count - 1 & " correctos."
 
     ExcelActualizado.Close SaveChanges:=False 'Cerrar libro actualizado sin guardar
+
+    LogWriteTemp "Verificación de módulos completada. Módulos correctos: " & correcto & "/" & nomModulo.Count - 1   '-1 por el de actualización
+    LogWriteTemp "Archivo de servidor cerrado."
 
     ufProgress.LabelCaption.Caption = "Actualizando versión.." & vbCrLf & _
     "Por favor, no abra o seleccione otro documento de Excel o Word."
@@ -309,6 +352,8 @@ Reintentar:
     'Actualizar versión de programa
     versionS = VersionCodigoIntegrado()
     ExcelLocal.Sheets("Configuracion_cuadros").Range("Version").Value = versionPuntos
+
+    LogWriteTemp "Versión actualizada a: " & versionPuntos
 
     'Descargar barra
     Unload ufProgress
@@ -325,11 +370,18 @@ Fallo:
     If completado Then
         ExcelLocal.Sheets("Configuracion_cuadros").Range("AvisoActualizacion") = "El programa está actualizado."
         MsgBox "Actualización completada con éxito." & vbCrLf & _
-            "Módulos actualizados: " & nomModulo.Count & vbCrLf & _
+            "Módulos actualizados: " & nomModulo.Count - 1 & vbCrLf & _
             "Módulos antes de actualización: " & modInicio & vbCrLf & _
             "Módulos después de actualización: " & modFinal, vbInformation
+        'Gestión de logs
+        LogWrite "Actualizado correctamente."
+        CloseLogs success:=True
     Else
         ExcelLocal.Sheets("Configuracion_cuadros").Range("AvisoActualizacion") = "Actualización fallida, intentar de nuevo."
+        'Gestión de logs
+        LogWrite "Actualización fallida."
+        LogWriteTemp "No se ha podido borrar/importar módulo: " & nomModulo(i)
+        CloseLogs success:=False
         'Activar actulaizaciones de pantalla
         Application.ScreenUpdating = True
         'Activar calculacion automatica
@@ -338,7 +390,16 @@ Fallo:
         Application.EnableEvents = True
         ExcelActualizado.Close SaveChanges:=False 'Cerrar libro actualizado sin guardar
         Unload ufProgress
-        MsgBox "Error al actualizar el archivo, inténtelo de nuevo.", vbCritical
+        vbOut = MsgBox("Error al actualizar el archivo, abrir registro?.", vbCritical + vbYesNo, "Error de actualización")
+        If vbOut = 6 Then
+            'Abrir log temporal
+            Dim logFile As Object
+            Set logFile = fso.OpenTextFile(tempLogPath, 1)
+            ' Dim logContent As String
+            ' logContent = logFile.ReadAll
+            ' logFile.Close
+            ' MsgBox logContent, vbOKOnly, "Registro de actualización"        
+        End If
     End If
 
     'Activar actulaizaciones de pantalla
@@ -351,6 +412,10 @@ Fallo:
 Exit Sub
 
 Salir:
+    'Gestión de logs
+    LogWrite "Actualización cancelada por usuario."
+    LogWriteTemp "Operación cancelada."
+    CloseLogs success:=False
     'Activar actulaizaciones de pantalla
     Application.ScreenUpdating = True
     'Activar calculacion automatica
@@ -366,6 +431,10 @@ Salir:
 
 ErrorHandler:
     'Si ocurre algun error ejecutar
+    'Gestión de logs
+    LogWrite "Error encontrado en actualización."
+    LogWriteTemp "Actualización interrumpida por error: " & Err.Description
+    CloseLogs success:=False
     MsgBox "Se ha producido un error a la hora de actualizar el excel: " & Err.Description, vbOKOnly + vbExclamation, "Error 102"
     'Activar actulaizaciones de pantalla
     Application.ScreenUpdating = True
@@ -375,10 +444,83 @@ ErrorHandler:
     Application.EnableEvents = True
     'Descargar barra
     Unload ufProgress
+    Set fso = Nothing
     ExcelActualizado.Close SaveChanges:=False 'Cerrar libro actualizado sin guardar
     End
 End Sub
 
+'===========================================================
+' Código de logging
+'===========================================================
+Sub EmpezarLog()
+    Dim mensaje As String
+
+    If logsInitialized Then Exit Sub
+
+    RutaLogsUsuario = RutaUsuario & RutaLogs
+
+    If Dir(RutaLogsUsuario, vbDirectory) = "" Then MkDir RutaLogsUsuario 'Crear carpeta de logs si no existe
+
+    permanentLogPath = RutaLogsUsuario & "\" & PERMANENT_LOG
+    
+    'Crear rutas de logs temporales
+    tempLogPath = RutaLogsUsuario & "\TempLog_" & Format(Now, "yyyy.mm.dd_hh.nn.ss") & ".txt"
+    
+    'Abrir log permanente en modo append
+    permanentFileHandle = FreeFile
+    Open permanentLogPath For Append As #permanentFileHandle
+
+    'Crear y abrir log temporal en modo output
+    tempFileHandle = FreeFile
+    Open tempLogPath For Output As #tempFileHandle
+
+    logsInitialized = True
+
+    Print #permanentFileHandle, "===" & Format(Now, "YYYY/MM/DD hh:nn:ss") & " - Comienzo actualización ===" 'Encabezado log permanente
+
+    LogWrite "Usuario: " & Environ("Username")
+    LogWrite "Ruta: " & ExcelLocal.FullName
+
+    Print #tempFileHandle, Format(Now, "YYYY/MM/DD hh:nn:ss") & " - Inicializado registro." 'Encabezado log temporal
+    LogLogWriteTempWrite "Usuario: " & Environ("Username")
+    LogWriteTemp "Ruta: " & ExcelLocal.FullName
+End Sub
+
+'Log permanente
+Sub LogWrite(msg As String)
+    If logsInitialized Then
+        Print #permanentFileHandle, Format(Now, "hh:nn:ss") & " | " & msg
+        DoEvents
+    End If
+End Sub
+
+'Log temporal
+Sub LogWriteTemp(msg As String)
+    If logsInitialized Then
+        Print #tempFileHandle, Format(Now, "hh:nn:ss") & " | " & msg
+        DoEvents
+    End If
+End Sub
+
+'Cerrar logs
+Public Sub CloseLogs(Optional ByVal success As Boolean = False)
+    If Not logsInitialized Then Exit Sub
+
+    'Cerrar archivos de log
+    Close #permanentFileHandle
+    Close #tempFileHandle
+
+    If success Then 'Borrar log temporal si ha ido bien
+        On Error Resume Next
+        Kill tempLogPath
+    End If
+
+    logsInitialized = False
+End Sub
+
+'===========================================================
+' Funciones core de actualización, modificado desde (http://www.cpearson.com/excel/vbe.aspx)
+'===========================================================
 Function CopyModule(ModuleName As String, _
     FromVBProject As VBIDE.VBProject, _
     ToVBProject As VBIDE.VBProject, _
@@ -414,7 +556,7 @@ Function CopyModule(ModuleName As String, _
     Dim SlashPos As Long
     Dim ExtPos As Long
     Dim TempVBComp As VBIDE.VBComponent
-    
+
     '''''''''''''''''''''''''''''''''''''''''''''
     ' Do some housekeeping validation.
     '''''''''''''''''''''''''''''''''''''''''''''
@@ -517,14 +659,14 @@ Function CopyModule(ModuleName As String, _
     Set VBComp = Nothing
     Set VBComp = ToVBProject.VBComponents(CompName)
 
-    ExcelLocal.Sheets("Lineas").Cells(i, 3).Value = CompName
+    If DebugMensajes Then ExcelLocal.Sheets("Lineas").Cells(i, 3).Value = CompName
 
     If VBComp Is Nothing Then
-        ExcelLocal.Sheets("Lineas").Cells(i, 4).Value = CompName & " normal"
+        If DebugMensajes Then ExcelLocal.Sheets("Lineas").Cells(i, 4).Value = CompName & " normal"
         ToVBProject.VBComponents.Import Filename:=FName
     Else
         If VBComp.Type = vbext_ct_Document Then
-            ExcelLocal.Sheets("Lineas").Cells(i, 4).Value = CompName & " reescribir"
+            If DebugMensajes Then ExcelLocal.Sheets("Lineas").Cells(i, 4).Value = CompName & " reescribir"
             ' VBComp is destination module
             Set TempVBComp = ToVBProject.VBComponents.Import(FName)
             ' TempVBComp is source module
@@ -561,7 +703,7 @@ Function ComponentTypeToString(ComponentType As VBIDE.vbext_ComponentType) As St
     End Select
 End Function
 
-Public Function TotalCodeLinesInVBComponent(VBComp As VBIDE.VBComponent) As Long
+Function TotalCodeLinesInVBComponent(VBComp As VBIDE.VBComponent) As Long
 ''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
 ' This returns the total number of code lines (excluding blank lines and
 ' comment lines) in the VBComponent referenced by VBComp. Returns -1
@@ -594,7 +736,6 @@ End Function
 '===========================================================
 ' Barra de progreso
 '===========================================================
-
 Private Sub ActBarra()
     'Fracción por cada llamada
     frac = progreso + frac
@@ -620,7 +761,6 @@ End Sub
 '===========================================================
 ' Funciones integradas a modulo de actualización
 '===========================================================
-
 Sub ComprobarActualizacionIntegrado(Optional modo As String)
     'On Error GoTo ErrorHandler
     'Iniciar FSO para comprobación de existencia de archivo
@@ -780,6 +920,9 @@ Sub ObtenerVersionActualizadaIntegrado(ruta As String, NumProyecto As Long)
     Close #fileNum
 End Sub
 
+'===========================================================
+' Funciones ayudantes
+'===========================================================
 Function RutaRelativa(s As String) As String
     Dim pos As Long, pos2 As Long
     pos = InStr(s, "\") ' Encontrar primera instancia de \
@@ -790,19 +933,4 @@ Function RutaRelativa(s As String) As String
     Else
         RutaRelativa = "" ' Si no se encuentra \ devolver ""
     End If
-End Function
-
-Function IsEditorInSync() As Boolean
-'=======================================================================
-' IsEditorInSync
-' This tests if the VBProject selected in the Project window, and
-' therefore the ActiveVBProject is the same as the VBProject associated
-' with the ActiveCodePane. If these two VBProjects are the same,
-' the editor is in sync and the result is True. If these are not the
-' same project, the editor is out of sync and the result is True.
-'=======================================================================
-    With Application.VBE
-    IsEditorInSync = .ActiveVBProject Is _
-        .ActiveCodePane.CodeModule.Parent.Collection.Parent
-    End With
 End Function

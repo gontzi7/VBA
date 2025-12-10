@@ -1,4 +1,4 @@
-'Version: 1.01
+'Version: 1.02
 Option Explicit
 
 Dim RutaLicencia As String, RutaBase As String, RutaUsuario As String
@@ -175,94 +175,95 @@ ErrorHandler:
     End
 End Sub
 
-Sub Actualizar()
-    Set wb = ThisWorkbook
-    'Ver si hay cambios sin guardar en el libro, si hay preguntar si se quieren guardar para actualizar
-    vbOut = MsgBox("Al actualizar el libro se reiniciará y se borrará toda la información escrita, actualizar?", vbYesNo + vbExclamation, "Confirmar actualización")
-    If vbOut = 7 Then
-        'Salir de macro y no actualizar
-        Exit Sub
-    End If
-    'Ruta a código de actualización
-    vbsPath = RutaUsuario & RutaBase & "\CuadrosBT(Pr2)\ActualizarPr2.vbs"
-    'Variable DebugMensajes
-    DebugMensajes = ThisWorkbook.Sheets("Busquedas").Range("Debug")
-    'Variables para barra de progreso
-    frac = 0
-Reintentar1:
-    Call ComprobarActualizacion("A")
-    'Comparar versión actual y nueva
-    If Not actualizado And Not errorConexion Then
-        vbOut = MsgBox("Hay mas actualizado, actualizar a última versión?" & vbCrLf & _
-            "Fecha de nueva versión: " & FechaVersion, vbYesNo + vbInformation, "Actualización disponible")
-    ElseIf actualizado And Not errorConexion Then
-        MsgBox "Está actualizado.", vbInformation
-        Exit Sub
-    ElseIf errorConexion Then
-        vbOut = MsgBox("No se ha podido establecer contacto con el servidor o no se ha seleccionado carpeta. Reintentar?", vbRetryCancel + vbExclamation, "Error conexión")
-        If vbOut = 4 Then GoTo Reintentar1   'Reintentar
-        If vbOut = 2 Then Exit Sub   'Cancelar
-        Exit Sub
-    End If
-    'Si usuario elige actualizar, pegar excel mas actualizado en la misma ruta
-    If vbOut = 6 Then
-        'Desactivar actualizaciones de pantalla
-        Application.ScreenUpdating = False
-        'Desproteger pagina maestra
-        ' principal.Unprotect Password:=contrasenaPaginas
+'Versión vieja de actualizador
+' Sub Actualizar()
+'     Set wb = ThisWorkbook
+'     'Ver si hay cambios sin guardar en el libro, si hay preguntar si se quieren guardar para actualizar
+'     vbOut = MsgBox("Al actualizar el libro se reiniciará y se borrará toda la información escrita, actualizar?", vbYesNo + vbExclamation, "Confirmar actualización")
+'     If vbOut = 7 Then
+'         'Salir de macro y no actualizar
+'         Exit Sub
+'     End If
+'     'Ruta a código de actualización
+'     vbsPath = RutaUsuario & RutaBase & "\CuadrosBT(Pr2)\ActualizarPr2.vbs"
+'     'Variable DebugMensajes
+'     DebugMensajes = ThisWorkbook.Sheets("Busquedas").Range("Debug")
+'     'Variables para barra de progreso
+'     frac = 0
+' Reintentar1:
+'     Call ComprobarActualizacion("A")
+'     'Comparar versión actual y nueva
+'     If Not actualizado And Not errorConexion Then
+'         vbOut = MsgBox("Hay mas actualizado, actualizar a última versión?" & vbCrLf & _
+'             "Fecha de nueva versión: " & FechaVersion, vbYesNo + vbInformation, "Actualización disponible")
+'     ElseIf actualizado And Not errorConexion Then
+'         MsgBox "Está actualizado.", vbInformation
+'         Exit Sub
+'     ElseIf errorConexion Then
+'         vbOut = MsgBox("No se ha podido establecer contacto con el servidor o no se ha seleccionado carpeta. Reintentar?", vbRetryCancel + vbExclamation, "Error conexión")
+'         If vbOut = 4 Then GoTo Reintentar1   'Reintentar
+'         If vbOut = 2 Then Exit Sub   'Cancelar
+'         Exit Sub
+'     End If
+'     'Si usuario elige actualizar, pegar excel mas actualizado en la misma ruta
+'     If vbOut = 6 Then
+'         'Desactivar actualizaciones de pantalla
+'         Application.ScreenUpdating = False
+'         'Desproteger pagina maestra
+'         ' principal.Unprotect Password:=contrasenaPaginas
 
-        On Error GoTo ErrorHandler
+'         On Error GoTo ErrorHandler
 
-        Call IniBarra
-        'Textos
-        ufProgress.Caption = "Actualizar documento"
-        ufProgress.LabelCaption.Caption = "Extrayendo ruta de archivo actual.." & vbCrLf & _
-            "Por favor, no abra o seleccione otro documento de Excel o Word."
-        'Cuantas veces se llama a actualizar barra
-        progreso = 1 / 3
-        'Conseguir ruta de archivo actual
-        rutaArchivo = ThisWorkbook.path
-        If DebugMensajes Then
-            MsgBox "Ruta de archivo actual: " & rutaArchivo
-        End If
-        Call ActBarra
-        'Conseguir nombre de archivo actual para borrar al finalizar
-        ufProgress.LabelCaption.Caption = "Extrayendo nombre de archivo.." & vbCrLf & _
-        "Por favor, no abra o seleccione otro documento de Excel o Word."
-        nombreArchivo = ThisWorkbook.name
-        If DebugMensajes Then
-            MsgBox "Nombre de archivo actual: " & nombreArchivo
-        End If
-        Call ActBarra
-        'Copiar el archivo actualizado a la misma ruta del antiguo
-        ufProgress.LabelCaption.Caption = "Copiando archivo actualizado.." & vbCrLf & _
-        "Por favor, no abra o seleccione otro documento de Excel o Word."
-        rutaAnterior = ThisWorkbook.FullName
-        Call ActBarra
-        'Descargar barra
-        Unload ufProgress
-        'Construir comando en cmd para pasar ruta de archivo original y ruta base por usuario
-        Dim cmd As String
-        cmd = "wscript """ & vbsPath & """ """ & rutaAnterior & """ """ & RutaUsuario & """"
-        ' Clipboard (cmd)
-        Call CopyToClipboard(cmd)
-        'Ejecutar código vbs para gestionar la actualización del archivo
-        Shell cmd, vbHide
-        'Proteger
-        'principal.Protect Password:=contrasenaPaginas
-    End If
-Exit Sub
+'         Call IniBarra
+'         'Textos
+'         ufProgress.Caption = "Actualizar documento"
+'         ufProgress.LabelCaption.Caption = "Extrayendo ruta de archivo actual.." & vbCrLf & _
+'             "Por favor, no abra o seleccione otro documento de Excel o Word."
+'         'Cuantas veces se llama a actualizar barra
+'         progreso = 1 / 3
+'         'Conseguir ruta de archivo actual
+'         rutaArchivo = ThisWorkbook.path
+'         If DebugMensajes Then
+'             MsgBox "Ruta de archivo actual: " & rutaArchivo
+'         End If
+'         Call ActBarra
+'         'Conseguir nombre de archivo actual para borrar al finalizar
+'         ufProgress.LabelCaption.Caption = "Extrayendo nombre de archivo.." & vbCrLf & _
+'         "Por favor, no abra o seleccione otro documento de Excel o Word."
+'         nombreArchivo = ThisWorkbook.name
+'         If DebugMensajes Then
+'             MsgBox "Nombre de archivo actual: " & nombreArchivo
+'         End If
+'         Call ActBarra
+'         'Copiar el archivo actualizado a la misma ruta del antiguo
+'         ufProgress.LabelCaption.Caption = "Copiando archivo actualizado.." & vbCrLf & _
+'         "Por favor, no abra o seleccione otro documento de Excel o Word."
+'         rutaAnterior = ThisWorkbook.FullName
+'         Call ActBarra
+'         'Descargar barra
+'         Unload ufProgress
+'         'Construir comando en cmd para pasar ruta de archivo original y ruta base por usuario
+'         Dim cmd As String
+'         cmd = "wscript """ & vbsPath & """ """ & rutaAnterior & """ """ & RutaUsuario & """"
+'         ' Clipboard (cmd)
+'         Call CopyToClipboard(cmd)
+'         'Ejecutar código vbs para gestionar la actualización del archivo
+'         Shell cmd, vbHide
+'         'Proteger
+'         'principal.Protect Password:=contrasenaPaginas
+'     End If
+' Exit Sub
 
-ErrorHandler:
-    'Si ocurre algun error ejecutar
-    MsgBox "Se ha producido un error a la hora de actualizar el excel: " & Err.Description, vbOKOnly + vbExclamation, "Error 101"
-    Application.ScreenUpdating = True
-    'Proteger
-    'principal.Protect Password:=contrasenaPaginas
-    'Descargar barra
-    Unload ufProgress
-    End
-End Sub
+' ErrorHandler:
+'     'Si ocurre algun error ejecutar
+'     MsgBox "Se ha producido un error a la hora de actualizar el excel: " & Err.Description, vbOKOnly + vbExclamation, "Error 101"
+'     Application.ScreenUpdating = True
+'     'Proteger
+'     'principal.Protect Password:=contrasenaPaginas
+'     'Descargar barra
+'     Unload ufProgress
+'     End
+' End Sub
 
 Sub ObtenerVersionActualizada(ruta As String, NumProyecto As Long)
     Dim fileNum As Integer
@@ -374,31 +375,37 @@ Sub CopyToClipboard(ByVal textToCopy As String)
 End Sub
 
 'Logica para errores al guardar
-Private Sub Workbook_AfterSave(ByVal Success As Boolean)
-    Select Case Success
-        Case True
-            'Se ha guardado correctamente, no hacer nada
-        Case False
-            If Not seleccion Then
-                seleccion = True
-                'Fallo, pedir si resolver
-                vbOut = MsgBox("Se ha detectado un error al guardar el archivo, solucionar?", vbCritical + vbYesNoCancel, "Error al guardar")
-                Select Case vbOut
-                    Case 6  'Si
-                        MsgBox "Se exportará toda la información del libro y se creará una copia en la misma carpeta." & vbCrLf & "Al terminar abrir la copia e importar datos.", vbInformation
+' Private Sub Workbook_AfterSave(ByVal Success As Boolean)
+'     Select Case Success
+'         Case True
+'             'Se ha guardado correctamente, no hacer nada
+'         Case False
+'             If Not seleccion Then
+'                 seleccion = True
+'                 'Fallo, pedir si resolver
+'                 vbOut = MsgBox("Se ha detectado un error al guardar el archivo, solucionar?", vbCritical + vbYesNoCancel, "Error al guardar")
+'                 Select Case vbOut
+'                     Case 6  'Si
+'                         MsgBox "Se exportará toda la información del libro y se creará una copia en la misma carpeta." & vbCrLf & "Al terminar abrir la copia e importar datos.", vbInformation
 
-                        Call Exportar
-                    Case 7  'No
-                        End
-                    Case 2  'Cancelar
-                        End
-                    Case Else
-                        End
-                End Select
-            End If
-    End Select
-End Sub
+'                         Call Exportar
+'                     Case 7  'No
+'                         End
+'                     Case 2  'Cancelar
+'                         End
+'                     Case Else
+'                         End
+'                 End Select
+'             End If
+'     End Select
 
-Private Sub Workbook_BeforeSave(ByVal SaveAsUI As Boolean, Cancel As Boolean)
-    seleccion = False
-End Sub
+' ThisWorkbook.VBProject.References.AddFromGuid _
+'     GUID:="{0002E157-0000-0000-C000-000000000046}", _
+'     Major:=5, Minor:=3
+
+
+' End Sub
+
+' Private Sub Workbook_BeforeSave(ByVal SaveAsUI As Boolean, Cancel As Boolean)
+'     seleccion = False
+' End Sub
