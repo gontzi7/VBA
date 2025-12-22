@@ -34,15 +34,15 @@ Dim versionPuntos As String
 Public Cerrar As Boolean
 
 'Rutas constantes independiente de usuario
-Const RutaServidor As String = "\BOSLAN INGENIERIA Y CONSULTORIA\Instalaciones - Imagenes\98-PROGRAMAS INST\Gontzal proba"
-Const RutaBase As String = RutaServidor & "\Proyectos"
-Const RutaLogs As String = RutaBase & "\Logs"
+Private Const RutaServidor As String = "\BOSLAN INGENIERIA Y CONSULTORIA\Instalaciones - Imagenes\98-PROGRAMAS INST\Gontzal proba"
+Private Const RutaBase As String = RutaServidor & "\Proyectos"
+Private Const RutaLogs As String = RutaBase & "\Logs"
 
-Const RutaExcel As String = "\CuadrosBT(Pr2)\CAL ELEC(mas actualizado).xlsm"
-Const Proyecto As Long = 2
+Private Const RutaExcel As String = "\CuadrosBT(Pr2)\CAL ELEC(mas actualizado).xlsm"
+Private Const Proyecto As Long = 2
 
 'Variables para logging
-Private Const PERMANENT_LOG As String = "logfile.txt"
+Private Const PERMANENT_LOG As String = "RegistroPr" & Proyecto & ".log"
 
 Private tempLogPath As String
 Private permanentLogPath As String
@@ -374,7 +374,7 @@ Fallo:
             "Módulos antes de actualización: " & modInicio & vbCrLf & _
             "Módulos después de actualización: " & modFinal, vbInformation
         'Gestión de logs
-        LogWrite "Actualizado correctamente."
+        LogWrite "Actualizado correctamente a versión: " & versionPuntos
         CloseLogs success:=True
     Else
         ExcelLocal.Sheets("Configuracion_cuadros").Range("AvisoActualizacion") = "Actualización fallida, intentar de nuevo."
@@ -458,26 +458,19 @@ Sub EmpezarLog()
     If logsInitialized Then Exit Sub
 
     RutaLogsUsuario = RutaUsuario & RutaLogs
-
     If Dir(RutaLogsUsuario, vbDirectory) = "" Then MkDir RutaLogsUsuario 'Crear carpeta de logs si no existe
-
     permanentLogPath = RutaLogsUsuario & "\" & PERMANENT_LOG
-    
     'Crear rutas de logs temporales
-    tempLogPath = RutaLogsUsuario & "\TempLog_" & Format(Now, "yyyy.mm.dd_hh.nn.ss") & ".txt"
-    
+    tempLogPath = RutaLogsUsuario & "\TempLog_Pr" & Proyecto & "_" & Format(Now, "yyyy.mm.dd_hh.nn.ss") & ".txt"
     'Abrir log permanente en modo append
     permanentFileHandle = FreeFile
     Open permanentLogPath For Append As #permanentFileHandle
-
     'Crear y abrir log temporal en modo output
     tempFileHandle = FreeFile
     Open tempLogPath For Output As #tempFileHandle
-
     logsInitialized = True
 
     Print #permanentFileHandle, "===" & Format(Now, "YYYY/MM/DD hh:nn:ss") & " - Comienzo actualización ===" 'Encabezado log permanente
-
     LogWrite "Usuario: " & Environ("Username")
     LogWrite "Ruta: " & ExcelLocal.FullName
 
@@ -773,7 +766,7 @@ Sub ComprobarActualizacionIntegrado(Optional modo As String)
     If Not fso.FileExists(RutaLicencia) Then
         'No existe
         If modo = "A" Then  'Se ha pulsado el botón de buscar actualizacion, abrir selector de carpetas
-Reintentar:
+            Reintentar:
             Dim sFolder As String
             'Abir selector de carpetas
             With Application.FileDialog(msoFileDialogFolderPicker)
