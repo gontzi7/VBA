@@ -1,0 +1,244 @@
+Option Explicit
+
+Public Cerrar As Boolean
+Public listaHojas As Collection
+Public Cancelado As Boolean
+Public hojasCuadros As Dictionary
+Public hojasResultados As Dictionary
+Public hojasIgnorar As Dictionary
+
+Dim Hoja As Workbook
+Dim exportPath As String
+Dim WS As Worksheet
+Dim Rng As Range
+Dim rowArr As Variant
+Dim i As Long, j As Long, k As Long, cantCuad As Long, colorPag As Long
+Dim fNum As Integer, OutPut As Integer
+Dim filTabla As Long, primeraFila As Long, primeraColumna As Long, ultimaColumna As Long
+Dim tipoPagina As String, nombrePagina As String
+Dim infoAPegar As Collection
+Dim DebugMensajes As Boolean, prim As Boolean
+Dim colores As Object
+'Variables importación
+Dim nombreHoja As String, nombreTabla As String
+Dim filasTabla As Long, colCount As Long
+Dim columnasRellenar As Collection
+
+
+    Dim importPath As Variant
+    Dim textoLinea As String
+    Dim rowValues() As String
+    Dim rowNum As Long
+    Dim colNum As Long
+    
+
+Sub Exportar()
+    On Error GoTo ErrorHandler
+
+    Set Hoja = ActiveWorkbook
+
+    'Pedir usuario ruta de guardado de archivo
+    exportPath = Application.GetSaveAsFilename( _
+        InitialFileName:=Format(Now(), "yymmdd") & "_exportación.dat", _
+        FileFilter:="Archivos de datos (*.dat), *.dat, Todos los archivos (*.*), *.*", _
+        Title:="Guardar archivo de datos")
+    'Cancelado o cerrado
+    On Error GoTo Seleccionado1
+    If exportPath = False Then
+        MsgBox "Exportación cancelada.", vbExclamation
+        Exit Sub
+    End If
+Seleccionado1:
+    On Error GoTo ErrorHandler  'Reiniciar gestión de errores
+    fNum = FreeFile
+    Open exportPath For Output As #fNum
+
+    'Crear colecciones y diccionarios para pasar datos
+    Set listaHojas = New Collection
+    Set hojasCuadros = New Dictionary
+    Set hojasResultados = New Dictionary
+    Set hojasIgnorar = New Dictionary
+
+    'Llenar colección con nombres de hojas
+    For Each WS In Hoja.Worksheets
+        listaHojas.Add WS.name
+    Next WS
+
+    'Dejar a usuario elegir hojas de cuadros y resultados con formulario
+    Cerrar = False
+    Cancelado = False
+    Seleccion.Show
+
+    'Esperar a que se cierre formulario
+    Do While Not Cerrar
+        DoEvents
+    Loop
+
+    If Cancelado Then Exit Sub
+
+    Call IniciarBarra
+    ufProgressObr.Caption = "Exportación de datos"
+    ufProgressObr.Proceso.Caption = ".."
+    ufProgressObr.SubProceso.Caption = "Abriendo archivo.."
+
+    progreso = 1 / (hojasCuadros.Count + hojasResultados.Count + 3)
+    progreso2 = 1
+
+    'Generar formato de configuracion cuadros
+    Print #fNum, "[GSheet]|" & "Configuracion_cuadros" & "|" & hojasCuadros.Count & "|" & "2315831"
+
+
+    'Fin de configuración cuadros
+    Print #fNum, "-----"
+
+            Case "[FSheet]" 'Hoja generada
+                If rowValues(1) = "Configuracion_cuadros" Then
+                    nombreHoja = rowValues(1)
+                    nombreTabla = "Nombre_cuadros"
+                    filasTabla = rowValues(2)
+
+                    Set columnasRellenar = New Collection   'Borrar colección
+
+                    'Que columnas se van a rellenar desde exportación
+                    columnasRellenar.Add 1 'Nombre cuadro
+                    columnasRellenar.Add 2 'Abreviatura
+                    columnasRellenar.Add 3 'Linea alimentación
+                    columnasRellenar.Add 4 'Item
+                    columnasRellenar.Add 5 'Nombre línea alimentación (si es externa)
+                    columnasRellenar.Add 6 'Nº
+                ElseIf rowValues(1) = "TABLA DE RESULTADOS" Then
+                    nombreHoja = rowValues(1)
+                    nombreTabla = "RESULTADOS"
+                    filasTabla = rowValues(2)
+
+                    Set columnasRellenar = New Collection   'Borrar colección
+
+                    'Que columnas se van a rellenar desde exportación
+                    columnasRellenar.Add 7  'Tipo instalación (A1, A2, B, E...)
+                    columnasRellenar.Add 16 'Secc elegida
+                    columnasRellenar.Add 17 'Aislamiento (RZ1-K, SZ1-K, H07Z1-K...)
+                    columnasRellenar.Add 18 'Agrupamiento
+                    columnasRellenar.Add 19 'Cable por fase
+                    columnasRellenar.Add 20 'Manguera
+                    columnasRellenar.Add 21 'Material
+                    columnasRellenar.Add 24 'PIA
+                    columnasRellenar.Add 26 'Longitud
+                    columnasRellenar.Add 28 'Tipo instalación (Sup., int., ext...)
+                    columnasRellenar.Add 42 'Nombre cuadro
+                    columnasRellenar.Add 43 'Fila
+                    columnasRellenar.Add 44 'Línea alimentación
+                End If
+
+
+
+            Case "[GSheet]" 'Hoja generada
+                'Variables
+                nombreHoja = rowValues(1)
+                nombreTabla = rowValues(1)
+                filasTabla = rowValues(2)
+
+                colores.Add nombreHoja, rowValues(3)
+
+                Set columnasRellenar = New Collection   'Borrar colección
+
+                'Que columnas se van a rellenar desde exportación
+                columnasRellenar.Add 1  'Denominación circuito
+                columnasRellenar.Add 2  'Nombre circuito
+                columnasRellenar.Add 4  'Nº elemento
+                columnasRellenar.Add 5  'Tipo
+                columnasRellenar.Add 6  'Potencia
+                columnasRellenar.Add 10 'Factor simultaneidad
+                columnasRellenar.Add 11 'Factor utilidad
+                columnasRellenar.Add 13 'Monofasica o trifasica
+                columnasRellenar.Add 14 'Fase
+
+
+
+
+
+
+
+    Call ActualizarBarra2
+
+    'Exportar páginas fijas
+    For Each WS In Hoja.Worksheets
+        If hojasResultados.Exists(WS.name) Then
+            tipoPagina = "Fijo"
+            nombrePagina = WS.name
+            colorPag = WS.Tab.color
+
+            Call MeterEnArchivo(tipoPagina, nombrePagina, colorPag)
+        End If
+
+        If hojasCuadros.Exists(WS.name) Then
+            tipoPagina = "Generado"
+            nombrePagina = WS.name
+            colorPag = WS.Tab.color
+
+            Call MeterEnArchivo(tipoPagina, nombrePagina, colorPag)
+        End If
+    Next WS
+
+    Close #fNum
+    MsgBox "Hoja exportada a archivo: " & exportPath & vbCrLf _
+        & "Listo para importarse en otra hoja.", vbInformation
+
+    Exit Sub
+ErrorHandler:
+    'Si ocurre algun error ejecutar
+    MsgBox "Ha ocurrido un error al exportar los datos: " & Err.Description, vbExclamation, "Error 901"
+    'Activar actualización de pantalla
+    Application.ScreenUpdating = True
+    'Activar calculacion automatica
+    Application.Calculation = xlCalculationAutomatic
+    Application.DisplayAlerts = True
+    Application.EnableEvents = True
+    Unload ufProgressObr
+    End
+End Sub
+
+Private Sub MeterEnArchivo(ByVal tipP As String, ByVal nomP As String, ByVal color As Long)
+
+    filTabla = WS.ListObjects(1).ListRows.count
+    
+    Set Rng = WS.ListObjects(1).DataBodyRange 'rango de valores
+
+    ' MsgBox rng.Address
+    rowArr = Rng.Value
+
+    'Título de página
+    Select Case tipP
+        Case "Fijo"
+            Print #fNum, "[FSheet]|" & nomP & "|" & filTabla & "|" & color
+        Case "Generado"
+            Print #fNum, "[GSheet]|" & nomP & "|" & filTabla & "|" & color
+        Case Else
+            Print #fNum, "[Sheet]|" & nomP & "|" & filTabla & "|" & color
+    End Select
+
+    'Valores
+    For i = 1 To UBound(rowArr, 1)
+        For j = 1 To UBound(rowArr, 2)
+            If IsNumeric(rowArr(i, j)) And rowArr(i, j) <> " " And rowArr(i, j) <> "" Then
+                rowArr(i, j) = Replace(rowArr(i, j), ",", ".")  'Comas a puntos para correcta valoración de decimales
+                Print #fNum, rowArr(i, j) & "|";
+            Else
+                Print #fNum, rowArr(i, j) & "|";
+            End If
+        Next j
+        Print #fNum,   'Nueva fila
+    Next i
+
+    Print #fNum, "-----"
+End Sub
+
+Private Sub IniciarBarra()
+    'Inicializar barra de progreso
+    frac = 0
+    ufProgress.LabelProgress.Width = 0
+    ufProgress.Caption = "Actualizar documento"
+    ufProgress.LabelCaption.Caption = "Extrayendo ruta de archivo actual.." & vbCrLf & _
+        "Por favor, no abra o seleccione otro documento de Excel o Word."
+    ufProgress.TiempoEstimado.Caption = ""
+    ufProgress.Show
+End Sub
