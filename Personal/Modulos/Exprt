@@ -3,9 +3,9 @@ Option Explicit
 Public Cerrar As Boolean
 Public listaHojas As Collection
 Public Cancelado As Boolean
-Public hojasCuadros As Dictionary
-Public hojasResultados As Dictionary
-Public hojasIgnorar As Dictionary
+Public hojasCuadros As Object 'Dictionary
+Public hojasResultados As Object 'Dictionary
+Public hojasIgnorar As Object 'Dictionary
 
 Dim Hoja As Workbook
 Dim exportPath As String
@@ -31,6 +31,8 @@ Dim columnasRellenar As Collection
     Dim rowNum As Long
     Dim colNum As Long
     
+'Variables barra progreso
+Dim progreso As Double, frac As Double, progreso2 As Double, frac2 As Double
 
 Sub Exportar()
     On Error GoTo ErrorHandler
@@ -55,9 +57,9 @@ Seleccionado1:
 
     'Crear colecciones y diccionarios para pasar datos
     Set listaHojas = New Collection
-    Set hojasCuadros = New Dictionary
-    Set hojasResultados = New Dictionary
-    Set hojasIgnorar = New Dictionary
+    Set hojasCuadros = CreateObject("Scripting.Dictionary")
+    Set hojasResultados = CreateObject("Scripting.Dictionary")
+    Set hojasIgnorar = CreateObject("Scripting.Dictionary")
 
     'Llenar colección con nombres de hojas
     For Each WS In Hoja.Worksheets
@@ -67,7 +69,7 @@ Seleccionado1:
     'Dejar a usuario elegir hojas de cuadros y resultados con formulario
     Cerrar = False
     Cancelado = False
-    Seleccion.Show
+    Seleccion.Show vbModeless
 
     'Esperar a que se cierre formulario
     Do While Not Cerrar
@@ -87,70 +89,45 @@ Seleccionado1:
     'Generar formato de configuracion cuadros
     Print #fNum, "[GSheet]|" & "Configuracion_cuadros" & "|" & hojasCuadros.Count & "|" & "2315831"
 
-
     'Fin de configuración cuadros
     Print #fNum, "-----"
 
-            Case "[FSheet]" 'Hoja generada
-                If rowValues(1) = "Configuracion_cuadros" Then
-                    nombreHoja = rowValues(1)
-                    nombreTabla = "Nombre_cuadros"
-                    filasTabla = rowValues(2)
+        ' Case "[FSheet]" 'Hoja generada
+        '     If rowValues(1) = "Configuracion_cuadros" Then
+        '         nombreHoja = rowValues(1)
+        '         nombreTabla = "Nombre_cuadros"
+        '         filasTabla = rowValues(2)
 
-                    Set columnasRellenar = New Collection   'Borrar colección
+        '         Set columnasRellenar = New Collection   'Borrar colección
 
-                    'Que columnas se van a rellenar desde exportación
-                    columnasRellenar.Add 1 'Nombre cuadro
-                    columnasRellenar.Add 2 'Abreviatura
-                    columnasRellenar.Add 3 'Linea alimentación
-                    columnasRellenar.Add 4 'Item
-                    columnasRellenar.Add 5 'Nombre línea alimentación (si es externa)
-                    columnasRellenar.Add 6 'Nº
-                ElseIf rowValues(1) = "TABLA DE RESULTADOS" Then
-                    nombreHoja = rowValues(1)
-                    nombreTabla = "RESULTADOS"
-                    filasTabla = rowValues(2)
+        '         'Que columnas se van a rellenar desde exportación
+        '         columnasRellenar.Add 1 'Nombre cuadro
+        '         columnasRellenar.Add 2 'Abreviatura
+        '         columnasRellenar.Add 3 'Linea alimentación
+        '         columnasRellenar.Add 4 'Item
+        '         columnasRellenar.Add 5 'Nombre línea alimentación (si es externa)
+        '         columnasRellenar.Add 6 'Nº
 
-                    Set columnasRellenar = New Collection   'Borrar colección
+        ' Case "[GSheet]" 'Hoja generada
+        '     'Variables
+        '     nombreHoja = rowValues(1)
+        '     nombreTabla = rowValues(1)
+        '     filasTabla = rowValues(2)
 
-                    'Que columnas se van a rellenar desde exportación
-                    columnasRellenar.Add 7  'Tipo instalación (A1, A2, B, E...)
-                    columnasRellenar.Add 16 'Secc elegida
-                    columnasRellenar.Add 17 'Aislamiento (RZ1-K, SZ1-K, H07Z1-K...)
-                    columnasRellenar.Add 18 'Agrupamiento
-                    columnasRellenar.Add 19 'Cable por fase
-                    columnasRellenar.Add 20 'Manguera
-                    columnasRellenar.Add 21 'Material
-                    columnasRellenar.Add 24 'PIA
-                    columnasRellenar.Add 26 'Longitud
-                    columnasRellenar.Add 28 'Tipo instalación (Sup., int., ext...)
-                    columnasRellenar.Add 42 'Nombre cuadro
-                    columnasRellenar.Add 43 'Fila
-                    columnasRellenar.Add 44 'Línea alimentación
-                End If
+        '     colores.Add nombreHoja, rowValues(3)
 
+        '     Set columnasRellenar = New Collection   'Borrar colección
 
-
-            Case "[GSheet]" 'Hoja generada
-                'Variables
-                nombreHoja = rowValues(1)
-                nombreTabla = rowValues(1)
-                filasTabla = rowValues(2)
-
-                colores.Add nombreHoja, rowValues(3)
-
-                Set columnasRellenar = New Collection   'Borrar colección
-
-                'Que columnas se van a rellenar desde exportación
-                columnasRellenar.Add 1  'Denominación circuito
-                columnasRellenar.Add 2  'Nombre circuito
-                columnasRellenar.Add 4  'Nº elemento
-                columnasRellenar.Add 5  'Tipo
-                columnasRellenar.Add 6  'Potencia
-                columnasRellenar.Add 10 'Factor simultaneidad
-                columnasRellenar.Add 11 'Factor utilidad
-                columnasRellenar.Add 13 'Monofasica o trifasica
-                columnasRellenar.Add 14 'Fase
+        '     'Que columnas se van a rellenar desde exportación
+        '     columnasRellenar.Add 1  'Denominación circuito
+        '     columnasRellenar.Add 2  'Nombre circuito
+        '     columnasRellenar.Add 4  'Nº elemento
+        '     columnasRellenar.Add 5  'Tipo
+        '     columnasRellenar.Add 6  'Potencia
+        '     columnasRellenar.Add 10 'Factor simultaneidad
+        '     columnasRellenar.Add 11 'Factor utilidad
+        '     columnasRellenar.Add 13 'Monofasica o trifasica
+        '     columnasRellenar.Add 14 'Fase
 
 
 
@@ -164,7 +141,7 @@ Seleccionado1:
     For Each WS In Hoja.Worksheets
         If hojasResultados.Exists(WS.name) Then
             tipoPagina = "Fijo"
-            nombrePagina = WS.name
+            nombrePagina = "TABLA DE RESULTADOS"
             colorPag = WS.Tab.color
 
             Call MeterEnArchivo(tipoPagina, nombrePagina, colorPag)
@@ -216,6 +193,41 @@ Private Sub MeterEnArchivo(ByVal tipP As String, ByVal nomP As String, ByVal col
             Print #fNum, "[Sheet]|" & nomP & "|" & filTabla & "|" & color
     End Select
 
+
+                columnasRellenar.Add 7  'Tipo instalación (A1, A2, B, E...)
+                columnasRellenar.Add 16 'Secc elegida
+                columnasRellenar.Add 17 'Aislamiento (RZ1-K, SZ1-K, H07Z1-K...)
+                columnasRellenar.Add 18 'Agrupamiento
+                columnasRellenar.Add 19 'Cable por fase
+                columnasRellenar.Add 20 'Manguera
+                columnasRellenar.Add 21 'Material
+                columnasRellenar.Add 24 'PIA
+                columnasRellenar.Add 26 'Longitud
+                columnasRellenar.Add 28 'Tipo instalación (Sup., int., ext...)
+                columnasRellenar.Add 42 'Nombre cuadro
+                columnasRellenar.Add 43 'Fila
+                columnasRellenar.Add 44 'Línea alimentación
+
+
+
+    Select Case nomP
+        Case "TABLA DE RESULTADOS"
+            'Reordenar columnas para tabla de resultados
+            Dim rowArr2 As Variant
+            ReDim rowArr2(1 To UBound(rowArr, 1), 1 To UBound(rowArr, 2))
+
+            For i = 1 To UBound(rowArr, 1)
+                For j = 1 To UBound(rowArr, 2)
+                    rowArr2(i, j) = rowArr(i, columnasRellenar(j))
+                Next j
+            Next i
+
+            rowArr = rowArr2
+        Case Else
+            'Cuadros a generar
+
+    End Select
+
     'Valores
     For i = 1 To UBound(rowArr, 1)
         For j = 1 To UBound(rowArr, 2)
@@ -231,6 +243,44 @@ Private Sub MeterEnArchivo(ByVal tipP As String, ByVal nomP As String, ByVal col
 
     Print #fNum, "-----"
 End Sub
+
+'===============================================================================================================================================
+'Barra de progreso
+'===============================================================================================================================================
+Public Sub ActualizarBarra()
+    'Fracción por cada llamada
+    frac = progreso + frac
+    'Actualizar barra de progreso
+    With ufProgressObr
+        .LabelProgress.Width = frac * (.FrameProgress.Width)
+        .Repaint
+    End With
+    DoEvents
+    veces = veces + 1
+End Sub
+
+Public Sub ActualizarBarra2()
+    'Fracción por cada llamada
+    ' Application.Wait Now + #12:00:01 AM#
+    frac2 = progreso2 + frac2
+    'Actualizar barra de progreso secundaria
+    With ufProgressObr
+        .LabelProgress2.Width = frac2 * (.FrameProgress2.Width)
+    End With
+    DoEvents
+End Sub
+
+Public Sub ReiniciarBarra2()
+    'Reiniciar barra de progreso secundaria
+    ' Application.Wait Now + #12:00:01 AM#
+    'SubProceso.Caption = ""
+    ufProgressObr.LabelProgress2.Width = 0
+    frac2 = 0
+    progreso2 = 0
+    'Avanzar la barra de progreso primaria
+    Call ActualizarBarra
+End Sub
+
 
 Private Sub IniciarBarra()
     'Inicializar barra de progreso

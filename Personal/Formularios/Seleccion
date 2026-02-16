@@ -1,6 +1,47 @@
 Option Explicit
 
-Dim i As Long
+Dim i As Long, seleccionado As Long
+Dim contCuad, contReslt, contIgnr As Long
+Dim nombre As String
+
+Dim Lista As MSForms.ListBox
+Dim TextoContador As MSForms.Label
+
+Private Sub LimpiarCuad_Click()
+    Call Clasificar("Cuadro", "Limpiar")
+End Sub
+
+Private Sub LimpiarIgnr_Click()
+    Call Clasificar("Ignorar", "Limpiar")
+End Sub
+
+Private Sub LimpiarReslt_Click()
+    Call Clasificar("Resultado", "Limpiar")
+End Sub
+
+Private Sub MeterCuad_Click()
+    Call Clasificar("Cuadro")
+End Sub
+
+Private Sub MeterIgnr_Click()
+    Call Clasificar("Ignorar")
+End Sub
+
+Private Sub MeterReslt_Click()
+    Call Clasificar("Resultado")
+End Sub
+
+Private Sub QuitarCuad_Click()
+
+End Sub
+
+Private Sub QuitarIgnr_Click()
+
+End Sub
+
+Private Sub QuitarReslt_Click()
+
+End Sub
 
 Private Sub UserForm_Initialize()
     With Me
@@ -11,10 +52,79 @@ Private Sub UserForm_Initialize()
     'Variable de parada
     Cerrar = False
     
+    'Otras variables
+    contCuad = 0
+    contReslt = 0
+    contIgnr = 0
+    
+    ContListaCuadros.Caption = "0 Hojas"
+    ContListaResultados.Caption = "0 Hojas"
+    ContListaIgnorar.Caption = "0 Hojas"
+
     'Cargar lista
-    For i = 1 To listaHojas.Count
+    For i = 1 To listaHojas.count
         ListaHojasM.AddItem listaHojas(i)
     Next i
+End Sub
+
+Private Sub Clasificar(ByVal Familia As String, Optional Trabajo As String)
+    Select Case Familia
+        Case "Cuadro"
+            Set Lista = Me.ListaCuadros 'Lista
+            contCuadr = contCuadr + 1   'Contador
+            contador = contCuadr
+            TextoContador = Me.ContListaCuadros 'Texto contador
+        Case "Resultado"
+            Set Lista = Me.ListaResultados
+            contReslt = contReslt + 1
+            contador = contReslt
+            TextoContador = Me.ContListaResultados 'Texto contador
+        Case "Ignorar"
+            Set Lista = Me.ListaIgnorar
+            contIgnr = contIgnr + 1
+            contador = contIgnr
+            TextoContador = Me.ContListaIgnorar 'Texto contador
+        Case Else
+            'No hacer nada
+            MsgBox "No puede ser"
+            
+            Exit Sub
+    End Select
+    
+    Select Case Trabajo
+        Case "Limpiar"
+            'Cargar lista principal
+            For i = 1 To Lista.count
+                ListaHojasM.AddItem Lista.List(i) 'Mover de lista familia a lista general
+            Next i
+
+            Lista.Clear 'Vaciar lista familia
+        Case "Quitar"
+            vbOut = MsgBox("Se quitará de la lista la siguiente entrada: " & Lista.List(Lista.ListIndex) & "Continuar?", vbYesNoCancel)
+            Select Case vbOut
+                Case 6  'Si
+                    ListaHojasM.AddItem Lista.List(Lista.ListIndex) 'Copiar en lista general
+                    
+                    Lista.RemoveItem Lista.ListIndex
+                Case 7  'No
+                
+                Case Else
+            End Select
+
+        Case Else   'Sin input
+            'Obtener nombre de hoja y quitar de lista
+            seleccionado = ListaHojasM.ListIndex
+            nombre = ListaHojasM.List(ListaHojasM.ListIndex)
+            ListaHojasM.RemoveItem ListaHojasM.ListIndex
+        
+            Lista.AddItem nombre
+            
+            'Sumar contador
+            TextoContador.Caption = contador & " Hojas"
+            
+            'Mover seleccionado de lista a siguiente
+            ListaHojasM.ListIndex = seleccionado
+    End Select
 End Sub
 
 Private Sub Cancelar_Click()
