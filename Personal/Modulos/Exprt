@@ -76,7 +76,10 @@ Seleccionado1:
         DoEvents
     Loop
 
-    If Cancelado Then Exit Sub
+    If Cancelado Then
+        Close #fNum
+        Exit Sub
+    End If
 
     Call IniciarBarra
     ufProgressObr.Caption = "Exportación de datos"
@@ -130,11 +133,6 @@ Seleccionado1:
         '     columnasRellenar.Add 14 'Fase
 
 
-
-
-
-
-
     Call ActualizarBarra2
 
     'Exportar páginas fijas
@@ -170,6 +168,7 @@ ErrorHandler:
     Application.Calculation = xlCalculationAutomatic
     Application.DisplayAlerts = True
     Application.EnableEvents = True
+    Close #fNum
     Unload ufProgressObr
     End
 End Sub

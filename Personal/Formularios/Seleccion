@@ -1,11 +1,86 @@
 Option Explicit
 
+Dim vbOut As Integer
 Dim i As Long, seleccionado As Long
-Dim contCuad, contReslt, contIgnr As Long
 Dim nombre As String
+Dim cuadrosProv As Object
+Dim atributos(0 To 2) As Variant
+Dim Rango As Range
 
 Dim Lista As MSForms.ListBox
 Dim TextoContador As MSForms.Label
+
+Private Sub BuscarAutomatico_Click()
+    MSgBox "En desarrollo", vbInformation, "Función no disponible"
+End Sub
+
+Private Sub ElegirEnHoja_Click()    'Al pulsar botón, dejar a usuario seleccionar celdas que contengan nombre y tag de cuadro, y añadir a diccionario de cuadros provisionales
+    If ListaCuadros.ListIndex = -1 Then
+        MsgBox "No ha seleccionado ningún cuadro", vbInformation, "Error"
+        Exit Sub
+    End If    
+    Me.Hide
+
+    On Error Resume Next
+    Set Rango = Application.InputBox("Seleccione el rango de celdas que contienen el nombre y el tag del cuadro. El primer valor del rango se considerará el tag, y el segundo el nombre", Type:=8)
+
+    Me.Show vbModeless
+    If Rango Is Nothing Then
+        MsgBox "No ha seleccionado ningún rango", vbInformation, "Error"
+        Exit Sub
+    End If
+    On Error GoTo 0
+
+    NombreLinCuad.Value = Rango.Cells(1, 2).Value 'Nombre del cuadro
+    NombreTagCuad.Value = Rango.Cells(1, 1).Value 'Tag del cuadro
+End Sub
+
+Private Sub ListaCuadros_Change()   'Al seleccionar un cuadro, mostrar sus propiedades en el formulario
+    If ListaCuadros.ListIndex = -1 Then
+        SeccionCuad.Caption = "Propiedades de cuadro"
+        NombreLinCuad.Value = ""
+        NombreTagCuad.Value = ""
+        AlimExterno.Value = False
+        Exit Sub
+    End If
+    If cuadrosProv.Exists(ListaCuadros.List(ListaCuadros.ListIndex)) Then
+        SeccionCuad.Caption = "Propiedades de cuadro " & ListaCuadros.List(ListaCuadros.ListIndex)
+        If cuadrosProv(ListaCuadros.List(ListaCuadros.ListIndex))(0) = "EXTERNO ------>" Then
+            AlimExterno.Value = True
+        Else
+            AlimExterno.Value = False
+        End If
+        NombreLinCuad.Value = cuadrosProv(ListaCuadros.List(ListaCuadros.ListIndex))(1)
+        NombreTagCuad.Value = cuadrosProv(ListaCuadros.List(ListaCuadros.ListIndex))(2)
+    Else
+        NombreLinCuad.Value = ""
+        NombreTagCuad.Value = ""
+    End If
+End Sub
+
+Private Sub AplicarProp_Click()
+    If AlimExterno Then
+        atributos(0) = "EXTERNO ------>"
+    End If
+    atributos(1) = NombreLinCuad.Value
+    atributos(2) = NombreTagCuad.Value
+
+    'Introducir en diccionario de cuadros provisionales
+    cuadrosProv.Add ListaCuadros.List(ListaCuadros.ListIndex), atributos()
+    'Marcar en segunda columna de la lista que tiene propiedades asignadas
+    ListaCuadros.List(ListaCuadros.ListIndex, 1) = "X"
+End Sub
+
+Private Sub LimpiarProp_Click()
+    If cuadrosProv.Exists(ListaCuadros.List(ListaCuadros.ListIndex)) Then
+        cuadrosProv.Remove ListaCuadros.List(ListaCuadros.ListIndex) 'Eliminar del diccionario de cuadros provisionales
+        ListaCuadros.List(ListaCuadros.ListIndex, 1) = "" 'Limpiar segunda columna de la lista
+        AlimExterno.Value = False
+    Else
+        NombreLinCuad.Value = ""
+        NombreTagCuad.Value = ""
+    End If
+End Sub
 
 Private Sub LimpiarCuad_Click()
     Call Clasificar("Cuadro", "Limpiar")
@@ -32,15 +107,24 @@ Private Sub MeterReslt_Click()
 End Sub
 
 Private Sub QuitarCuad_Click()
-
+    Call Clasificar("Cuadro", "Quitar")
 End Sub
 
 Private Sub QuitarIgnr_Click()
-
+    Call Clasificar("Ignorar", "Quitar")
 End Sub
 
 Private Sub QuitarReslt_Click()
+    Call Clasificar("Resultado", "Quitar")
+End Sub
 
+Private Sub LimpiarTodo_Click()
+    vbOut = MsgBox("Se vaciarán las tres listas. Continuar?", vbYesNoCancel + vbQuestion, "Confirmar operación")
+    If vbOut = 6 Then
+        Call Clasificar("Cuadro", "Limpiar")
+        Call Clasificar("Resultado", "Limpiar")
+        Call Clasificar("Ignorar", "Limpiar")
+    End If
 End Sub
 
 Private Sub UserForm_Initialize()
@@ -52,11 +136,8 @@ Private Sub UserForm_Initialize()
     'Variable de parada
     Cerrar = False
     
-    'Otras variables
-    contCuad = 0
-    contReslt = 0
-    contIgnr = 0
-    
+    Set cuadrosProv = CreateObject("Scripting.Dictionary")
+
     ContListaCuadros.Caption = "0 Hojas"
     ContListaResultados.Caption = "0 Hojas"
     ContListaIgnorar.Caption = "0 Hojas"
@@ -71,59 +152,72 @@ Private Sub Clasificar(ByVal Familia As String, Optional Trabajo As String)
     Select Case Familia
         Case "Cuadro"
             Set Lista = Me.ListaCuadros 'Lista
-            contCuadr = contCuadr + 1   'Contador
-            contador = contCuadr
-            TextoContador = Me.ContListaCuadros 'Texto contador
+            Set TextoContador = Me.ContListaCuadros 'Texto contador
+            'Seleccionar página
+            MultiPage1.Value = 0
         Case "Resultado"
             Set Lista = Me.ListaResultados
-            contReslt = contReslt + 1
-            contador = contReslt
-            TextoContador = Me.ContListaResultados 'Texto contador
+            Set TextoContador = Me.ContListaResultados 'Texto contador
+            'Seleccionar página
+            MultiPage1.Value = 1
         Case "Ignorar"
             Set Lista = Me.ListaIgnorar
-            contIgnr = contIgnr + 1
-            contador = contIgnr
-            TextoContador = Me.ContListaIgnorar 'Texto contador
+            Set TextoContador = Me.ContListaIgnorar 'Texto contador
+            'Seleccionar página
+            MultiPage1.Value = 2
         Case Else
             'No hacer nada
             MsgBox "No puede ser"
-            
             Exit Sub
     End Select
     
     Select Case Trabajo
         Case "Limpiar"
             'Cargar lista principal
-            For i = 1 To Lista.count
+            For i = 0 To Lista.ListCount - 1
                 ListaHojasM.AddItem Lista.List(i) 'Mover de lista familia a lista general
             Next i
-
+            
             Lista.Clear 'Vaciar lista familia
+            TextoContador.Caption = Lista.ListCount & " Hojas"
         Case "Quitar"
-            vbOut = MsgBox("Se quitará de la lista la siguiente entrada: " & Lista.List(Lista.ListIndex) & "Continuar?", vbYesNoCancel)
+            If Lista.ListIndex = -1 Then
+                MsgBox "No ha seleccionado ninguna hoja", vbInformation, "Error"
+                Exit Sub
+            End If
+    
+            vbOut = MsgBox("Se quitará de la lista la siguiente entrada: " & Lista.List(Lista.ListIndex) & " Continuar?", vbYesNoCancel + vbQuestion, "Confirmar operación")
             Select Case vbOut
                 Case 6  'Si
                     ListaHojasM.AddItem Lista.List(Lista.ListIndex) 'Copiar en lista general
                     
                     Lista.RemoveItem Lista.ListIndex
+                    ListaHojasM.ListIndex = ListaHojasM.ListCount - 1
                 Case 7  'No
                 
                 Case Else
             End Select
-
+        Case "Diccionario"
+            For i = 1 To Lista.ListCount    'Añadir las hojas a los diccionarios (cuadros con su línea de alimentación)
+                Select Case Familia
+                    Case "Cuadro"
+                        hojasCuadros.Add Lista.List(i), atributos()
+                    Case "Resultado"
+                        hojasResultados.Add Lista.List(i), 0
+                    Case "Ignorar"
+                        hojasIgnorar.Add Lista.List(i), 0
+                End Select
+            Next i
         Case Else   'Sin input
             'Obtener nombre de hoja y quitar de lista
             seleccionado = ListaHojasM.ListIndex
             nombre = ListaHojasM.List(ListaHojasM.ListIndex)
             ListaHojasM.RemoveItem ListaHojasM.ListIndex
-        
+
             Lista.AddItem nombre
-            
+
             'Sumar contador
-            TextoContador.Caption = contador & " Hojas"
-            
-            'Mover seleccionado de lista a siguiente
-            ListaHojasM.ListIndex = seleccionado
+            TextoContador.Caption = Lista.ListCount & " Hojas"
     End Select
 End Sub
 
@@ -134,6 +228,43 @@ Private Sub Cancelar_Click()
 End Sub
 
 Private Sub Aceptar_Click()
+    'Comprobar que no haya cuadros hojas sin asignar a ninguna de las tres listas
+    If ListaHojasM.ListCount > 0 Then
+        vbOut = MsgBox("Quedan hojas sin clasificar. Se pasarán automáticamente a la lista de ignorar. Continuar?", vbYesNoCancel + vbExclamation, "Hojas sin clasificar")
+        Select Case vbOut
+            Case 6  'Si
+                'Pasar a diccionario de ignorar con valor vacío
+                For i = 0 To ListaHojasM.ListCount - 1
+                    ListaHojasM.ListIndex = 0   'Siempre la primera posición porque se van eliminando al pasarlas a la lista de ignorar
+                    Call Clasificar("Ignorar")
+                Next i
+            Case 7  'No
+                Exit Sub
+            Case Else
+                Exit Sub
+        End Select
+    End If
+    'Comprobar que no hay cuadros sin propiedades asignadas
+    For i = 0 To ListaCuadros.ListCount - 1
+        If Not cuadrosProv.Exists(ListaCuadros.List(i)) Then
+            vbOut = MsgBox("El cuadro " & ListaCuadros.List(i) & " no tiene propiedades asignadas. Continuar de todas formas?", vbYesNoCancel + vbExclamation, "Cuadro sin propiedades")
+            Select Case vbOut
+                Case 6  'Si
+                    'Pasar a diccionario de cuadros con valores vacíos
+                    hojasCuadros.Add ListaCuadros.List(i), Array("", "", "")
+                Case 7  'No
+                    Exit Sub
+                Case Else
+                    Exit Sub
+            End Select
+        End If
+    Next i
+
+    'Pasar listas a diccionario público y cerrar
+    Call Clasificar("Cuadro", "Diccionario")
+    Call Clasificar("Resultado", "Diccionario")
+    Call Clasificar("Ignorar", "Diccionario")
+
     Cerrar = True
     Unload Me
 End Sub
