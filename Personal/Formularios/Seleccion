@@ -1,7 +1,7 @@
 Option Explicit
 
 Dim vbOut As Integer
-Dim i As Long, seleccionado As Long
+Dim i As Long, seleccionado As Long, j As Long
 Dim nombre As String
 Dim cuadrosProv As Object
 Dim atributos(0 To 2) As Variant
@@ -43,6 +43,11 @@ Private Sub ListaCuadros_Change()   'Al seleccionar un cuadro, mostrar sus propi
         AlimExterno.Value = False
         Exit Sub
     End If
+
+    If ListaCuadros.ListIndex > -1 Then
+        SeccionCuad.Caption = "Propiedades de cuadro " & ListaCuadros.List(ListaCuadros.ListIndex)
+    End If
+
     If cuadrosProv.Exists(ListaCuadros.List(ListaCuadros.ListIndex)) Then
         SeccionCuad.Caption = "Propiedades de cuadro " & ListaCuadros.List(ListaCuadros.ListIndex)
         If cuadrosProv(ListaCuadros.List(ListaCuadros.ListIndex))(0) = "EXTERNO ------>" Then
@@ -61,11 +66,16 @@ End Sub
 Private Sub AplicarProp_Click()
     If AlimExterno Then
         atributos(0) = "EXTERNO ------>"
+    Else
+        atributos(0) = "I"
     End If
     atributos(1) = NombreLinCuad.Value
     atributos(2) = NombreTagCuad.Value
 
     'Introducir en diccionario de cuadros provisionales
+    If cuadrosProv.Exists(ListaCuadros.List(ListaCuadros.ListIndex)) Then
+        cuadrosProv.Remove ListaCuadros.List(ListaCuadros.ListIndex) 'Eliminar del diccionario de cuadros provisionales para actualizar con nuevos valores
+    End If
     cuadrosProv.Add ListaCuadros.List(ListaCuadros.ListIndex), atributos()
     'Marcar en segunda columna de la lista que tiene propiedades asignadas
     ListaCuadros.List(ListaCuadros.ListIndex, 1) = "X"
@@ -198,10 +208,12 @@ Private Sub Clasificar(ByVal Familia As String, Optional Trabajo As String)
                 Case Else
             End Select
         Case "Diccionario"
-            For i = 1 To Lista.ListCount    'Añadir las hojas a los diccionarios (cuadros con su línea de alimentación)
+            For i = 0 To Lista.ListCount - 1    'Añadir las hojas a los diccionarios (cuadros con su línea de alimentación)
                 Select Case Familia
                     Case "Cuadro"
-                        hojasCuadros.Add Lista.List(i), atributos()
+                        If Not hojasCuadros.Exists(Lista.List(i)) Then 'Si el cuadro no existe en el diccionario
+                            hojasCuadros.Add Lista.List(i), cuadrosProv(Lista.List(i))  'Valor del diccionario de cuadro solicitado
+                        End If
                     Case "Resultado"
                         hojasResultados.Add Lista.List(i), 0
                     Case "Ignorar"
@@ -245,20 +257,30 @@ Private Sub Aceptar_Click()
         End Select
     End If
     'Comprobar que no hay cuadros sin propiedades asignadas
+    j = 0
     For i = 0 To ListaCuadros.ListCount - 1
-        If Not cuadrosProv.Exists(ListaCuadros.List(i)) Then
-            vbOut = MsgBox("El cuadro " & ListaCuadros.List(i) & " no tiene propiedades asignadas. Continuar de todas formas?", vbYesNoCancel + vbExclamation, "Cuadro sin propiedades")
-            Select Case vbOut
-                Case 6  'Si
-                    'Pasar a diccionario de cuadros con valores vacíos
-                    hojasCuadros.Add ListaCuadros.List(i), Array("", "", "")
-                Case 7  'No
-                    Exit Sub
-                Case Else
-                    Exit Sub
-            End Select
+        'Pasar a diccionario de cuadros con valores vacíos
+        If Not cuadrosProv.Exists(ListaCuadros.List(i)) Then 
+            cuadrosProv.Add ListaCuadros.List(i), Array("", "", "")
+        End If
+
+        If ListaCuadros.List(i, 1) = "X" Then
+        Else
+            j = j + 1
         End If
     Next i
+
+    If j > 0 Then
+        vbOut = MsgBox("Hay " & j & " cuadros sin propiedades asignadas. Continuar de todas formas?", vbYesNoCancel + vbExclamation, "Cuadro sin propiedades")
+        Select Case vbOut
+            Case 6  'Si
+
+            Case 7  'No
+                Exit Sub
+            Case Else
+                Exit Sub
+        End Select
+    End If
 
     'Pasar listas a diccionario público y cerrar
     Call Clasificar("Cuadro", "Diccionario")

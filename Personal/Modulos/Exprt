@@ -3,9 +3,9 @@ Option Explicit
 Public Cerrar As Boolean
 Public listaHojas As Collection
 Public Cancelado As Boolean
-Public hojasCuadros As Object 'Dictionary
-Public hojasResultados As Object 'Dictionary
-Public hojasIgnorar As Object 'Dictionary
+Public hojasCuadros As Object 'Diccionario cuadros y líneas de alimentación
+Public hojasResultados As Object 'Diccionario hojas de resultados
+Public hojasIgnorar As Object 'Diccionario hojas a ignorar en selección
 
 Dim Hoja As Workbook
 Dim exportPath As String
@@ -14,15 +14,17 @@ Dim Rng As Range
 Dim rowArr As Variant
 Dim i As Long, j As Long, k As Long, cantCuad As Long, colorPag As Long
 Dim fNum As Integer, OutPut As Integer
-Dim filTabla As Long, primeraFila As Long, primeraColumna As Long, ultimaColumna As Long
+Dim filTabla As Long, primeraFila As Long, primeraColumna As Long, ultimaColumna As Long, ultimaFila As Long
 Dim tipoPagina As String, nombrePagina As String
 Dim infoAPegar As Collection
-Dim DebugMensajes As Boolean, prim As Boolean
+Dim DebugMensajes As Boolean, resltTerm As Boolean
 Dim colores As Object
+Dim key As Variant
 'Variables importación
 Dim nombreHoja As String, nombreTabla As String
 Dim filasTabla As Long, colCount As Long
-Dim columnasRellenar As Collection
+Dim columnasRellenar As Collection, ConfiguracionCuadros As Collection
+Dim tablaConversion As Object
 
 
     Dim importPath As Variant
@@ -32,7 +34,7 @@ Dim columnasRellenar As Collection
     Dim colNum As Long
     
 'Variables barra progreso
-Dim progreso As Double, frac As Double, progreso2 As Double, frac2 As Double
+Dim progreso As Double, frac As Double, progreso2 As Double, frac2 As Double, veces As Long
 
 Sub Exportar()
     On Error GoTo ErrorHandler
@@ -52,8 +54,6 @@ Sub Exportar()
     End If
 Seleccionado1:
     On Error GoTo ErrorHandler  'Reiniciar gestión de errores
-    fNum = FreeFile
-    Open exportPath For Output As #fNum
 
     'Crear colecciones y diccionarios para pasar datos
     Set listaHojas = New Collection
@@ -83,67 +83,71 @@ Seleccionado1:
 
     Call IniciarBarra
     ufProgressObr.Caption = "Exportación de datos"
-    ufProgressObr.Proceso.Caption = ".."
+    ufProgressObr.Proceso.Caption = "Iniciando.."
     ufProgressObr.SubProceso.Caption = "Abriendo archivo.."
 
-    progreso = 1 / (hojasCuadros.Count + hojasResultados.Count + 3)
+    cantCuad = hojasCuadros.Count + hojasResultados.Count
+
+    progreso = 1 / (cantCuad + 3)
     progreso2 = 1
+
+    'Crear archivo de texto e imprimir datos
+    fNum = FreeFile
+    Open exportPath For Output As #fNum
+
+    Call ActualizarBarra
+
+    ufProgressObr.Proceso.Caption = "Construyendo información general de cuadros.."
+    ufProgressObr.SubProceso.Caption = "Haciendo cosas.."
+
+    Set ConfiguracionCuadros = New Collection
+    'Construir array con datos de configuración de cuadros (nombre cuadro, línea alimentación, item, nombre línea alimentación si es externa, nº circuito)
+    For Each key In hojasCuadros.Keys
+        Dim configCuadro(1 To 5) As String  'Array para almacenar datos de configuración de cada cuadro
+
+        configCuadro(1) = Hoja.Sheets(key).Range("E1").Value    'Nombre cuadro
+        configCuadro(2) = key 'Abreviatura cuadro
+    
+        If hojasCuadros(key)(0) = "EXTERNO ------>" Then
+            configCuadro(3) = hojasCuadros(key)(0)
+            configCuadro(4) = hojasCuadros(key)(2) 'Item línea alimentación
+            configCuadro(5) = hojasCuadros(key)(1) 'Nombre línea alimentación externo
+        Else
+            configCuadro(3) = hojasCuadros(key)(2) & " - " & hojasCuadros(key)(1) 'Nombre línea alimentación con formato "item - nombre" si es interno
+            configCuadro(4) = ""
+            configCuadro(5) = ""
+        End If
+
+        ConfiguracionCuadros.Add configCuadro
+    Next key
 
     'Generar formato de configuracion cuadros
     Print #fNum, "[GSheet]|" & "Configuracion_cuadros" & "|" & hojasCuadros.Count & "|" & "2315831"
 
+    For i = 1 To ConfiguracionCuadros.Count
+        For j = 1 To 5 'Número de datos de configuración por cuadro
+            Print #fNum, ConfiguracionCuadros(i)(j) & "|";
+        Next j
+        Print #fNum,   'Nueva fila
+    Next i
     'Fin de configuración cuadros
     Print #fNum, "-----"
 
-        ' Case "[FSheet]" 'Hoja generada
-        '     If rowValues(1) = "Configuracion_cuadros" Then
-        '         nombreHoja = rowValues(1)
-        '         nombreTabla = "Nombre_cuadros"
-        '         filasTabla = rowValues(2)
-
-        '         Set columnasRellenar = New Collection   'Borrar colección
-
-        '         'Que columnas se van a rellenar desde exportación
-        '         columnasRellenar.Add 1 'Nombre cuadro
-        '         columnasRellenar.Add 2 'Abreviatura
-        '         columnasRellenar.Add 3 'Linea alimentación
-        '         columnasRellenar.Add 4 'Item
-        '         columnasRellenar.Add 5 'Nombre línea alimentación (si es externa)
-        '         columnasRellenar.Add 6 'Nº
-
-        ' Case "[GSheet]" 'Hoja generada
-        '     'Variables
-        '     nombreHoja = rowValues(1)
-        '     nombreTabla = rowValues(1)
-        '     filasTabla = rowValues(2)
-
-        '     colores.Add nombreHoja, rowValues(3)
-
-        '     Set columnasRellenar = New Collection   'Borrar colección
-
-        '     'Que columnas se van a rellenar desde exportación
-        '     columnasRellenar.Add 1  'Denominación circuito
-        '     columnasRellenar.Add 2  'Nombre circuito
-        '     columnasRellenar.Add 4  'Nº elemento
-        '     columnasRellenar.Add 5  'Tipo
-        '     columnasRellenar.Add 6  'Potencia
-        '     columnasRellenar.Add 10 'Factor simultaneidad
-        '     columnasRellenar.Add 11 'Factor utilidad
-        '     columnasRellenar.Add 13 'Monofasica o trifasica
-        '     columnasRellenar.Add 14 'Fase
-
-
-    Call ActualizarBarra2
-
-    'Exportar páginas fijas
-    For Each WS In Hoja.Worksheets
-        If hojasResultados.Exists(WS.name) Then
+    For Each WS In Hoja.Worksheets  'Primero hoja de resultados
+        If hojasResultados.Exists(WS.name) And Not resltTerm Then
+            ufProgressObr.Proceso.Caption = "Procesando hoja: " & WS.name & " (" & cantCuad & " hojas restantes)"
             tipoPagina = "Fijo"
             nombrePagina = "TABLA DE RESULTADOS"
             colorPag = WS.Tab.color
 
             Call MeterEnArchivo(tipoPagina, nombrePagina, colorPag)
+            resltTerm = True
         End If
+    Next WS
+
+    'Exportar páginas
+    For Each WS In Hoja.Worksheets    
+        ufProgressObr.Proceso.Caption = "Procesando hoja: " & WS.name & " (" & cantCuad & " hojas restantes)"
 
         If hojasCuadros.Exists(WS.name) Then
             tipoPagina = "Generado"
@@ -154,14 +158,18 @@ Seleccionado1:
         End If
     Next WS
 
+    ufProgressObr.Proceso.Caption = "Exportación completada."
+    ufProgressObr.SubProceso.Caption = "Cerrando macro.."
+
     Close #fNum
     MsgBox "Hoja exportada a archivo: " & exportPath & vbCrLf _
         & "Listo para importarse en otra hoja.", vbInformation
 
+    Unload ufProgressObr
     Exit Sub
 ErrorHandler:
     'Si ocurre algun error ejecutar
-    MsgBox "Ha ocurrido un error al exportar los datos: " & Err.Description, vbExclamation, "Error 901"
+    MsgBox "Ha ocurrido un error al exportar los datos: " & Err.Description, vbExclamation, "Error 1001"
     'Activar actualización de pantalla
     Application.ScreenUpdating = True
     'Activar calculacion automatica
@@ -174,13 +182,67 @@ ErrorHandler:
 End Sub
 
 Private Sub MeterEnArchivo(ByVal tipP As String, ByVal nomP As String, ByVal color As Long)
+    ufProgressObr.SubProceso.Caption = "Cargando parámetros de hoja.."
+    'Diccionario
+    Set tablaConversion = CreateObject("Scripting.Dictionary")
+    Set WS = Hoja.Worksheets(nomP)
+    'Tablas conversión y variables por hoja
+    Select Case tipP
+        Case "Fijo" 'Resultados
+            'Tabla de conversión para tabla de resultados
+            tablaConversion.Add 7, 8     'Tipo instalación (A1, A2, B, E...)
+            tablaConversion.Add 16,13  'Secc elegida
+            tablaConversion.Add 17,9    'Aislamiento (RZ1-K, SZ1-K, H07Z1-K...)
+            tablaConversion.Add 18,10   'Agrupamiento
+            tablaConversion.Add 19,11   'Cable por fase
+            tablaConversion.Add 20,12  'Manguera
+            tablaConversion.Add 21,14  'Material
+            tablaConversion.Add 24,19  'PIA
+            tablaConversion.Add 26,20   'Longitud
+            tablaConversion.Add 28,25   'Tipo instalación (Sup., int., ext...)
+            tablaConversion.Add 42   'Nombre cuadro
+            tablaConversion.Add 43   'Fila
+            tablaConversion.Add 44   'Línea alimentación
 
-    filTabla = WS.ListObjects(1).ListRows.count
+            'Filas y columnas de tabla de resultados
+            primeraFila = 13
+            primeraColumna = 1
+            ultimaColumna = 28
+
+            ultimaFila = WS.Cells(WS.Rows.count, 1).End(xlUp).Row
+        Case "Generado" 'Cuadros a generar
+            tablaConversion.Add 1,1  'Denominación circuito
+            tablaConversion.Add 2,2  'Nombre circuito
+            tablaConversion.Add 4,4  'Nº elemento
+            tablaConversion.Add 5,5  'Tipo
+            tablaConversion.Add 6,6  'Potencia
+            tablaConversion.Add 10,10 'Factor simultaneidad
+            tablaConversion.Add 11,11 'Factor utilidad
+            tablaConversion.Add 13,13 'Monofasica o trifasica
+            tablaConversion.Add 14,14 'Fase
+
+            'Filas y columnas de cuadros a generar
+            primeraFila = 4
+            primeraColumna = 1
+            ultimaColumna = 44
+
+            ultimaFila = WS.Cells(WS.Rows.count, 1).End(xlUp).Row
+        Case Else
+            Exit Sub
+    End Select
+
+    filTabla = ultimaFila - primeraFila + 1
+
+    progreso2 = 1 / (filTabla + 3) 'Progreso secundario por cada fila de tabla exportada
+    Call ActualizarBarra2
+    ufProgressObr.SubProceso.Caption = "Pasando tabla a memoria.."
     
-    Set Rng = WS.ListObjects(1).DataBodyRange 'rango de valores
+    Set Rng = WS.Range(WS.Cells(primeraFila, primeraColumna), WS.Cells(ultimaFila - 1, ultimaColumna))
 
     ' MsgBox rng.Address
     rowArr = Rng.Value
+
+    Call ActualizarBarra2
 
     'Título de página
     Select Case tipP
@@ -192,61 +254,46 @@ Private Sub MeterEnArchivo(ByVal tipP As String, ByVal nomP As String, ByVal col
             Print #fNum, "[Sheet]|" & nomP & "|" & filTabla & "|" & color
     End Select
 
+    'Valores
+    For i = 1 To UBound(rowArr, 1)  'Recorrer filas
+        ufProgressObr.SubProceso.Caption = "Exportando tabla a archivo. Fila: " & i & "/" & filTabla
+        For j = 1 To UBound(rowArr, 2)  'Valores de cada fila uno por uno
+            If IsNumeric(rowArr(i, j)) And rowArr(i, j) <> " " And rowArr(i, j) <> "" Then
+                rowArr(i, j) = Replace(rowArr(i, j), ",", ".")  'Comas a puntos para correcta valoración de decimales
+            End If
 
-                columnasRellenar.Add 7  'Tipo instalación (A1, A2, B, E...)
-                columnasRellenar.Add 16 'Secc elegida
-                columnasRellenar.Add 17 'Aislamiento (RZ1-K, SZ1-K, H07Z1-K...)
-                columnasRellenar.Add 18 'Agrupamiento
-                columnasRellenar.Add 19 'Cable por fase
-                columnasRellenar.Add 20 'Manguera
-                columnasRellenar.Add 21 'Material
-                columnasRellenar.Add 24 'PIA
-                columnasRellenar.Add 26 'Longitud
-                columnasRellenar.Add 28 'Tipo instalación (Sup., int., ext...)
-                columnasRellenar.Add 42 'Nombre cuadro
-                columnasRellenar.Add 43 'Fila
-                columnasRellenar.Add 44 'Línea alimentación
-
-
-
-    Select Case nomP
-        Case "TABLA DE RESULTADOS"
-            'Reordenar columnas para tabla de resultados
+            'Aplicar tabla de conversión
             Dim rowArr2 As Variant
             ReDim rowArr2(1 To UBound(rowArr, 1), 1 To UBound(rowArr, 2))
 
-            For i = 1 To UBound(rowArr, 1)
-                For j = 1 To UBound(rowArr, 2)
-                    rowArr2(i, j) = rowArr(i, columnasRellenar(j))
-                Next j
-            Next i
-
-            rowArr = rowArr2
-        Case Else
-            'Cuadros a generar
-
-    End Select
-
-    'Valores
-    For i = 1 To UBound(rowArr, 1)
-        For j = 1 To UBound(rowArr, 2)
-            If IsNumeric(rowArr(i, j)) And rowArr(i, j) <> " " And rowArr(i, j) <> "" Then
-                rowArr(i, j) = Replace(rowArr(i, j), ",", ".")  'Comas a puntos para correcta valoración de decimales
-                Print #fNum, rowArr(i, j) & "|";
+            If tablaConversion.Exists(j) Then   'Si la columna actual está en la tabla de conversión, poner valor de la columna correspondiente según tabla de conversión
+                For Each key In tablaConversion.Keys
+                    If key = j Then
+                        rowArr2(i, j) = rowArr(i, tablaConversion(key))  'Valor convertido según tabla de conversión
+                        Exit For
+                    End If
+                Next key
             Else
-                Print #fNum, rowArr(i, j) & "|";
+                rowArr2(i, j) = ""  'Valor en blanco, no se necesita para exportación
             End If
+
+            'Escribir valor de fila en archivo
+            Print #fNum, rowArr2(i, j) & "|";
         Next j
         Print #fNum,   'Nueva fila
+        Call ActualizarBarra2
     Next i
 
     Print #fNum, "-----"
+
+    cantCuad = cantCuad - 1
+    Call ReiniciarBarra2
 End Sub
 
 '===============================================================================================================================================
 'Barra de progreso
 '===============================================================================================================================================
-Public Sub ActualizarBarra()
+Private Sub ActualizarBarra()
     'Fracción por cada llamada
     frac = progreso + frac
     'Actualizar barra de progreso
@@ -258,7 +305,7 @@ Public Sub ActualizarBarra()
     veces = veces + 1
 End Sub
 
-Public Sub ActualizarBarra2()
+Private Sub ActualizarBarra2()
     'Fracción por cada llamada
     ' Application.Wait Now + #12:00:01 AM#
     frac2 = progreso2 + frac2
@@ -269,7 +316,7 @@ Public Sub ActualizarBarra2()
     DoEvents
 End Sub
 
-Public Sub ReiniciarBarra2()
+Private Sub ReiniciarBarra2()
     'Reiniciar barra de progreso secundaria
     ' Application.Wait Now + #12:00:01 AM#
     'SubProceso.Caption = ""
@@ -282,12 +329,18 @@ End Sub
 
 
 Private Sub IniciarBarra()
-    'Inicializar barra de progreso
+    'Variables y textos
     frac = 0
-    ufProgress.LabelProgress.Width = 0
-    ufProgress.Caption = "Actualizar documento"
-    ufProgress.LabelCaption.Caption = "Extrayendo ruta de archivo actual.." & vbCrLf & _
-        "Por favor, no abra o seleccione otro documento de Excel o Word."
-    ufProgress.TiempoEstimado.Caption = ""
-    ufProgress.Show
+    frac2 = 0
+    ufProgressObr.TituloObra.Caption = ""
+    ufProgressObr.LabelProgress.Width = 0
+    ufProgressObr.LabelProgress2.Width = 0
+    ufProgressObr.Caption = ""
+    ufProgressObr.Proceso.Caption = ""
+    ufProgressObr.SubProceso.Caption = "Iniciando barra.."
+    ufProgressObr.TiempoEstimado.Caption = ""
+    ufProgressObr.Denbora.Caption = ""
+    ufProgressObr.Show vbModeless
+    'Variable de parada
+    Cerrar = False
 End Sub
