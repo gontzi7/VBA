@@ -103,7 +103,7 @@ Seleccionado1:
     Set ConfiguracionCuadros = New Collection
     'Construir array con datos de configuración de cuadros (nombre cuadro, línea alimentación, item, nombre línea alimentación si es externa, nº circuito)
     For Each key In hojasCuadros.Keys
-        Dim configCuadro(1 To 5) As String  'Array para almacenar datos de configuración de cada cuadro
+        Dim configCuadro(1 To 6) As String  'Array para almacenar datos de configuración de cada cuadro
 
         configCuadro(1) = Hoja.Sheets(key).Range("E1").Value    'Nombre cuadro
         configCuadro(2) = key 'Abreviatura cuadro
@@ -117,15 +117,16 @@ Seleccionado1:
             configCuadro(4) = ""
             configCuadro(5) = ""
         End If
+        configCuadro(6) = ""
 
         ConfiguracionCuadros.Add configCuadro
     Next key
 
     'Generar formato de configuracion cuadros
-    Print #fNum, "[GSheet]|" & "Configuracion_cuadros" & "|" & hojasCuadros.Count & "|" & "2315831"
+    Print #fNum, "[FSheet]|" & "Configuracion_cuadros" & "|" & hojasCuadros.Count & "|" & "2315831"
 
     For i = 1 To ConfiguracionCuadros.Count
-        For j = 1 To 5 'Número de datos de configuración por cuadro
+        For j = 1 To 6 'Número de datos de configuración por cuadro
             Print #fNum, ConfiguracionCuadros(i)(j) & "|";
         Next j
         Print #fNum,   'Nueva fila
@@ -141,6 +142,7 @@ Seleccionado1:
             colorPag = WS.Tab.color
 
             Call MeterEnArchivo(tipoPagina, nombrePagina, colorPag)
+            ufProgressObr.Denbora.Caption = ""
             resltTerm = True
         End If
     Next WS
@@ -155,6 +157,7 @@ Seleccionado1:
             colorPag = WS.Tab.color
 
             Call MeterEnArchivo(tipoPagina, nombrePagina, colorPag)
+            ufProgressObr.Denbora.Caption = ""
         End If
     Next WS
 
@@ -190,19 +193,20 @@ Private Sub MeterEnArchivo(ByVal tipP As String, ByVal nomP As String, ByVal col
     Select Case tipP
         Case "Fijo" 'Resultados
             'Tabla de conversión para tabla de resultados
-            tablaConversion.Add 7, 8     'Tipo instalación (A1, A2, B, E...)
-            tablaConversion.Add 16,13  'Secc elegida
+            tablaConversion.Add 7, 8    'Tipo instalación (A1, A2, B, E...)
+            tablaConversion.Add 16,13   'Secc elegida
             tablaConversion.Add 17,9    'Aislamiento (RZ1-K, SZ1-K, H07Z1-K...)
             tablaConversion.Add 18,10   'Agrupamiento
             tablaConversion.Add 19,11   'Cable por fase
-            tablaConversion.Add 20,12  'Manguera
-            tablaConversion.Add 21,14  'Material
-            tablaConversion.Add 24,19  'PIA
+            tablaConversion.Add 20,12   'Manguera
+            tablaConversion.Add 21,14   'Material
+            tablaConversion.Add 24,19   'PIA
             tablaConversion.Add 26,20   'Longitud
             tablaConversion.Add 28,25   'Tipo instalación (Sup., int., ext...)
-            tablaConversion.Add 42   'Nombre cuadro
-            tablaConversion.Add 43   'Fila
-            tablaConversion.Add 44   'Línea alimentación
+            tablaConversion.Add 42,"E1" 'Nombre cuadro
+            tablaConversion.Add 43,"E2" 'Fila
+            tablaConversion.Add 44,"E3" 'Línea alimentación
+            tablaConversion.Add 51, "F" 'Última columna para importación sin errores
 
             'Filas y columnas de tabla de resultados
             primeraFila = 13
@@ -211,11 +215,11 @@ Private Sub MeterEnArchivo(ByVal tipP As String, ByVal nomP As String, ByVal col
 
             ultimaFila = WS.Cells(WS.Rows.count, 1).End(xlUp).Row
         Case "Generado" 'Cuadros a generar
-            tablaConversion.Add 1,1  'Denominación circuito
-            tablaConversion.Add 2,2  'Nombre circuito
-            tablaConversion.Add 4,4  'Nº elemento
-            tablaConversion.Add 5,5  'Tipo
-            tablaConversion.Add 6,6  'Potencia
+            tablaConversion.Add 1, 1  'Denominación circuito
+            tablaConversion.Add 2, 2  'Nombre circuito
+            tablaConversion.Add 4, 4  'Nº elemento
+            tablaConversion.Add 5, 5  'Tipo
+            tablaConversion.Add 6, 6  'Potencia
             tablaConversion.Add 10,10 'Factor simultaneidad
             tablaConversion.Add 11,11 'Factor utilidad
             tablaConversion.Add 13,13 'Monofasica o trifasica
@@ -224,7 +228,7 @@ Private Sub MeterEnArchivo(ByVal tipP As String, ByVal nomP As String, ByVal col
             'Filas y columnas de cuadros a generar
             primeraFila = 4
             primeraColumna = 1
-            ultimaColumna = 44
+            ultimaColumna = 14
 
             ultimaFila = WS.Cells(WS.Rows.count, 1).End(xlUp).Row
         Case Else
@@ -242,6 +246,11 @@ Private Sub MeterEnArchivo(ByVal tipP As String, ByVal nomP As String, ByVal col
     ' MsgBox rng.Address
     rowArr = Rng.Value
 
+    Dim prim As Boolean
+    Dim fila As Long
+    fila = 4
+    prim = True
+
     Call ActualizarBarra2
 
     'Título de página
@@ -257,19 +266,86 @@ Private Sub MeterEnArchivo(ByVal tipP As String, ByVal nomP As String, ByVal col
     'Valores
     For i = 1 To UBound(rowArr, 1)  'Recorrer filas
         ufProgressObr.SubProceso.Caption = "Exportando tabla a archivo. Fila: " & i & "/" & filTabla
-        For j = 1 To UBound(rowArr, 2)  'Valores de cada fila uno por uno
-            If IsNumeric(rowArr(i, j)) And rowArr(i, j) <> " " And rowArr(i, j) <> "" Then
-                rowArr(i, j) = Replace(rowArr(i, j), ",", ".")  'Comas a puntos para correcta valoración de decimales
+        'Extraer fórmula de columna B para uso en tabla de resultados
+        Dim formula As String
+        Dim hojaForm As Variant, hojaFormAnt As Variant
+        formula = WS.Cells(i + primeraFila - 1, 2).Formula
+    
+        If InStr(formula, "&") > 0 Then 'Para casos en los que la fórmula contiene texto como "Cuadro"..
+            formula = Trim(Mid(formula, InStr(formula, "&") + 1))
+        Else
+            formula = Trim(formula)
+        End If
+
+        Dim partesFormula() As String   'Separar fórmula por "!" para extraer nombre de hoja de cuadro al que hace referencia, que se usará en tabla de resultados para identificar a qué cuadro corresponde cada línea de alimentación
+        partesFormula = Split(formula, "!")
+        If UBound(partesFormula) >= 1 Then
+            hojaForm = Replace(partesFormula(0), "='", "")
+            hojaForm = Replace(hojaForm, "'", "")
+            hojaForm = Replace(hojaForm, "=", "")   'Si queda un signo de igual
+        Else
+            hojaForm = "ini"
+        End If
+
+        hojaFormAnt = IIf(hojaFormAnt = "", hojaForm, hojaFormAnt)  'Inicializar hojaFormAnt en la primera iteración
+
+        'Comprobar si la hoja de cuadro extraída de la fórmula es diferente a la hoja de cuadro de la fila anterior, para actualizar el valor de línea de alimentación en caso de que haya cambiado de cuadro dentro de la misma hoja de resultados
+        If hojaForm <> hojaFormAnt Then
+            fila = 4 'Reiniciar contador de fila de alimentación al cambiar de cuadro
+            prim = True 'Reiniciar variable para dejar en blanco la primera fila de cada nuevo cuadro en la columna de fila de alimentación
+            hojaFormAnt = hojaForm 'Actualizar hoja de cuadro anterior
+            DoEvents
+        End If
+
+        For j = 1 To tablaConversion.Keys()(tablaConversion.Count - 1)  'Valores de cada fila columna por columna
+            'On Error Resume Next    'Cuando j supere el numero de columnas de rowArr, para evitar error de subíndice fuera de rango y seguir exportando el resto de columnas que sí existen
+            If j <= UBound(rowArr, 2) Then
+                If IsNumeric(rowArr(i, j)) And rowArr(i, j) <> " " And rowArr(i, j) <> "" Then
+                    rowArr(i, j) = Replace(rowArr(i, j), ",", ".")  'Comas a puntos para correcta valoración de decimales
+                End If
             End If
 
             'Aplicar tabla de conversión
             Dim rowArr2 As Variant
-            ReDim rowArr2(1 To UBound(rowArr, 1), 1 To UBound(rowArr, 2))
+            ReDim rowArr2(1 To UBound(rowArr, 1), 1 To tablaConversion.Keys()(tablaConversion.Count - 1))
+
+            ufProgressObr.Denbora.Caption = "Cuadro: " & hojaForm & " - Fila alimentación: " & fila
 
             If tablaConversion.Exists(j) Then   'Si la columna actual está en la tabla de conversión, poner valor de la columna correspondiente según tabla de conversión
                 For Each key In tablaConversion.Keys
                     If key = j Then
-                        rowArr2(i, j) = rowArr(i, tablaConversion(key))  'Valor convertido según tabla de conversión
+                        If IsNumeric(tablaConversion(key)) Then 'Or tablaConversion(key) = "" 
+                            rowArr2(i, j) = rowArr(i, tablaConversion(key))  'Valor convertido según tabla de conversión
+                        Else
+                            'No es numérico, conseguir últimas 3 variables para tabla de resultados (nombre cuadro, fila y línea alimentación) según tabla de conversión
+                            Select Case tablaConversion(key)
+                                Case "E1" 'Abreviatura cuadro
+                                        If hojaForm = "ini" Then
+                                            rowArr2(i, j) = "ALIM"
+                                        Else
+                                            rowArr2(i, j) = hojaForm
+                                        End If
+                                Case "E2" 'Fila
+                                    If prim Then
+                                        rowArr2(i, j) = "" 'Dejar en blanco la primera fila de línea de alimentación, que corresponde a los encabezados de la tabla
+                                    Else
+                                        rowArr2(i, j) = fila
+                                        fila = fila + 1
+                                    End If
+                                Case "E3" 'Línea alimentación
+                                    If prim Then
+                                        rowArr2(i, j) = "" 'Dejar en blanco la primera fila de línea de alimentación, que corresponde a los encabezados de la tabla
+                                    Else
+                                        If hojaForm = "ini" Then
+                                            rowArr2(i, j) = "ALIM"
+                                        Else
+                                            rowArr2(i, j) = hojasCuadros(hojaForm)(2) 'Valor del item de línea de alimentación según formulario de selección de cuadros
+                                        End If
+                                    End If
+                                Case "F"
+                                    rowArr2(i, j) = "" 'Columna para importación sin errores, se deja en blanco porque no se necesita exportar ningún valor en esta columna, solo se usa para evitar errores de importación al haber una columna más que en la tabla de resultados original
+                            End Select
+                        End If
                         Exit For
                     End If
                 Next key
@@ -280,6 +356,7 @@ Private Sub MeterEnArchivo(ByVal tipP As String, ByVal nomP As String, ByVal col
             'Escribir valor de fila en archivo
             Print #fNum, rowArr2(i, j) & "|";
         Next j
+        prim = False
         Print #fNum,   'Nueva fila
         Call ActualizarBarra2
     Next i
