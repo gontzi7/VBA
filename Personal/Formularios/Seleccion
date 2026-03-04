@@ -11,7 +11,26 @@ Dim Lista As MSForms.ListBox
 Dim TextoContador As MSForms.Label
 
 Private Sub BuscarAutomatico_Click()
-    MSgBox "En desarrollo", vbInformation, "Función no disponible"
+    MsgBox "En desarrollo", vbInformation, "Función no disponible"
+    vbOut = MsgBox("Rellenar automáticamente las líneas de alimentación de todos los cuadros?", vbYesNoCancel + vbQuestion, "Confirmar operación")
+    Select Case vbOut
+        Case 6  'Si, todos automático
+            Call RellenarAutomatico(True)
+        Case 7  'No, sólo uno automático
+            Call RellenarAutomatico()
+        Case Else   'Cancelar
+    End Select
+End Sub
+
+Private Sub RellenarAutomatico(Optional todos As Boolean = False)
+    MsgBox todos
+    Dim i As Long
+    For i = 0 To ListaCuadros.ListCount - 1
+        If todos Or ListaCuadros.List(i, 1) = "" Then 'Si todos o no tiene propiedades asignadas
+            ListaCuadros.ListIndex = i
+            Call AplicarProp_Click
+        End If
+    Next i
 End Sub
 
 Private Sub ElegirEnHoja_Click()    'Al pulsar botón, dejar a usuario seleccionar celdas que contengan nombre y tag de cuadro, y añadir a diccionario de cuadros provisionales
@@ -313,18 +332,30 @@ Private Sub Aceptar_Click()
         MsgBox "Hay " & NoCmpt.count & " hojas con nombres incompatibles. Se abrirá un formulario para corregirlos", vbExclamation, "Nombres incompatibles"
         ufCorregirInv.Show vbModeless 'Mostrar formulario de corrección de incompatibles modal para forzar a usuario a corregir incompatibles antes de continuar
 
-        Do While Not ContinuarEjecucion And Not salirMacr
+        Do While Not ContinuarEjecucion
             DoEvents
         Loop
-    
+
         If salirMacr Then
             Exit Sub
         End If
-    End If
 
-    ' For Each Nombre In cambios.Keys
-    '     Hoja.Sheets(Nombre).name = cambios(Nombre) 'Renombrar hojas según cambios realizados en formulario de corrección de incompatibles
-    ' Next Nombre
+        Dim Nombre As Variant
+        'Realizar cambios de nombres en hojas
+        For Each Nombre In cambios.Keys
+            MsgBox "Renombrando hoja " & Nombre & " a " & cambios(Nombre)
+            Hoja.Sheets(Nombre).name = cambios(Nombre) 'Renombrar hojas según cambios realizados en formulario de corrección de incompatibles
+            For i = 0 To ListaCuadros.ListCount - 1 'Actualizar nombres en lista de cuadros
+                If ListaCuadros.List(i) = Nombre Then
+                    ListaCuadros.List(i) = cambios(Nombre) 'Actualizar nombre en lista de cuadros
+                End If
+            Next i
+            If cuadrosProv.Exists(Nombre) Then 'Actualizar claves en diccionario de cuadros provisionales
+                cuadrosProv.Add cambios(Nombre), cuadrosProv(Nombre) 'Añadir nuevo nombre con mismo valor que el antiguo
+                cuadrosProv.Remove Nombre 'Eliminar antiguo nombre del diccionario de cuadros provisionales
+            End If
+        Next Nombre
+    End If
 
     'Pasar listas a diccionario público y cerrar
     Call Clasificar("Cuadro", "Diccionario")

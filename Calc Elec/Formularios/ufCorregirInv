@@ -16,7 +16,19 @@ Private Sub Cambiar_Click()
     ListaIncompatibles.RemoveItem ListaIncompatibles.ListIndex
     Call Limpiar_Click
     'Mirar si falta alguno
-    If realizados = NoCmpt.count Then corregidos = True
+    If realizados = NoCmpt.count Then 
+        corregidos = True
+        MsgBox "Todas las incompatibilidades corregidas. Pulsa aceptar para continuar.", vbInformation, "Corregido"
+        Call Salir_Click
+        Exit Sub
+    End If
+    'Seleccionar siguiente
+    If ListaIncompatibles.ListIndex = -1 And ListaIncompatibles.ListCount > 0 Then
+        ListaIncompatibles.ListIndex = 0
+        Nombre.Caption = ListaIncompatibles.List(ListaIncompatibles.ListIndex)
+        Cambio.Enabled = True
+        Cambio.SetFocus
+    End If
 End Sub
 
 Private Sub Comprobar_Click()
@@ -26,25 +38,32 @@ Private Sub Comprobar_Click()
         'Comprobar si es válido
         nombreRango = Cambio.Text
 
-        If Not ExistePagina(nombreRango) Then   'Crear página de prueba para comprobar si el nombre es válido, si no existe
+        Application.ScreenUpdating = False
+
+        If Not ExistePagina(nombreRango, Hoja) Then   'Crear página de prueba para comprobar si el nombre es válido, si no existe
             Set pag = Hoja.Sheets.Add
             pag.Name = nombreRango
         Else
-            MsgBox "El nombre elegido ya existe como página, elige otro", vbCritical, "Error"
+            MsgBox "El nombre elegido ya existe como página, elige otro.", vbCritical, "Error"
             Exit Sub
         End If
 
-        Hoja.Sheets("Busquedas").Range("A1").FormulaR1C1 = "=" & nombreRango & "!A1"
-        If InStr(Hoja.Sheets("Busquedas").Range("A1").FormulaR1C1, "'") > 0 Then    'La formula contiene comillas, por lo que el nombre no es correcto
+        Hoja.Sheets("Busquedas").Range("A1").Formula = "=" & nombreRango & "!A1"
+        If InStr(Hoja.Sheets("Busquedas").Range("A1").Formula, "'") > 0 Then    'La formula contiene comillas, por lo que el nombre no es correcto
             MsgBox "No es válido", vbCritical, "Error"
-            Exit Sub
+            Cambio.Text = ""
+            Cambio.SetFocus
         Else
             'Es válido
             MsgBox "Nombre válido", vbInformation, "Válido"
             Cambiar.Enabled = True
+            Cambiar.SetFocus
         End If
-
+    
+        Application.DisplayAlerts = False
         pag.Delete 'Borrar página de prueba
+        Application.DisplayAlerts = True
+        Application.ScreenUpdating = True
 
         ' On Error Resume Next
         ' 'ThisWorkbook.Sheets("Busquedas").Range("AG1").name = nombreRango
@@ -102,7 +121,7 @@ Private Sub UserForm_Initialize()
     'Marcador
     corregidos = False
     'Cargar lista para poder seleccionar
-    MsgBox NoCmpt.count
+
     For i = 1 To NoCmpt.count
         ListaIncompatibles.AddItem NoCmpt(i)
     Next i
