@@ -4,6 +4,7 @@ Dim i As Long, realizados As Long
 Dim corregidos As Boolean
 Dim OutPut As Integer
 Dim nombreRango As String
+Dim pag As Worksheet
 
 Private Sub Cambiar_Click()
     realizados = realizados + 1
@@ -25,23 +26,43 @@ Private Sub Comprobar_Click()
         'Comprobar si es válido
         nombreRango = Cambio.Text
 
-        On Error Resume Next
-        'ThisWorkbook.Sheets("Busquedas").Range("AG1").name = nombreRango
-        ThisWorkbook.Names.Add name:=nombreRango, RefersTo:=ThisWorkbook.Sheets("Busquedas").Range("AG1")
-        
-        If Err.Number <> 0 Or ExisteRango(nombreRango) Then    'Si da error o existe el nombre
+        If Not ExistePagina(nombreRango) Then   'Crear página de prueba para comprobar si el nombre es válido, si no existe
+            Set pag = Hoja.Sheets.Add
+            pag.Name = nombreRango
+        Else
+            MsgBox "El nombre elegido ya existe como página, elige otro", vbCritical, "Error"
+            Exit Sub
+        End If
+
+        Hoja.Sheets("Busquedas").Range("A1").FormulaR1C1 = "=" & nombreRango & "!A1"
+        If InStr(Hoja.Sheets("Busquedas").Range("A1").FormulaR1C1, "'") > 0 Then    'La formula contiene comillas, por lo que el nombre no es correcto
             MsgBox "No es válido", vbCritical, "Error"
-            Err.Clear
             Exit Sub
         Else
-            'Quitar nombre de prueba
-            ThisWorkbook.Names(nombreRango).Delete
+            'Es válido
+            MsgBox "Nombre válido", vbInformation, "Válido"
+            Cambiar.Enabled = True
         End If
-        On Error GoTo 0 'Restaurar manejo de errores
 
-        'Es válido
-        MsgBox "Nombre válido", vbInformation, "Válido"
-        Cambiar.Enabled = True
+        pag.Delete 'Borrar página de prueba
+
+        ' On Error Resume Next
+        ' 'ThisWorkbook.Sheets("Busquedas").Range("AG1").name = nombreRango
+        ' ThisWorkbook.Names.Add name:=nombreRango, RefersTo:=ThisWorkbook.Sheets("Busquedas").Range("AG1")
+
+        ' If Err.Number <> 0 Or ExisteRango(nombreRango) Then    'Si da error o existe el nombre
+        '     MsgBox "No es válido", vbCritical, "Error"
+        '     Err.Clear
+        '     Exit Sub
+        ' Else
+        '     'Quitar nombre de prueba
+        '     ThisWorkbook.Names(nombreRango).Delete
+        ' End If
+        ' On Error GoTo 0 'Restaurar manejo de errores
+
+        ' 'Es válido
+        ' MsgBox "Nombre válido", vbInformation, "Válido"
+        ' Cambiar.Enabled = True
     End If
 End Sub
 
@@ -81,6 +102,7 @@ Private Sub UserForm_Initialize()
     'Marcador
     corregidos = False
     'Cargar lista para poder seleccionar
+    MsgBox NoCmpt.count
     For i = 1 To NoCmpt.count
         ListaIncompatibles.AddItem NoCmpt(i)
     Next i
@@ -121,4 +143,18 @@ Function ExisteRango(nom As String) As Boolean
 Nocompatible:
     ExisteRango = False
     On Error GoTo 0
+End Function
+
+Function ExistePagina(nombrePag As String, Optional wb As Workbook) As Boolean
+    Dim test As Worksheet
+    If wb Is Nothing Then
+        Set wb = ThisWorkbook 'Usar el libro actual
+    End If
+    On Error GoTo ErrorHandler
+    Set test = wb.Sheets(nombrePag)
+    ExistePagina = True
+    Exit Function
+ErrorHandler:
+    'Ha ocurrido un error al abrir la pagina, no existe
+    ExistePagina = False
 End Function

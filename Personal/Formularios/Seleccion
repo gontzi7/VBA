@@ -213,6 +213,8 @@ Private Sub Clasificar(ByVal Familia As String, Optional Trabajo As String)
                     Case "Cuadro"
                         If Not hojasCuadros.Exists(Lista.List(i)) Then 'Si el cuadro no existe en el diccionario
                             hojasCuadros.Add Lista.List(i), cuadrosProv(Lista.List(i))  'Valor del diccionario de cuadro solicitado
+                            'Formato:
+                            'Nombre hoja de cuadro, Array(identificador línea de alimentación, nombre línae de alimentación, tag línea de alimentación)
                         End If
                     Case "Resultado"
                         hojasResultados.Add Lista.List(i), 0
@@ -281,6 +283,48 @@ Private Sub Aceptar_Click()
                 Exit Sub
         End Select
     End If
+
+    'Comprobar nombres de cuadros y resultados
+    Set NoCmpt = New Collection
+    Set cambios = CreateObject("Scripting.Dictionary")
+
+    'Llenar colección con nombres de hojas
+    For i = 0 To ListaCuadros.ListCount - 1
+        'Comprobar formato correcto de nombres de hojas
+        If InStr(ListaCuadros.List(i), " ") > 0 Then    'El nombre contiene espacios, no es correcto
+            NoCmpt.Add ListaCuadros.List(i)
+        Else
+            Hoja.Sheets("Busquedas").Range("A1").Formula = "=" & ListaCuadros.List(i) & "!A1"
+            DoEvents
+            'MsgBox "Poniendo fórmula: " & Hoja.Sheets("Busquedas").Range("A1").Formula
+            If InStr(Hoja.Sheets("Busquedas").Range("A1").Formula, "'") > 0 Then    'La formula contiene comillas, por lo que el nombre no es correcto
+                NoCmpt.Add ListaCuadros.List(i)
+                'MSgBox ListaCuadros.List(i)
+            End If
+            Hoja.Sheets("Busquedas").Range("A1").Formula = ""
+        End If
+    Next i
+
+    'Limpiar celda de prueba
+    Hoja.Sheets("Busquedas").Range("A1").Formula = ""
+
+    If NoCmpt.count > 0 Then
+        salirMacr = False
+        MsgBox "Hay " & NoCmpt.count & " hojas con nombres incompatibles. Se abrirá un formulario para corregirlos", vbExclamation, "Nombres incompatibles"
+        ufCorregirInv.Show vbModeless 'Mostrar formulario de corrección de incompatibles modal para forzar a usuario a corregir incompatibles antes de continuar
+
+        Do While Not ContinuarEjecucion And Not salirMacr
+            DoEvents
+        Loop
+    
+        If salirMacr Then
+            Exit Sub
+        End If
+    End If
+
+    ' For Each Nombre In cambios.Keys
+    '     Hoja.Sheets(Nombre).name = cambios(Nombre) 'Renombrar hojas según cambios realizados en formulario de corrección de incompatibles
+    ' Next Nombre
 
     'Pasar listas a diccionario público y cerrar
     Call Clasificar("Cuadro", "Diccionario")

@@ -6,8 +6,12 @@ Public Cancelado As Boolean
 Public hojasCuadros As Object 'Diccionario cuadros y líneas de alimentación
 Public hojasResultados As Object 'Diccionario hojas de resultados
 Public hojasIgnorar As Object 'Diccionario hojas a ignorar en selección
+Public Hoja As Workbook
+Public NoCmpt As Collection 'Colección incompatibles
+Public cambios As Object 'Diccionario para guardar cambios realizados en incompatibles (nombre original, nombre corregido)
+Public salirMacr As Boolean 'Variable para controlar salida de macro en caso de cancelar en formulario de corrección de incompatibles
+Public ContinuarEjecucion As Boolean 'Variable para controlar continuación de ejecución después de corregir incompatibles
 
-Dim Hoja As Workbook
 Dim exportPath As String
 Dim WS As Worksheet
 Dim Rng As Range
@@ -214,6 +218,7 @@ Private Sub MeterEnArchivo(ByVal tipP As String, ByVal nomP As String, ByVal col
             ultimaColumna = 28
 
             ultimaFila = WS.Cells(WS.Rows.count, 1).End(xlUp).Row
+            MsgBox "Última fila: " & ultimaFila & " nombre hoja: " & WS.name
         Case "Generado" 'Cuadros a generar
             tablaConversion.Add 1, 1  'Denominación circuito
             tablaConversion.Add 2, 2  'Nombre circuito

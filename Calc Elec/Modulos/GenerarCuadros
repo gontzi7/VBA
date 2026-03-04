@@ -195,7 +195,7 @@ Sub VerificarNombres(Optional autom As String)
 
     Call LimpiarNombresDeCelda(ThisWorkbook.Sheets("Busquedas"), "AG1")
 
-    MsgBox "Verificando. " & UBound(Abreviaturas, 1) & " nombres a comprobar.", vbInformation, "Iniciando verificación de nombres"
+    If DeBugMensajes Then MsgBox "Verificando. " & UBound(Abreviaturas, 1) & " nombres a comprobar.", vbInformation, "Iniciando verificación de nombres"
 
     For i = 1 To UBound(Abreviaturas, 1)
         nombreRango = Abreviaturas(i, 2)
@@ -203,7 +203,7 @@ Sub VerificarNombres(Optional autom As String)
         exst = ExisteRango(nombreRango)
         'Si existe y no hay una página con ese nombre, marcar como no compatible
         If exst And Not ExistePagina(nombreRango) Then
-            MsgBox "No válido"
+            If DeBugMensajes Then MsgBox "No válido"
             NoCmpt.Add nombreRango
             GoTo siguiente
         End If
@@ -219,7 +219,7 @@ Sub VerificarNombres(Optional autom As String)
             ThisWorkbook.Names(nombreRango).Delete
         End If
         On Error GoTo 0 'Restaurar manejo de errores
-siguiente:
+    siguiente:
     Next i
 
     'Si hay nombres no compatibles, pedir corregir
