@@ -12,24 +12,84 @@ Dim TextoContador As MSForms.Label
 
 Private Sub BuscarAutomatico_Click()
     MsgBox "En desarrollo", vbInformation, "Función no disponible"
+
+    If ListaCuadros.ListCount = 0 Then
+        MsgBox "No ha categorizado ningún cuadro, rellene todos los cuadros antes de continuar.", vbInformation, "Error"
+        Exit Sub
+    End If
+
     vbOut = MsgBox("Rellenar automáticamente las líneas de alimentación de todos los cuadros?", vbYesNoCancel + vbQuestion, "Confirmar operación")
     Select Case vbOut
         Case 6  'Si, todos automático
             Call RellenarAutomatico(True)
         Case 7  'No, sólo uno automático
+            If ListaCuadros.ListIndex = -1 Then
+                MsgBox "No ha seleccionado ningún cuadro", vbInformation, "Error"
+                Exit Sub
+            End If
             Call RellenarAutomatico()
         Case Else   'Cancelar
     End Select
 End Sub
 
 Private Sub RellenarAutomatico(Optional todos As Boolean = False)
-    MsgBox todos
-    Dim i As Long
-    For i = 0 To ListaCuadros.ListCount - 1
-        If todos Or ListaCuadros.List(i, 1) = "" Then 'Si todos o no tiene propiedades asignadas
-            ListaCuadros.ListIndex = i
-            Call AplicarProp_Click
+    Dim inicio As Long
+
+    If todos Then
+        inicio = 0
+    Else
+        inicio = ListaCuadros.ListIndex
+    End If
+
+    Dim valores As Range
+    Dim lineasCuadros() As Variant
+    Dim filasAlim() As Variant
+    Dim resultados As Worksheet
+
+    If ListaResultados.ListIndex = -1 Then
+        If ExistePagina("TABLA DE RESULTADOS", Hoja) Then
+            Set resultados = Hoja.Sheets("TABLA DE RESULTADOS")
+        Else
+            MsgBox "Elegir una hoja de resultados primero", vbCritical, "Error"
+            Exit Sub
         End If
+    Else
+        Set resultados = Hoja.Sheets(ListaResultados.List(0))
+    End If
+
+    'Guardar tabla en array para agilizar búsquedas
+    Set valores = resultados.Columns("A:A")
+    lineasCuadros = valores.Formula
+
+    Set valores = resultados.Columns("AF:AF")
+    filasAlim = valores.Value
+
+    For i = inicio To ListaCuadros.ListCount - 1
+        ListaCuadros.ListIndex = i  'Seleccionar cuadro
+
+        'Buscar cuadro en fórmulas de lineas
+        For j = 1 To UBound(lineasCuadros)
+            If InStr(lineasCuadros(j, 1), ListaCuadros.List(i)) > 0 Then
+                'MsgBox "Encontrado cuadro " & ListaCuadros.List(i) & " formula " & lineasCuadros(j, 1) & " fila " & j & " fila alim " & filasAlim(j, 1)
+                'Definir rango de la línea de alimentación
+                Set Rango = resultados.Range("A" & filasAlim(j, 1) & ":B" & filasAlim(j, 1))
+                'MsgBox "Rango definido: " & Rango.Address
+                Exit For
+            End If
+        Next j
+
+        If filasAlim(filasAlim(j, 1), 1) = 9 Then 'Si la línea de alimentación un paso hacia atrás se alimenta de CT (9) marcar como externo
+            AlimExterno.Value = True
+        Else
+            AlimExterno.Value = False
+        End If
+
+        'MsgBox "Externo: " & AlimExterno.Value & " Fila alimentación: " & filasAlim(j, 1)
+
+        NombreLinCuad.Value = Rango.Cells(1, 2).Value 'Nombre del cuadro
+        NombreTagCuad.Value = Rango.Cells(1, 1).Value 'Tag del cuadro
+        Call AplicarProp_Click 'Aplicar propiedades al cuadro
+        If Not todos Then Exit For 'Si no es todos, salir después del primer ciclo
     Next i
 End Sub
 
@@ -41,7 +101,8 @@ Private Sub ElegirEnHoja_Click()    'Al pulsar botón, dejar a usuario seleccion
     Me.Hide
 
     On Error Resume Next
-    Set Rango = Application.InputBox("Seleccione el rango de celdas que contienen el nombre y el tag del cuadro. El primer valor del rango se considerará el tag, y el segundo el nombre", Type:=8)
+    Set Rango = Application.InputBox("Seleccione el rango de celdas que contienen el nombre y el tag del cuadro. El primer valor del rango se considerará el tag," _
+        " y el segundo el nombre", Title:= "Alimentación de " & ListaCuadros.List(ListaCuadros.ListIndex), Type:=8)
 
     Me.Show vbModeless
     If Rango Is Nothing Then
@@ -365,3 +426,17 @@ Private Sub Aceptar_Click()
     Cerrar = True
     Unload Me
 End Sub
+
+Function ExistePagina(nombrePag As String, Optional wb As Workbook) As Boolean
+    Dim test As Worksheet
+    If wb Is Nothing Then
+        Set wb = ThisWorkbook 'Usar el libro actual
+    End If
+    On Error GoTo ErrorHandler
+    Set test = wb.Sheets(nombrePag)
+    ExistePagina = True
+    Exit Function
+ErrorHandler:
+    'Ha ocurrido un error al abrir la pagina, no existe
+    ExistePagina = False
+End Function

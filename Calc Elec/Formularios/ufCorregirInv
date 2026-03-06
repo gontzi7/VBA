@@ -47,7 +47,9 @@ Private Sub Comprobar_Click()
             MsgBox "El nombre elegido ya existe como página, elige otro.", vbCritical, "Error"
             Exit Sub
         End If
-
+        
+        On Error GoTo ErrorHandler
+    
         Hoja.Sheets("Busquedas").Range("A1").Formula = "=" & nombreRango & "!A1"
         If InStr(Hoja.Sheets("Busquedas").Range("A1").Formula, "'") > 0 Then    'La formula contiene comillas, por lo que el nombre no es correcto
             MsgBox "No es válido", vbCritical, "Error"
@@ -83,6 +85,14 @@ Private Sub Comprobar_Click()
         ' MsgBox "Nombre válido", vbInformation, "Válido"
         ' Cambiar.Enabled = True
     End If
+
+    Exit Sub
+ErrorHandler:
+    MsgBox "No es válido", vbCritical, "Error"
+    Application.DisplayAlerts = False
+    pag.Delete 'Borrar página de prueba
+    Application.DisplayAlerts = True
+    Application.ScreenUpdating = True
 End Sub
 
 Private Sub Limpiar_Click()
