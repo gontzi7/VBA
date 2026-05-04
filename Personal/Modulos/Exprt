@@ -15,7 +15,7 @@ Public ContinuarEjecucion As Boolean 'Variable para controlar continuación de e
 Dim exportPath As String
 Dim WS As Worksheet
 Dim Rng As Range
-Dim rowArr As Variant
+Dim rowArr As Variant, formArr As Variant
 Dim i As Long, j As Long, k As Long, cantCuad As Long, colorPag As Long
 Dim fNum As Integer, OutPut As Integer
 Dim filTabla As Long, primeraFila As Long, primeraColumna As Long, ultimaColumna As Long, ultimaFila As Long
@@ -217,14 +217,13 @@ Private Sub MeterEnArchivo(ByVal tipP As String, ByVal nomP As String, ByVal col
             primeraColumna = 1
             ultimaColumna = 28
 
-            ultimaFila = WS.Cells(WS.Rows.count, 1).End(xlUp).Row
-            MsgBox "Última fila: " & ultimaFila & " nombre hoja: " & WS.name
+            ultimaFila = WS.Cells(WS.Rows.count, 1).End(xlUp).Row + 1
         Case "Generado" 'Cuadros a generar
             tablaConversion.Add 1, 1  'Denominación circuito
             tablaConversion.Add 2, 2  'Nombre circuito
             tablaConversion.Add 4, 4  'Nº elemento
             tablaConversion.Add 5, 5  'Tipo
-            tablaConversion.Add 6, 6  'Potencia
+            'tablaConversion.Add 6, 6  'Potencia
             tablaConversion.Add 10,10 'Factor simultaneidad
             tablaConversion.Add 11,11 'Factor utilidad
             tablaConversion.Add 13,13 'Monofasica o trifasica
@@ -247,9 +246,9 @@ Private Sub MeterEnArchivo(ByVal tipP As String, ByVal nomP As String, ByVal col
     ufProgressObr.SubProceso.Caption = "Pasando tabla a memoria.."
     
     Set Rng = WS.Range(WS.Cells(primeraFila, primeraColumna), WS.Cells(ultimaFila - 1, ultimaColumna))
-
-    ' MsgBox rng.Address
     rowArr = Rng.Value
+
+    formArr = Rng.Formula
 
     Dim prim As Boolean
     Dim fila As Long
@@ -271,35 +270,37 @@ Private Sub MeterEnArchivo(ByVal tipP As String, ByVal nomP As String, ByVal col
     'Valores
     For i = 1 To UBound(rowArr, 1)  'Recorrer filas
         ufProgressObr.SubProceso.Caption = "Exportando tabla a archivo. Fila: " & i & "/" & filTabla
-        'Extraer fórmula de columna B para uso en tabla de resultados
-        Dim formula As String
-        Dim hojaForm As Variant, hojaFormAnt As Variant
-        formula = WS.Cells(i + primeraFila - 1, 2).Formula
-    
-        If InStr(formula, "&") > 0 Then 'Para casos en los que la fórmula contiene texto como "Cuadro"..
-            formula = Trim(Mid(formula, InStr(formula, "&") + 1))
-        Else
-            formula = Trim(formula)
-        End If
+        If tipP = "Fijo" Then   'Sólo para resultados
+            'Extraer fórmula de columna B para uso en tabla de resultados
+            Dim formula As String
+            Dim hojaForm As Variant, hojaFormAnt As Variant
+            formula = WS.Cells(i + primeraFila - 1, 2).Formula
 
-        Dim partesFormula() As String   'Separar fórmula por "!" para extraer nombre de hoja de cuadro al que hace referencia, que se usará en tabla de resultados para identificar a qué cuadro corresponde cada línea de alimentación
-        partesFormula = Split(formula, "!")
-        If UBound(partesFormula) >= 1 Then
-            hojaForm = Replace(partesFormula(0), "='", "")
-            hojaForm = Replace(hojaForm, "'", "")
-            hojaForm = Replace(hojaForm, "=", "")   'Si queda un signo de igual
-        Else
-            hojaForm = "ini"
-        End If
+            If InStr(formula, "&") > 0 Then 'Para casos en los que la fórmula contiene texto como "Cuadro"..
+                formula = Trim(Mid(formula, InStr(formula, "&") + 1))
+            Else
+                formula = Trim(formula)
+            End If
 
-        hojaFormAnt = IIf(hojaFormAnt = "", hojaForm, hojaFormAnt)  'Inicializar hojaFormAnt en la primera iteración
+            Dim partesFormula() As String   'Separar fórmula por "!" para extraer nombre de hoja de cuadro al que hace referencia, que se usará en tabla de resultados para identificar a qué cuadro corresponde cada línea de alimentación
+            partesFormula = Split(formula, "!")
+            If UBound(partesFormula) >= 1 Then
+                hojaForm = Replace(partesFormula(0), "='", "")
+                hojaForm = Replace(hojaForm, "'", "")
+                hojaForm = Replace(hojaForm, "=", "")   'Si queda un signo de igual
+            Else
+                hojaForm = "ini"
+            End If
 
-        'Comprobar si la hoja de cuadro extraída de la fórmula es diferente a la hoja de cuadro de la fila anterior, para actualizar el valor de línea de alimentación en caso de que haya cambiado de cuadro dentro de la misma hoja de resultados
-        If hojaForm <> hojaFormAnt Then
-            fila = 4 'Reiniciar contador de fila de alimentación al cambiar de cuadro
-            prim = True 'Reiniciar variable para dejar en blanco la primera fila de cada nuevo cuadro en la columna de fila de alimentación
-            hojaFormAnt = hojaForm 'Actualizar hoja de cuadro anterior
-            DoEvents
+            hojaFormAnt = IIf(hojaFormAnt = "", hojaForm, hojaFormAnt)  'Inicializar hojaFormAnt en la primera iteración
+
+            'Comprobar si la hoja de cuadro extraída de la fórmula es diferente a la hoja de cuadro de la fila anterior, para actualizar el valor de línea de alimentación en caso de que haya cambiado de cuadro dentro de la misma hoja de resultados
+            If hojaForm <> hojaFormAnt Then
+                fila = 4 'Reiniciar contador de fila de alimentación al cambiar de cuadro
+                prim = True 'Reiniciar variable para dejar en blanco la primera fila de cada nuevo cuadro en la columna de fila de alimentación
+                hojaFormAnt = hojaForm 'Actualizar hoja de cuadro anterior
+                DoEvents
+            End If
         End If
 
         For j = 1 To tablaConversion.Keys()(tablaConversion.Count - 1)  'Valores de cada fila columna por columna
@@ -355,7 +356,11 @@ Private Sub MeterEnArchivo(ByVal tipP As String, ByVal nomP As String, ByVal col
                     End If
                 Next key
             Else
-                rowArr2(i, j) = ""  'Valor en blanco, no se necesita para exportación
+                If j <= UBound(formArr, 2) Then
+                    rowArr2(i, j) = formArr(i, j) 'Valor original de la celda sin conversión, para columnas que no están en la tabla de conversión
+                Else
+                    rowArr2(i, j) = ""  'Valor en blanco, no se necesita para exportación
+                End If
             End If
 
             'Escribir valor de fila en archivo

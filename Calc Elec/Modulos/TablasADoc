@@ -282,7 +282,7 @@ Mover:
         Call AbrirDoc
         'Mover tabla
         primeraColumna = 2
-        primeraFila = 10
+        primeraFila = 12
         ultColumna = 13
         Call MoverADoc(WS, primeraColumna, primeraFila, ultColumna, 99)
         'Mensaje confirmaicón

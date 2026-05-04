@@ -705,12 +705,12 @@ Function TotalCodeLinesInVBComponent(VBComp As VBIDE.VBComponent) As Long
     Dim N As Long
     Dim s As String
     Dim LineCount As Long
-    
+
     If VBComp.Collection.Parent.Protection = vbext_pp_locked Then
         TotalCodeLinesInVBComponent = -1
         Exit Function
     End If
-    
+
     With VBComp.CodeModule
         For N = 1 To .CountOfLines
             s = .Lines(N, 1)
@@ -927,3 +927,39 @@ Function RutaRelativa(s As String) As String
         RutaRelativa = "" ' Si no se encuentra \ devolver ""
     End If
 End Function
+
+'===========================================================
+' Autodestrucción de hoja
+'===========================================================
+Private Sub Autodestruir()
+    'Borrar módulo de actualización para evitar errores en futuras actualizaciones
+    Dim VBProj As VBIDE.VBProject
+    Set VBProj = ThisWorkbook.VBProject
+    On Error Resume Next
+    VBProj.VBComponents.Remove VBProj.VBComponents("MotorActualizacion")
+
+    Dim cmd As String
+    cmd = "wscript """ & vbsPath & """ """ & rutaAnterior & """ """ & RutaUsuario & """"
+    'Ejecutar código vbs para gestionar la actualización del archivo
+    'Shell cmd, vbHide
+    Dim oShell As Object
+    Set oShell = CreateObject("Shell.Application")
+    oShell.ShellExecute "cmd.exe", "/c " & cmd, , "runas", 1
+
+    strCommand = "powershell.exe -c Start-Process -Verb RunAs powershell.exe \"" -ExecutionPolicy Unrestricted -NoExit -f `\""$PWD\script.ps1`\"" foo bar \"""
+    Set WshShell = CreateObject("WScript.Shell")
+    Set WshShellExec = WshShell.Exec(strCommand)
+
+    Set oShell = CreateObject("Shell.Application")
+    oShell.ShellExecute "cscript.exe", "//nologo c:temp\run.vbs", , "runas", 1 
+
+    oShell.ShellExecute "cmd.exe", "/k cscript //nologo c:temp\run.vbs", , "runas", 1
+End Sub
+
+Public Sub PS_Admin_Execute(ByVal sPSCmd As String)
+'Setup the powershell command properly
+    sPSCmd = "powershell -command ""Start-Process powershell -Verb runAs " & _
+             "-ArgumentList '-Command " & sPSCmd & "'"""
+    'Execute and capture the returned value
+    CreateObject("WScript.Shell").Run sPSCmd, 0, True
+End Sub

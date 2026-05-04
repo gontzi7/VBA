@@ -245,7 +245,6 @@ Sub VerificarNombres(Optional autom As String)
         Loop
         If salirMacr Then GoTo Terminar
     End If
-    MsgBox "continuado"
     'Si se ha elegido automatico, generar nuevos nombres
     If CorregirAutomatico Then
         Dim nuevoNom As String, contador As Long
@@ -300,6 +299,8 @@ Terminar:
     Application.Calculation = xlCalculationAutomatic
     Application.EnableEvents = True
     Application.DisplayAlerts = True
+    Unload ufProgressObr
+    End
 End Sub
 
 Sub LimpiarNombresDeCelda(WS As Worksheet, targetAddress As String)
