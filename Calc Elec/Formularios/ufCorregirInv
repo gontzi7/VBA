@@ -4,7 +4,6 @@ Dim i As Long, realizados As Long
 Dim corregidos As Boolean
 Dim OutPut As Integer
 Dim nombreRango As String
-Dim Libro As Workbook
 
 Private Sub Cambiar_Click()
     realizados = realizados + 1
@@ -41,7 +40,6 @@ Private Sub Comprobar_Click()
         MsgBox "Escribe un nombre para reemplazar", vbExclamation
     Else
         'Comprobar si es válido
-        Set Libro = ThisWorkbook
         nombreRango = Cambio.Text
 
         Application.ScreenUpdating = False
@@ -110,6 +108,7 @@ Private Sub UserForm_Initialize()
     End With
     'Marcador
     corregidos = False
+    valido.Caption = " "
     'Cargar lista para poder seleccionar
 
     For i = 1 To NoCmpt.count

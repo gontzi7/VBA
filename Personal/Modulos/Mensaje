@@ -1,0 +1,7 @@
+Option Explicit
+
+Sub Remove_VBA_Passwords()
+    If Hook Then
+        MsgBox "Proyecto de VBA desprotegido!", vbInformation, "*****"
+    End If
+End Sub

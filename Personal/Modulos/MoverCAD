@@ -1,0 +1,313 @@
+Option Explicit
+
+Dim exportPath As String
+Dim ws As Worksheet, hojaCAD As Worksheet
+Dim Libro As Workbook
+Dim Rng As Range
+Dim rowArr As Variant, formArr As Variant
+Dim i As Long, j As Long, k As Long, cantCuad As Long, colorPag As Long
+Dim fNum As Integer, OutPut As Integer
+Dim filTabla As Long, primeraFila As Long, primeraColumna As Long, ultimaColumna As Long, ultimaFila As Long
+Dim tipoPagina As String, nombrePagina As String
+Dim infoAPegar As Collection
+Dim DebugMensajes As Boolean, resltTerm As Boolean
+Dim colores As Object
+Dim key As Variant
+'Variables importación
+Dim nombreHoja As String, nombreTabla As String
+Dim filasTabla As Long, colCount As Long
+Dim columnasRellenar As Collection, ConfiguracionCuadros As Collection
+Dim tablaConversion As Object
+
+
+    Dim importPath As Variant
+    Dim textoLinea As String
+    Dim rowValues() As String
+    Dim rowNum As Long
+    Dim colNum As Long
+    
+'Variables barra progreso
+Dim progreso As Double, frac As Double, progreso2 As Double, frac2 As Double, veces As Long
+
+Sub CADPers()
+'    On Error GoTo ErrorHandler  'Reiniciar gestión de errores
+
+    Set Libro = ActiveWorkbook
+    Set hojaCAD = Libro.Sheets("CAD")
+'     'Crear colecciones y diccionarios para pasar datos
+'     Set listaHojas = New Collection
+'     Set hojasCuadros = CreateObject("Scripting.Dictionary")
+'     Set hojasResultados = CreateObject("Scripting.Dictionary")
+'     Set hojasIgnorar = CreateObject("Scripting.Dictionary")
+
+'     'Llenar colección con nombres de hojas
+'     For Each WS In Hoja.Worksheets
+'         listaHojas.Add WS.Name
+'     Next WS
+
+'     'Dejar a usuario elegir hojas de cuadros y resultados con formulario
+'     Cerrar = False
+'     Cancelado = False
+'     Seleccion.Show vbModeless
+
+'     'Esperar a que se cierre formulario
+'     Do While Not Cerrar
+'         DoEvents
+'     Loop
+
+'     If Cancelado Then
+'         Close #fNum
+'         End
+'     End If
+
+'     Call IniciarBarra
+'     ufProgressObr.Caption = "Formateo a CAD"
+'     ufProgressObr.Proceso.Caption = "Iniciando.."
+'     ufProgressObr.SubProceso.Caption = "Abriendo archivo.."
+
+'     cantCuad = hojasCuadros.count + hojasResultados.count
+
+'     progreso = 1 / (cantCuad + 3)
+'     progreso2 = 1
+
+'     'Crear archivo de texto e imprimir datos
+'     fNum = FreeFile
+'     Open exportPath For Output As #fNum
+
+'     Call ActualizarBarra
+
+'     ufProgressObr.Proceso.Caption = "Construyendo información general de cuadros.."
+'     ufProgressObr.SubProceso.Caption = "Haciendo cosas.."
+
+'     Set ConfiguracionCuadros = New Collection
+'     'Construir array con datos de configuración de cuadros (nombre cuadro, línea alimentación, item, nombre línea alimentación si es externa, nº circuito)
+'     For Each key In hojasCuadros.Keys
+'         Dim configCuadro(1 To 6) As String  'Array para almacenar datos de configuración de cada cuadro
+
+'         configCuadro(1) = Hoja.Sheets(key).Range("E1").Value    'Nombre cuadro
+'         configCuadro(2) = key 'Abreviatura cuadro
+    
+'         If hojasCuadros(key)(0) = "EXTERNO ------>" Then
+'             configCuadro(3) = hojasCuadros(key)(0)
+'             configCuadro(4) = hojasCuadros(key)(2) 'Item línea alimentación
+'             configCuadro(5) = hojasCuadros(key)(1) 'Nombre línea alimentación externo
+'         Else
+'             configCuadro(3) = hojasCuadros(key)(2) & " - " & hojasCuadros(key)(1) 'Nombre línea alimentación con formato "item - nombre" si es interno
+'             configCuadro(4) = ""
+'             configCuadro(5) = ""
+'         End If
+'         configCuadro(6) = ""
+
+'         ConfiguracionCuadros.Add configCuadro
+'     Next key
+
+'     'Generar formato de configuracion cuadros
+'     Print #fNum, "[FSheet]|" & "Configuracion_cuadros" & "|" & hojasCuadros.count & "|" & "2315831"
+
+'     For i = 1 To ConfiguracionCuadros.count
+'         For j = 1 To 6 'Número de datos de configuración por cuadro
+'             Print #fNum, ConfiguracionCuadros(i)(j) & "|";
+'         Next j
+'         Print #fNum,   'Nueva fila
+'     Next i
+'     'Fin de configuración cuadros
+'     Print #fNum, "-----"
+
+'     For Each WS In Hoja.Worksheets  'Primero hoja de resultados
+'         If hojasResultados.Exists(WS.Name) And Not resltTerm Then
+'             ufProgressObr.Proceso.Caption = "Procesando hoja: " & WS.Name & " (" & cantCuad & " hojas restantes)"
+'             tipoPagina = "Fijo"
+'             nombrePagina = "TABLA DE RESULTADOS"
+'             colorPag = WS.Tab.color
+
+'             Call MeterEnArchivo(tipoPagina, nombrePagina, colorPag)
+'             ufProgressObr.Denbora.Caption = ""
+'             resltTerm = True
+'         End If
+'     Next WS
+
+'     'Exportar páginas
+'     For Each WS In Hoja.Worksheets
+'         ufProgressObr.Proceso.Caption = "Procesando hoja: " & WS.Name & " (" & cantCuad & " hojas restantes)"
+
+'         If hojasCuadros.Exists(WS.Name) Then
+'             tipoPagina = "Generado"
+'             nombrePagina = WS.Name
+'             colorPag = WS.Tab.color
+
+'             Call MeterEnArchivo(tipoPagina, nombrePagina, colorPag)
+'             ufProgressObr.Denbora.Caption = ""
+'         End If
+'     Next WS
+
+'     ufProgressObr.Proceso.Caption = "Exportación completada."
+'     ufProgressObr.SubProceso.Caption = "Cerrando macro.."
+
+'     Close #fNum
+'     MsgBox "Hoja exportada a archivo: " & exportPath & vbCrLf _
+'         & "Listo para importarse en otra hoja.", vbInformation
+
+'     Unload ufProgressObr
+    ' Dim acadApp As Object
+    ' Set acadApp = GetObject(, "AutoCAD.Application")
+
+    Call CrearDocumentoRangos
+
+    Exit Sub
+ErrorHandler:
+    'Si ocurre algun error ejecutar
+    MsgBox "Ha ocurrido un error al exportar los datos: " & Err.Description, vbExclamation, "Error 1001"
+    'Activar actualización de pantalla
+    Application.ScreenUpdating = True
+    'Activar calculacion automatica
+    Application.Calculation = xlCalculationAutomatic
+    Application.DisplayAlerts = True
+    Application.EnableEvents = True
+    Close #fNum
+    Unload ufProgressObr
+    End
+End Sub
+
+Sub CrearDocumentoRangos()
+    Dim filePath As String
+    Dim fNum As Integer
+    Dim cmd As String
+    Dim f As Integer
+    Dim UltTabla, ultfila As Long
+
+    UltTabla = 0
+
+    ' Path where the script will be saved
+    ' filePath = Libro.Path & Application.PathSeparator & "TABLAS_PROYECTO.txt"
+    filePath = Environ("TEMP") & Application.PathSeparator & "TABLAS_PROYECTO.txt"
+
+    Dim fso As Object
+
+    Set fso = CreateObject("Scripting.FileSystemObject")
+
+    ' If Not fso.FolderExists(Escritorio() & "\Scripts") Then
+    '     fso.CreateFolder (Escritorio() & "\Scripts")
+    ' End If
+
+    fNum = FreeFile
+    
+    Open filePath For Output As #fNum
+    
+    'Loop principal para agregar tablas según configuración
+    ultfila = hojaCAD.Cells(rows.Count, "N").End(xlUp).Row
+    ' MsgBox "Última fila con datos en columna N: " & ultfila
+
+    On Error Resume Next
+
+    For i = 2 To ultfila
+        If hojaCAD.Cells(i, "N").Value <> "" And i > UltTabla + 1 Then
+            'Guardar última posición de tabla
+            UltTabla = i + 12
+            'Conseguir última columna de tabla
+            Dim ultCol As Long
+            ultCol = hojaCAD.Cells(i + 1, Columns.Count).End(xlToLeft).Column
+            Print #fNum, hojaCAD.Cells(i, "N").Value & " : " & vbTab & hojaCAD.Range(hojaCAD.Cells(i + 1, "N"), hojaCAD.Cells(i + 12, ultCol)).Address
+        End If
+    Next i
+    
+    Close #fNum
+
+    MsgBox "Se ha generado el archivo con rutas de tablas para insertar manualmente en CAD." & vbInformation, "Archivo generado"
+    'Shell "explorer.exe " & Escritorio() & "\Scripts", vbNormalFocus
+    Dim returnvalue As Variant
+    returnvalue = Shell("notepad.exe " & filePath, vbNormalFocus)
+
+    End
+
+ErrorHandler:
+    'Si ocurre algun error ejecutar
+    MsgBox "Ha ocurrido un error al exportar los datos: " & Err.Description, vbExclamation, "Error 1001"
+    'Activar actualización de pantalla
+    Application.ScreenUpdating = True
+    'Activar calculacion automatica
+    Application.Calculation = xlCalculationAutomatic
+    Application.DisplayAlerts = True
+    Application.EnableEvents = True
+    Close #fNum
+    Unload ufProgressObr
+    End
+End Sub
+
+Function Escritorio() As String
+'returns the path to Desktop
+    Escritorio = CreateObject("wscript.shell").specialfolders("desktop")
+End Function
+
+Sub CopyToClipboard(ByVal textToCopy As String)
+    Dim dataObj As New MSForms.DataObject
+    dataObj.SetText textToCopy
+    dataObj.PutInClipboard
+End Sub
+
+Function GetRangeRowCount(sheetName As String, rngAddress As String, Optional wb As Workbook) As Long
+
+    If wb Is Nothing Then
+        Set wb = ThisWorkbook 'Usar el libro actual
+    End If
+
+    Dim ws As Worksheet
+    Set ws = wb.Sheets(sheetName)
+    
+    GetRangeRowCount = ws.Range(rngAddress).rows.Count
+
+End Function
+
+'===============================================================================================================================================
+'Barra de progreso
+'===============================================================================================================================================
+Private Sub ActualizarBarra()
+    'Fracción por cada llamada
+    frac = progreso + frac
+    'Actualizar barra de progreso
+    With ufProgressObr
+        .LabelProgress.Width = frac * (.FrameProgress.Width)
+        .Repaint
+    End With
+    DoEvents
+    veces = veces + 1
+End Sub
+
+Private Sub ActualizarBarra2()
+    'Fracción por cada llamada
+    ' Application.Wait Now + #12:00:01 AM#
+    frac2 = progreso2 + frac2
+    'Actualizar barra de progreso secundaria
+    With ufProgressObr
+        .LabelProgress2.Width = frac2 * (.FrameProgress2.Width)
+    End With
+    DoEvents
+End Sub
+
+Private Sub ReiniciarBarra2()
+    'Reiniciar barra de progreso secundaria
+    ' Application.Wait Now + #12:00:01 AM#
+    'SubProceso.Caption = ""
+    ufProgressObr.LabelProgress2.Width = 0
+    frac2 = 0
+    progreso2 = 0
+    'Avanzar la barra de progreso primaria
+    Call ActualizarBarra
+End Sub
+
+
+Private Sub IniciarBarra()
+    'Variables y textos
+    frac = 0
+    frac2 = 0
+    ufProgressObr.TituloObra.Caption = ""
+    ufProgressObr.LabelProgress.Width = 0
+    ufProgressObr.LabelProgress2.Width = 0
+    ufProgressObr.Caption = ""
+    ufProgressObr.Proceso.Caption = ""
+    ufProgressObr.SubProceso.Caption = "Iniciando barra.."
+    ufProgressObr.TiempoEstimado.Caption = ""
+    ufProgressObr.Denbora.Caption = ""
+    ufProgressObr.Show vbModeless
+    'Variable de parada
+    Cerrar = False
+End Sub

@@ -34,7 +34,7 @@ Dim versionPuntos As String
 Public Cerrar As Boolean
 
 'Rutas constantes independiente de usuario
-Private Const RutaServidor As String = "\BOSLAN INGENIERIA Y CONSULTORIA\Instalaciones - Imagenes\98-PROGRAMAS INST\Gontzal proba"
+Private Const RutaServidor As String = "\Accenture\BOS_Instalaciones - Imagenes\98-PROGRAMAS INST\Gontzal proba"
 Private Const RutaBase As String = RutaServidor & "\Proyectos"
 Private Const RutaLogs As String = RutaBase & "\Logs"
 
@@ -55,8 +55,8 @@ Private logsInitialized As Boolean
 ' Procedimiento principal de actualización
 '===========================================================
 Sub Actualizar2()
-    ' DebugMensajes = ThisWorkbook.Sheets("Busquedas").Range("Debug")
-    ' If Not DebugMensajes Then On Error GoTo ErrorHandler
+    DebugMensajes = ThisWorkbook.Sheets("Busquedas").Range("Debug")
+    If Not DebugMensajes Then On Error GoTo ErrorHandler
 
     'Desactivar actulaizaciones de pantalla
     Application.ScreenUpdating = False

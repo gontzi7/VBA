@@ -11,8 +11,6 @@ Dim Lista As MSForms.ListBox
 Dim TextoContador As MSForms.Label
 
 Private Sub BuscarAutomatico_Click()
-    MsgBox "En desarrollo", vbInformation, "Función no disponible"
-
     If ListaCuadros.ListCount = 0 Then
         MsgBox "No ha categorizado ningún cuadro, rellene todos los cuadros antes de continuar.", vbInformation, "Error"
         Exit Sub
@@ -47,14 +45,14 @@ Private Sub RellenarAutomatico(Optional todos As Boolean = False)
     Dim resultados As Worksheet
 
     If ListaResultados.ListIndex = -1 Then
-        If ExistePagina("TABLA DE RESULTADOS", Hoja) Then
-            Set resultados = Hoja.Sheets("TABLA DE RESULTADOS")
+        If ExistePagina("TABLA DE RESULTADOS", Libro) Then
+            Set resultados = Libro.Sheets("TABLA DE RESULTADOS")
         Else
             MsgBox "Elegir una hoja de resultados primero", vbCritical, "Error"
             Exit Sub
         End If
     Else
-        Set resultados = Hoja.Sheets(ListaResultados.List(0))
+        Set resultados = Libro.Sheets(ListaResultados.List(0))
     End If
 
     'Guardar tabla en array para agilizar búsquedas
@@ -93,6 +91,13 @@ Private Sub RellenarAutomatico(Optional todos As Boolean = False)
     Next i
 End Sub
 
+Private Sub CargAj_Click()
+    vbOut = MsgBox("Se cargará la última configuración guardada. Continuar?", vbYesNoCancel + vbQuestion, "Confirmar operación")
+    If vbOut = 6 Then
+
+    
+End Sub
+
 Private Sub ElegirEnHoja_Click()    'Al pulsar botón, dejar a usuario seleccionar celdas que contengan nombre y tag de cuadro, y añadir a diccionario de cuadros provisionales
     If ListaCuadros.ListIndex = -1 Then
         MsgBox "No ha seleccionado ningún cuadro", vbInformation, "Error"
@@ -101,7 +106,7 @@ Private Sub ElegirEnHoja_Click()    'Al pulsar botón, dejar a usuario seleccion
     Me.Hide
 
     On Error Resume Next
-    Set Rango = Application.InputBox("Seleccione el rango de celdas que contienen el nombre y el tag del cuadro. El primer valor del rango se considerará el tag," _
+    Set Rango = Application.InputBox("Seleccione el rango de celdas que contienen el nombre y el tag del cuadro. El primer valor del rango se considerará el tag," & _
         " y el segundo el nombre", Title:= "Alimentación de " & ListaCuadros.List(ListaCuadros.ListIndex), Type:=8)
 
     Me.Show vbModeless
@@ -317,8 +322,11 @@ End Sub
 
 Private Sub Cancelar_Click()
     Cancelado = True
-    Cerrar = True
     Unload Me
+End Sub
+
+Private Sub UserForm_QueryClose(Cancel As Integer, CloseMode As Integer)
+    Cerrar = True
 End Sub
 
 Private Sub Aceptar_Click()
@@ -374,19 +382,19 @@ Private Sub Aceptar_Click()
         If InStr(ListaCuadros.List(i), " ") > 0 Then    'El nombre contiene espacios, no es correcto
             NoCmpt.Add ListaCuadros.List(i)
         Else
-            Hoja.Sheets("Busquedas").Range("A1").Formula = "=" & ListaCuadros.List(i) & "!A1"
+            Libro.Sheets("Busquedas").Range("A1").Formula = "=" & ListaCuadros.List(i) & "!A1"
             DoEvents
-            'MsgBox "Poniendo fórmula: " & Hoja.Sheets("Busquedas").Range("A1").Formula
-            If InStr(Hoja.Sheets("Busquedas").Range("A1").Formula, "'") > 0 Then    'La formula contiene comillas, por lo que el nombre no es correcto
+            'MsgBox "Poniendo fórmula: " & Libro.Sheets("Busquedas").Range("A1").Formula
+            If InStr(Libro.Sheets("Busquedas").Range("A1").Formula, "'") > 0 Then    'La formula contiene comillas, por lo que el nombre no es correcto
                 NoCmpt.Add ListaCuadros.List(i)
                 'MSgBox ListaCuadros.List(i)
             End If
-            Hoja.Sheets("Busquedas").Range("A1").Formula = ""
+            Libro.Sheets("Busquedas").Range("A1").Formula = ""
         End If
     Next i
 
     'Limpiar celda de prueba
-    Hoja.Sheets("Busquedas").Range("A1").Formula = ""
+    Libro.Sheets("Busquedas").Range("A1").Formula = ""
 
     If NoCmpt.count > 0 Then
         salirMacr = False
@@ -404,8 +412,8 @@ Private Sub Aceptar_Click()
         Dim Nombre As Variant
         'Realizar cambios de nombres en hojas
         For Each Nombre In cambios.Keys
-            MsgBox "Renombrando hoja " & Nombre & " a " & cambios(Nombre)
-            Hoja.Sheets(Nombre).name = cambios(Nombre) 'Renombrar hojas según cambios realizados en formulario de corrección de incompatibles
+            ' MsgBox "Renombrando hoja " & Nombre & " a " & cambios(Nombre)
+            Libro.Sheets(Nombre).name = cambios(Nombre) 'Renombrar hojas según cambios realizados en formulario de corrección de incompatibles
             For i = 0 To ListaCuadros.ListCount - 1 'Actualizar nombres en lista de cuadros
                 If ListaCuadros.List(i) = Nombre Then
                     ListaCuadros.List(i) = cambios(Nombre) 'Actualizar nombre en lista de cuadros
@@ -423,7 +431,7 @@ Private Sub Aceptar_Click()
     Call Clasificar("Resultado", "Diccionario")
     Call Clasificar("Ignorar", "Diccionario")
 
-    Cerrar = True
+    Cancelado = False
     Unload Me
 End Sub
 

@@ -6,7 +6,7 @@ Public Cancelado As Boolean
 Public hojasCuadros As Object 'Diccionario cuadros y líneas de alimentación
 Public hojasResultados As Object 'Diccionario hojas de resultados
 Public hojasIgnorar As Object 'Diccionario hojas a ignorar en selección
-Public Hoja As Workbook
+Public Libro As Workbook
 Public NoCmpt As Collection 'Colección incompatibles
 Public cambios As Object 'Diccionario para guardar cambios realizados en incompatibles (nombre original, nombre corregido)
 Public salirMacr As Boolean 'Variable para controlar salida de macro en caso de cancelar en formulario de corrección de incompatibles
@@ -36,14 +36,15 @@ Dim tablaConversion As Object
     Dim rowValues() As String
     Dim rowNum As Long
     Dim colNum As Long
-    
+
 'Variables barra progreso
 Dim progreso As Double, frac As Double, progreso2 As Double, frac2 As Double, veces As Long
 
-Sub Exportar()
+Sub ExportarPers()
     On Error GoTo ErrorHandler
 
-    Set Hoja = ActiveWorkbook
+    Set Libro = ActiveWorkbook
+    resltTerm = False
 
     'Pedir usuario ruta de guardado de archivo
     exportPath = Application.GetSaveAsFilename( _
@@ -54,7 +55,7 @@ Sub Exportar()
     On Error GoTo Seleccionado1
     If exportPath = False Then
         MsgBox "Exportación cancelada.", vbExclamation
-        Exit Sub
+        End
     End If
 Seleccionado1:
     On Error GoTo ErrorHandler  'Reiniciar gestión de errores
@@ -66,8 +67,8 @@ Seleccionado1:
     Set hojasIgnorar = CreateObject("Scripting.Dictionary")
 
     'Llenar colección con nombres de hojas
-    For Each WS In Hoja.Worksheets
-        listaHojas.Add WS.name
+    For Each WS In Libro.Worksheets
+        listaHojas.Add WS.Name
     Next WS
 
     'Dejar a usuario elegir hojas de cuadros y resultados con formulario
@@ -82,7 +83,7 @@ Seleccionado1:
 
     If Cancelado Then
         Close #fNum
-        Exit Sub
+        End
     End If
 
     Call IniciarBarra
@@ -90,7 +91,7 @@ Seleccionado1:
     ufProgressObr.Proceso.Caption = "Iniciando.."
     ufProgressObr.SubProceso.Caption = "Abriendo archivo.."
 
-    cantCuad = hojasCuadros.Count + hojasResultados.Count
+    cantCuad = hojasCuadros.count + hojasResultados.count
 
     progreso = 1 / (cantCuad + 3)
     progreso2 = 1
@@ -109,7 +110,7 @@ Seleccionado1:
     For Each key In hojasCuadros.Keys
         Dim configCuadro(1 To 6) As String  'Array para almacenar datos de configuración de cada cuadro
 
-        configCuadro(1) = Hoja.Sheets(key).Range("E1").Value    'Nombre cuadro
+        configCuadro(1) = Libro.Sheets(key).Range("E1").Value    'Nombre cuadro
         configCuadro(2) = key 'Abreviatura cuadro
     
         If hojasCuadros(key)(0) = "EXTERNO ------>" Then
@@ -127,9 +128,9 @@ Seleccionado1:
     Next key
 
     'Generar formato de configuracion cuadros
-    Print #fNum, "[FSheet]|" & "Configuracion_cuadros" & "|" & hojasCuadros.Count & "|" & "2315831"
+    Print #fNum, "[FSheet]|" & "Configuracion_cuadros" & "|" & hojasCuadros.count & "|" & "2315831"
 
-    For i = 1 To ConfiguracionCuadros.Count
+    For i = 1 To ConfiguracionCuadros.count
         For j = 1 To 6 'Número de datos de configuración por cuadro
             Print #fNum, ConfiguracionCuadros(i)(j) & "|";
         Next j
@@ -138,9 +139,9 @@ Seleccionado1:
     'Fin de configuración cuadros
     Print #fNum, "-----"
 
-    For Each WS In Hoja.Worksheets  'Primero hoja de resultados
-        If hojasResultados.Exists(WS.name) And Not resltTerm Then
-            ufProgressObr.Proceso.Caption = "Procesando hoja: " & WS.name & " (" & cantCuad & " hojas restantes)"
+    For Each WS In Libro.Worksheets  'Primero hoja de resultados
+        If hojasResultados.Exists(WS.Name) And Not resltTerm Then
+            ufProgressObr.Proceso.Caption = "Procesando hoja: " & WS.Name & " (" & cantCuad & " hojas restantes)"
             tipoPagina = "Fijo"
             nombrePagina = "TABLA DE RESULTADOS"
             colorPag = WS.Tab.color
@@ -152,12 +153,12 @@ Seleccionado1:
     Next WS
 
     'Exportar páginas
-    For Each WS In Hoja.Worksheets    
-        ufProgressObr.Proceso.Caption = "Procesando hoja: " & WS.name & " (" & cantCuad & " hojas restantes)"
+    For Each WS In Libro.Worksheets
+        ufProgressObr.Proceso.Caption = "Procesando hoja: " & WS.Name & " (" & cantCuad & " hojas restantes)"
 
-        If hojasCuadros.Exists(WS.name) Then
+        If hojasCuadros.Exists(WS.Name) Then
             tipoPagina = "Generado"
-            nombrePagina = WS.name
+            nombrePagina = WS.Name
             colorPag = WS.Tab.color
 
             Call MeterEnArchivo(tipoPagina, nombrePagina, colorPag)
@@ -192,24 +193,24 @@ Private Sub MeterEnArchivo(ByVal tipP As String, ByVal nomP As String, ByVal col
     ufProgressObr.SubProceso.Caption = "Cargando parámetros de hoja.."
     'Diccionario
     Set tablaConversion = CreateObject("Scripting.Dictionary")
-    Set WS = Hoja.Worksheets(nomP)
+    Set WS = Libro.Worksheets(nomP)
     'Tablas conversión y variables por hoja
     Select Case tipP
         Case "Fijo" 'Resultados
             'Tabla de conversión para tabla de resultados
             tablaConversion.Add 7, 8    'Tipo instalación (A1, A2, B, E...)
-            tablaConversion.Add 16,13   'Secc elegida
-            tablaConversion.Add 17,9    'Aislamiento (RZ1-K, SZ1-K, H07Z1-K...)
-            tablaConversion.Add 18,10   'Agrupamiento
-            tablaConversion.Add 19,11   'Cable por fase
-            tablaConversion.Add 20,12   'Manguera
-            tablaConversion.Add 21,14   'Material
-            tablaConversion.Add 24,19   'PIA
-            tablaConversion.Add 26,20   'Longitud
-            tablaConversion.Add 28,25   'Tipo instalación (Sup., int., ext...)
-            tablaConversion.Add 42,"E1" 'Nombre cuadro
-            tablaConversion.Add 43,"E2" 'Fila
-            tablaConversion.Add 44,"E3" 'Línea alimentación
+            tablaConversion.Add 16, 13  'Secc elegida
+            tablaConversion.Add 17, 9   'Aislamiento (RZ1-K, SZ1-K, H07Z1-K...)
+            tablaConversion.Add 18, 10  'Agrupamiento
+            tablaConversion.Add 19, 11  'Cable por fase
+            tablaConversion.Add 20, 12  'Manguera
+            tablaConversion.Add 21, 14  'Material
+            tablaConversion.Add 24, 19  'PIA
+            tablaConversion.Add 26, 20  'Longitud
+            tablaConversion.Add 28, 25  'Tipo instalación (Sup., int., ext...)
+            tablaConversion.Add 42, "E1" 'Nombre cuadro
+            tablaConversion.Add 43, "E2" 'Fila
+            tablaConversion.Add 44, "E3" 'Línea alimentación
             tablaConversion.Add 51, "F" 'Última columna para importación sin errores
 
             'Filas y columnas de tabla de resultados
@@ -224,10 +225,10 @@ Private Sub MeterEnArchivo(ByVal tipP As String, ByVal nomP As String, ByVal col
             tablaConversion.Add 4, 4  'Nº elemento
             tablaConversion.Add 5, 5  'Tipo
             'tablaConversion.Add 6, 6  'Potencia
-            tablaConversion.Add 10,10 'Factor simultaneidad
-            tablaConversion.Add 11,11 'Factor utilidad
-            tablaConversion.Add 13,13 'Monofasica o trifasica
-            tablaConversion.Add 14,14 'Fase
+            tablaConversion.Add 10, 10 'Factor simultaneidad
+            tablaConversion.Add 11, 11 'Factor utilidad
+            tablaConversion.Add 13, 13 'Monofasica o trifasica
+            tablaConversion.Add 14, 14 'Fase
 
             'Filas y columnas de cuadros a generar
             primeraFila = 4
@@ -248,7 +249,7 @@ Private Sub MeterEnArchivo(ByVal tipP As String, ByVal nomP As String, ByVal col
     Set Rng = WS.Range(WS.Cells(primeraFila, primeraColumna), WS.Cells(ultimaFila - 1, ultimaColumna))
     rowArr = Rng.Value
 
-    formArr = Rng.Formula
+    formArr = Rng.formula
 
     Dim prim As Boolean
     Dim fila As Long
@@ -274,9 +275,10 @@ Private Sub MeterEnArchivo(ByVal tipP As String, ByVal nomP As String, ByVal col
             'Extraer fórmula de columna B para uso en tabla de resultados
             Dim formula As String
             Dim hojaForm As Variant, hojaFormAnt As Variant
-            formula = WS.Cells(i + primeraFila - 1, 2).Formula
+            formula = WS.Cells(i + primeraFila - 1, 2).formula
+            'MsgBox formula
 
-            If InStr(formula, "&") > 0 Then 'Para casos en los que la fórmula contiene texto como "Cuadro"..
+            If InStr(formula, "&") > 0 Then 'Para casos en los que la fórmula contiene texto como '"Cuadro" & Hoja!E1'
                 formula = Trim(Mid(formula, InStr(formula, "&") + 1))
             Else
                 formula = Trim(formula)
@@ -288,6 +290,8 @@ Private Sub MeterEnArchivo(ByVal tipP As String, ByVal nomP As String, ByVal col
                 hojaForm = Replace(partesFormula(0), "='", "")
                 hojaForm = Replace(hojaForm, "'", "")
                 hojaForm = Replace(hojaForm, "=", "")   'Si queda un signo de igual
+            ElseIf formula = "" Then   'En casos de que no haya nada escrito en la celda a mirar, marcar como vacía.
+                hojaForm = ""
             Else
                 hojaForm = "ini"
             End If
@@ -303,7 +307,7 @@ Private Sub MeterEnArchivo(ByVal tipP As String, ByVal nomP As String, ByVal col
             End If
         End If
 
-        For j = 1 To tablaConversion.Keys()(tablaConversion.Count - 1)  'Valores de cada fila columna por columna
+        For j = 1 To tablaConversion.Keys()(tablaConversion.count - 1)  'Valores de cada fila columna por columna
             'On Error Resume Next    'Cuando j supere el numero de columnas de rowArr, para evitar error de subíndice fuera de rango y seguir exportando el resto de columnas que sí existen
             If j <= UBound(rowArr, 2) Then
                 If IsNumeric(rowArr(i, j)) And rowArr(i, j) <> " " And rowArr(i, j) <> "" Then
@@ -313,14 +317,14 @@ Private Sub MeterEnArchivo(ByVal tipP As String, ByVal nomP As String, ByVal col
 
             'Aplicar tabla de conversión
             Dim rowArr2 As Variant
-            ReDim rowArr2(1 To UBound(rowArr, 1), 1 To tablaConversion.Keys()(tablaConversion.Count - 1))
+            ReDim rowArr2(1 To UBound(rowArr, 1), 1 To tablaConversion.Keys()(tablaConversion.count - 1))
 
             ufProgressObr.Denbora.Caption = "Cuadro: " & hojaForm & " - Fila alimentación: " & fila
 
             If tablaConversion.Exists(j) Then   'Si la columna actual está en la tabla de conversión, poner valor de la columna correspondiente según tabla de conversión
                 For Each key In tablaConversion.Keys
                     If key = j Then
-                        If IsNumeric(tablaConversion(key)) Then 'Or tablaConversion(key) = "" 
+                        If IsNumeric(tablaConversion(key)) Then 'Or tablaConversion(key) = ""
                             rowArr2(i, j) = rowArr(i, tablaConversion(key))  'Valor convertido según tabla de conversión
                         Else
                             'No es numérico, conseguir últimas 3 variables para tabla de resultados (nombre cuadro, fila y línea alimentación) según tabla de conversión
@@ -328,6 +332,8 @@ Private Sub MeterEnArchivo(ByVal tipP As String, ByVal nomP As String, ByVal col
                                 Case "E1" 'Abreviatura cuadro
                                         If hojaForm = "ini" Then
                                             rowArr2(i, j) = "ALIM"
+                                        ElseIf hojaForm = "" Then
+                                            rowArr2(i, j) = ""
                                         Else
                                             rowArr2(i, j) = hojaForm
                                         End If
@@ -344,6 +350,8 @@ Private Sub MeterEnArchivo(ByVal tipP As String, ByVal nomP As String, ByVal col
                                     Else
                                         If hojaForm = "ini" Then
                                             rowArr2(i, j) = "ALIM"
+                                        ElseIf hojaForm = "" Then
+                                            rowArr2(i, j) = ""
                                         Else
                                             rowArr2(i, j) = hojasCuadros(hojaForm)(2) 'Valor del item de línea de alimentación según formulario de selección de cuadros
                                         End If
@@ -368,6 +376,7 @@ Private Sub MeterEnArchivo(ByVal tipP As String, ByVal nomP As String, ByVal col
         Next j
         prim = False
         Print #fNum,   'Nueva fila
+        SiguienteFila:
         Call ActualizarBarra2
     Next i
 
