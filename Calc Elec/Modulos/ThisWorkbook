@@ -21,6 +21,9 @@ Dim contrasenaPaginas As String
 Dim actualizado As Boolean, errorConexion As Boolean
 Dim FechaVersion As String
 
+'Definición global de libro
+Public Libro As Workbook
+
 Function RutaRelativa(s As String) As String
     Dim pos As Long, pos2 As Long
     pos = InStr(s, "\") ' Encontrar primera instancia de \
@@ -34,8 +37,9 @@ Function RutaRelativa(s As String) As String
 End Function
 
 Private Sub Workbook_Open()
+    Set Libro = ThisWorkbook
     On Error Resume Next
-    If ThisWorkbook.Sheets("Busquedas").Range("SERVIDOR") Then Exit Sub 'Ignorar si es versión servidor
+    If Libro.Sheets("Busquedas").Range("SERVIDOR") Then Exit Sub 'Ignorar si es versión servidor
 
     'Activar actualizaciones de pantalla
     Application.ScreenUpdating = True
@@ -49,9 +53,9 @@ Private Sub Workbook_Open()
     ufProgress.Show
     'Cuantas veces se llama a actualizar barra
     progreso = 1 / 3
-    Set principal = ThisWorkbook.Sheets("Configuracion_cuadros")
+    Set principal = Libro.Sheets("Configuracion_cuadros")
     'Variable DebugMensajes
-    DebugMensajes = ThisWorkbook.Sheets("Busquedas").Range("Debug")
+    DebugMensajes = Libro.Sheets("Busquedas").Range("Debug")
     Call ActBarra
     'Llamar a servidor y conseguir versión actualizada
     ufProgress.LabelCaption.Caption = "Estableciendo conexión con servidor.." & vbCrLf & _
@@ -177,7 +181,7 @@ End Sub
 
 'Versión vieja de actualizador
 ' Sub Actualizar()
-'     Set wb = ThisWorkbook
+'     Set wb = Libro
 '     'Ver si hay cambios sin guardar en el libro, si hay preguntar si se quieren guardar para actualizar
 '     vbOut = MsgBox("Al actualizar el libro se reiniciará y se borrará toda la información escrita, actualizar?", vbYesNo + vbExclamation, "Confirmar actualización")
 '     If vbOut = 7 Then
@@ -187,7 +191,7 @@ End Sub
 '     'Ruta a código de actualización
 '     vbsPath = RutaUsuario & RutaBase & "\CuadrosBT(Pr2)\ActualizarPr2.vbs"
 '     'Variable DebugMensajes
-'     DebugMensajes = ThisWorkbook.Sheets("Busquedas").Range("Debug")
+'     DebugMensajes = Libro.Sheets("Busquedas").Range("Debug")
 '     'Variables para barra de progreso
 '     frac = 0
 ' Reintentar1:
@@ -222,7 +226,7 @@ End Sub
 '         'Cuantas veces se llama a actualizar barra
 '         progreso = 1 / 3
 '         'Conseguir ruta de archivo actual
-'         rutaArchivo = ThisWorkbook.path
+'         rutaArchivo = Libro.path
 '         If DebugMensajes Then
 '             MsgBox "Ruta de archivo actual: " & rutaArchivo
 '         End If
@@ -230,7 +234,7 @@ End Sub
 '         'Conseguir nombre de archivo actual para borrar al finalizar
 '         ufProgress.LabelCaption.Caption = "Extrayendo nombre de archivo.." & vbCrLf & _
 '         "Por favor, no abra o seleccione otro documento de Excel o Word."
-'         nombreArchivo = ThisWorkbook.name
+'         nombreArchivo = Libro.name
 '         If DebugMensajes Then
 '             MsgBox "Nombre de archivo actual: " & nombreArchivo
 '         End If
@@ -238,7 +242,7 @@ End Sub
 '         'Copiar el archivo actualizado a la misma ruta del antiguo
 '         ufProgress.LabelCaption.Caption = "Copiando archivo actualizado.." & vbCrLf & _
 '         "Por favor, no abra o seleccione otro documento de Excel o Word."
-'         rutaAnterior = ThisWorkbook.FullName
+'         rutaAnterior = Libro.FullName
 '         Call ActBarra
 '         'Descargar barra
 '         Unload ufProgress
@@ -312,7 +316,7 @@ End Sub
 
 Function VersionCodigo() As String
     Dim VBProj As Object
-    Set VBProj = ThisWorkbook.VBProject
+    Set VBProj = Libro.VBProject
 
     'Acceder al modulo del excel
     Dim vbMod As Object
@@ -399,7 +403,7 @@ End Sub
 '             End If
 '     End Select
 
-' ThisWorkbook.VBProject.References.AddFromGuid _
+' Libro.VBProject.References.AddFromGuid _
 '     GUID:="{0002E157-0000-0000-C000-000000000046}", _
 '     Major:=5, Minor:=3
 
