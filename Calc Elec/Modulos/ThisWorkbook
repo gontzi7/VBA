@@ -1,7 +1,7 @@
 'Version: 1.02
 Option Explicit
 
-Dim RutaLicencia As String, RutaBase As String, RutaUsuario As String
+Dim RutaLicencia As String, RutaUsuario As String
 Dim principal As Worksheet
 Dim Proyecto As Long
 Dim VersionActual As String
@@ -20,6 +20,24 @@ Dim contrasenaPaginas As String
 
 Dim actualizado As Boolean, errorConexion As Boolean
 Dim FechaVersion As String
+
+'Rutas constantes independiente de usuario
+Private Const RutaServidor As String = "\Accenture\BOS_Instalaciones - Imagenes\98-PROGRAMAS INST\Gontzal proba"
+Private Const RutaBase As String = RutaServidor & "\Proyectos"
+Private Const RutaLogs As String = RutaBase & "\Logs"
+
+Private Const RutaExcel As String = "\CuadrosBT(Pr2)\CAL ELEC(mas actualizado).xlsm"
+Private Const Proyecto As Long = 2
+
+'Variables para logging
+Private Const PERMANENT_LOG As String = "RegistroPr" & Proyecto & ".log"
+
+Private tempLogPath As String
+Private permanentLogPath As String
+
+Private permanentFileHandle As Integer
+Private tempFileHandle As Integer
+Private logsInitialized As Boolean
 
 'Definición global de libro
 Public Libro As Workbook
@@ -63,9 +81,10 @@ Private Sub Workbook_Open()
     'Comprobar si hay actualizaciones
     'RutaUsuario = "C:\Users\gontzal.santa.cruz"
     RutaUsuario = Environ("UserProfile")
-    RutaBase = "\BOSLAN INGENIERIA Y CONSULTORIA\Instalaciones - Imagenes\98-PROGRAMAS INST\Gontzal proba\Proyectos"
+
     Call ComprobarActualizacion
     Call ActBarra
+
     'Aviso según resultado
     ufProgress.LabelCaption.Caption = "Finalizando inicialización.." & vbCrLf & _
     "Por favor, no abra o seleccione otro documento de Excel o Word."
@@ -82,6 +101,10 @@ Private Sub Workbook_Open()
     End If
     'Actualizar versión de programa
     principal.Range("Version").Value = versionPuntos
+
+    LogWrite "Archivo abierto sin errores"
+    CloseLogs success:=True
+
     Call ActBarra
     'Descargar barra
     Unload ufProgress
@@ -90,6 +113,8 @@ Exit Sub
 ErrorHandler:
     'Si ocurre algun error ejecutar
     MsgBox "Se ha producido un error a la hora de abrir el excel: " & Err.Description, vbOKOnly + vbExclamation, "Error 100"
+    LogWrite "Inicialización fallida."
+    CloseLogs success:=False
     Application.ScreenUpdating = True
     'Descargar barra
     Unload ufProgress
@@ -104,10 +129,9 @@ Public Sub ComprobarActualizacion(Optional modo As String)
     VersionActual = VersionCodigo()
     'Valores de ruta por defecto
     RutaUsuario = Environ("UserProfile")
-    RutaBase = "\BOSLAN INGENIERIA Y CONSULTORIA\Instalaciones - Imagenes\98-PROGRAMAS INST\Gontzal proba\Proyectos"
+
     'Conseguir última versión de programa
     RutaLicencia = RutaUsuario & RutaBase & "\Licencias.txt"
-    Proyecto = 2
     'Comprobar que archivo existe
     If Not fso.FileExists(RutaLicencia) Then
         'No existe
@@ -153,6 +177,11 @@ Reintentar:
         Set fso = Nothing
         Exit Sub
     End If
+
+    'Empezar logging
+    Call EmpezarLog
+    LogWriteTemp "Conexión establecida con servidor, comprobando versión de programa."
+
     errorConexion = False
     'Limpiar objetos
     Set fso = Nothing
@@ -170,6 +199,8 @@ Exit Sub
 ErrorHandler:
     'Si ocurre algun error ejecutar
     MsgBox "Se ha producido un error a la hora de actualizar el excel: " & Err.Description, vbOKOnly + vbExclamation, "Error 102"
+    LogWrite "Inicialización fallida."
+    CloseLogs success:=False
     Set fso = Nothing
     Application.ScreenUpdating = True
     'Proteger
@@ -279,6 +310,9 @@ Sub ObtenerVersionActualizada(ruta As String, NumProyecto As Long)
     'Abrir archivo de licencia
     fileNum = FreeFile
     Open ruta For Input As #fileNum
+
+    LogWriteTemp "Escaneando archivo de licencia por proyecto afectado: " & NumProyecto
+
     'Escanear archivo de licencia por el proyecto afectado
     lineCounter = 0
     Do While Not EOF(fileNum)
@@ -299,11 +333,15 @@ Sub ObtenerVersionActualizada(ruta As String, NumProyecto As Long)
                 Else
                     FechaVersion = "No hay fecha de versión"
                 End If
+            
+                LogWriteTemp "Versión encontrada: " & NumVersion & ", Fecha de versión: " & FechaVersion
+
                 If DebugMensajes Then
                     MsgBox "Fecha de la versión: " & FechaVersion & vbCrLf & _
                         "Número de versión: " & NumVersion
                 End If
             Else
+                LogWriteTemp "No se ha encontrado número de licencia o se ha modificado el archivo."
                 MsgBox "No se ha encontrado número de licencia o se ha modificado el archivo." & NumProyecto, vbCritical
                 Exit Sub
             End If
@@ -377,6 +415,69 @@ Sub CopyToClipboard(ByVal textToCopy As String)
     dataObj.SetText textToCopy
     dataObj.PutInClipboard
 End Sub
+
+'===========================================================
+' Código de logging
+'===========================================================
+Sub EmpezarLog()
+    Dim mensaje As String
+
+    If logsInitialized Then Exit Sub
+
+    RutaLogsUsuario = RutaUsuario & RutaLogs
+    If Dir(RutaLogsUsuario, vbDirectory) = "" Then MkDir RutaLogsUsuario 'Crear carpeta de logs si no existe
+    permanentLogPath = RutaLogsUsuario & "\" & PERMANENT_LOG
+    'Crear rutas de logs temporales
+    tempLogPath = RutaLogsUsuario & "\TempLog_Pr" & Proyecto & "_" & Format(Now, "yyyy.mm.dd_hh.nn.ss") & ".txt"
+    'Abrir log permanente en modo append
+    permanentFileHandle = FreeFile
+    Open permanentLogPath For Append As #permanentFileHandle
+    'Crear y abrir log temporal en modo output
+    tempFileHandle = FreeFile
+    Open tempLogPath For Output As #tempFileHandle
+    logsInitialized = True
+
+    Print #permanentFileHandle, "===" & Format(Now, "YYYY/MM/DD hh:nn:ss") & " - Abierto archivo ===" 'Encabezado log permanente
+    LogWrite "Usuario: " & Environ("Username")
+    LogWrite "Ruta: " & ExcelLocal.FullName
+
+    Print #tempFileHandle, Format(Now, "YYYY/MM/DD hh:nn:ss") & " - Abriendo archivo." 'Encabezado log temporal
+    LogWriteTemp "Usuario: " & Environ("Username")
+    LogWriteTemp "Ruta: " & ExcelLocal.FullName
+End Sub
+
+'Log permanente
+Sub LogWrite(msg As String)
+    If logsInitialized Then
+        Print #permanentFileHandle, Format(Now, "hh:nn:ss") & " | " & msg
+        DoEvents
+    End If
+End Sub
+
+'Log temporal
+Sub LogWriteTemp(msg As String)
+    If logsInitialized Then
+        Print #tempFileHandle, Format(Now, "hh:nn:ss") & " | " & msg
+        DoEvents
+    End If
+End Sub
+
+'Cerrar logs
+Public Sub CloseLogs(Optional ByVal success As Boolean = False)
+    If Not logsInitialized Then Exit Sub
+
+    'Cerrar archivos de log
+    Close #permanentFileHandle
+    Close #tempFileHandle
+
+    If success Then 'Borrar log temporal si ha ido bien
+        On Error Resume Next
+        Kill tempLogPath
+    End If
+
+    logsInitialized = False
+End Sub
+
 
 'Logica para errores al guardar
 ' Private Sub Workbook_AfterSave(ByVal Success As Boolean)

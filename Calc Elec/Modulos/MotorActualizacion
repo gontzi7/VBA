@@ -55,7 +55,7 @@ Private logsInitialized As Boolean
 ' Procedimiento principal de actualización
 '===========================================================
 Sub Actualizar2()
-    DebugMensajes = ThisWorkbook.Sheets("Busquedas").Range("Debug")
+    DebugMensajes = ExcelLocal.Sheets("Busquedas").Range("Debug")
     If Not DebugMensajes Then On Error GoTo ErrorHandler
 
     'Desactivar actulaizaciones de pantalla
@@ -834,7 +834,7 @@ ErrorHandler:
 End Sub
 
 Function VersionCodigoIntegrado() As String
-    Set VBProj = ThisWorkbook.VBProject
+    Set VBProj = ExcelLocal.VBProject
 
     'Acceder al modulo del excel
     Dim vbMod As Object
@@ -934,7 +934,7 @@ End Function
 Private Sub Autodestruir()
     'Borrar módulo de actualización para evitar errores en futuras actualizaciones
     Dim VBProj As VBIDE.VBProject
-    Set VBProj = ThisWorkbook.VBProject
+    Set VBProj = ExcelLocal.VBProject
     On Error Resume Next
     VBProj.VBComponents.Remove VBProj.VBComponents("MotorActualizacion")
 
